@@ -294,6 +294,10 @@
             gap: 0.5rem;
             max-width: 500px; /* Approx 5-6 dominoes wide */
         }
+        #my-hand-container {
+            display: flex;
+            justify-content: center;
+        }
 
         @media (max-width: 768px) {
             #game-layout {
@@ -435,7 +439,7 @@
 
             <div id="right-hand-area" class="side-hand"></div>
 
-            <div id="bottom-hand-area" class="flex justify-between items-end gap-4 mt-2">
+            <div id="bottom-hand-area" class="flex justify-center items-end gap-4 mt-2">
                 <div id="my-hand-container" class="flex-grow"></div>
                 <div id="boneyard-container" class="bg-gray-900 bg-opacity-70 p-4 rounded-lg shadow-inner">
                     <h2 class="text-xl font-semibold mb-3 text-center">Boneyard</h2>
