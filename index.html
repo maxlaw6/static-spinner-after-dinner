@@ -287,6 +287,13 @@
         .side-hand .domino {
             transform: rotate(90deg);
         }
+        .player-hand {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 0.5rem;
+            max-width: 500px; /* Approx 5-6 dominoes wide */
+        }
 
         @media (max-width: 768px) {
             #game-layout {
@@ -696,8 +703,7 @@
                 
                 const canStart = isHost && playerCount >= 2 && playerCount <= 8;
                 startGameButton.disabled = !canStart;
-                reDealButton.classList.toggle('hidden', !isHost || gameState.gameStatus !== 'in-progress');
-
+                reDealButton.classList.toggle('hidden', true); // Hide re-deal in lobby
 
                 if (isHost) {
                     if (playerCount < 2) {
