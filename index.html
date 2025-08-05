@@ -837,7 +837,22 @@
                 const newRoundNumber = currentData.roundNumber + 1;
                 const newStartingDouble = 9 - (newRoundNumber - 1);
 
-                const starterInfo = findRoundStarter(updatedPlayers, playerIds, newStartingDouble);
+                let newPlayerIndex;
+                let newMustDraw = false;
+
+                // BUG FIX: Winner of previous round starts the next.
+                if (currentData.roundNumber > 0 && currentData.roundEndInfo?.winnerId) {
+                    newPlayerIndex = playerIds.indexOf(currentData.roundEndInfo.winnerId);
+                    if (newPlayerIndex === -1) { // Fallback if winner not found
+                        const starterInfo = findRoundStarter(updatedPlayers, playerIds, newStartingDouble);
+                        newPlayerIndex = starterInfo.playerIndex;
+                        newMustDraw = starterInfo.mustDraw;
+                    }
+                } else { // First round logic
+                    const starterInfo = findRoundStarter(updatedPlayers, playerIds, newStartingDouble);
+                    newPlayerIndex = starterInfo.playerIndex;
+                    newMustDraw = starterInfo.mustDraw;
+                }
 
                 transaction.update(gameRef, {
                     gameStatus: 'in-progress',
@@ -846,8 +861,8 @@
                     boardDominos: [],
                     roundNumber: newRoundNumber,
                     currentStartingDouble: newStartingDouble,
-                    currentPlayerIndex: starterInfo.playerIndex,
-                    mustDrawToStart: starterInfo.mustDraw,
+                    currentPlayerIndex: newPlayerIndex,
+                    mustDrawToStart: newMustDraw,
                     turnState: 'WAITING',
                     lastDrawnDominoId: null,
                     moveHistory: []
@@ -941,9 +956,6 @@
                 return total + topValue + bottomValue;
             }, 0);
         }
-
-        // This function is no longer needed, its logic is merged into endDominoDrag
-        // async function endRound(winnerPlayerId) { ... }
 
         continueRoundButton.addEventListener('click', () => {
              if (localGameState.players[currentPlayerId]?.isHost) {
