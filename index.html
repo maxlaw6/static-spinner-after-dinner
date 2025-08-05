@@ -621,12 +621,21 @@
     // --- Firebase Initialization ---
     async function initializeFirebase() {
         try {
-            // Use the globally provided Firebase config from the environment
-            if (typeof __firebase_config === 'undefined') {
-                throw new Error("Firebase configuration is not available.");
+            // This is the main fix: Handle the case where the environment-provided config is missing.
+            if (typeof __firebase_config === 'undefined' || !__firebase_config) {
+                console.error("Firebase configuration variable '__firebase_config' is missing.");
+                authStatus.textContent = "Connection Error";
+                // Display a user-friendly error on the main screen instead of just in the console.
+                loadingScreen.classList.add('hidden');
+                setupScreen.classList.remove('hidden');
+                lobbyView.innerHTML = `<div class="text-center text-red-400"><p><strong>Fatal Error:</strong> Could not connect to the game service.</p><p>The required Firebase configuration was not found. Please ensure the app is running in the correct environment.</p></div>`;
+                // Disable all buttons to prevent further action.
+                createGameButton.disabled = true;
+                joinGameButton.disabled = true;
+                return; // Stop initialization.
             }
+            
             const firebaseConfig = JSON.parse(__firebase_config);
-
             const app = initializeApp(firebaseConfig);
             db = getFirestore(app);
             auth = getAuth(app);
@@ -634,26 +643,19 @@
 
             authStatus.textContent = 'Authenticating...';
             
-            // This listener will handle the user state once sign-in is complete
             onAuthStateChanged(auth, (user) => {
                 if (user) {
                     currentPlayerId = user.uid;
                     enableLobby();
                 }
             });
-
-            // Check if a user is already signed in from a previous session
-            if (auth.currentUser) {
-                 currentPlayerId = auth.currentUser.uid;
-                 enableLobby();
-                 return;
-            }
-
-            // Use the provided auth token if it exists, otherwise sign in anonymously
+            
+            // The onAuthStateChanged listener above will handle the user state after sign-in.
+            // We just need to trigger the sign-in process.
             if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                 await signInWithCustomToken(auth, __initial_auth_token);
+                await signInWithCustomToken(auth, __initial_auth_token);
             } else {
-                 await signInAnonymously(auth);
+                await signInAnonymously(auth);
             }
 
         } catch (error) {
