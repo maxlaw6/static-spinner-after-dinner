@@ -950,7 +950,7 @@
                 transaction.update(gameRef, {
                     gameStatus: isGameOver ? 'finished' : 'round-over',
                     players: updatedPlayers,
-                    roundEndInfo: { winnerId: winnerPlayerId, points: roundPoints }
+                    roundEndInfo: { winnerId: winnerPlayerId, points: roundPoints } // BUG FIX
                 });
             });
         }
@@ -1043,7 +1043,7 @@
             myHandContainer.appendChild(handDiv);
         }
 
-        // NEW function to render player pips around the table
+        // Renders player pips around the table
         function renderPlayerPips(gameState) {
             const playerOrder = gameState.playerOrder;
             const myIndex = playerOrder.indexOf(currentPlayerId);
@@ -1052,9 +1052,8 @@
 
             if (myIndex === -1) return;
 
-            playerOrder.forEach((pid, index) => {
-                // Don't create a pip for the current user, their hand is at the bottom
-                if (pid === currentPlayerId) return;
+            playerOrder.forEach((pid) => {
+                if (pid === currentPlayerId) return; // Don't create a pip for the current user
 
                 const playerData = gameState.players[pid];
                 const pip = document.createElement('div');
@@ -1072,8 +1071,7 @@
                 pip.appendChild(nameEl);
                 pip.appendChild(countEl);
 
-                // Calculate position around the table
-                const {x, y} = getPipPosition(index, myIndex, playerCount);
+                const {x, y} = getPipPosition(pid, myIndex, playerCount, playerOrder);
                 pip.style.left = `${x}%`;
                 pip.style.top = `${y}%`;
 
@@ -1081,33 +1079,31 @@
             });
         }
 
-        // NEW helper to calculate pip positions
-        function getPipPosition(playerIndex, myIndex, playerCount) {
-            // This creates a circular arrangement of players, with the current player conceptually at the bottom.
-            const positions = [];
-            // Top positions
-            if (playerCount > 2) positions.push({ x: 50, y: 5 }); // Top center
-            if (playerCount > 4) positions.push({ x: 25, y: 5 }); // Top left
-            if (playerCount > 5) positions.push({ x: 75, y: 5 }); // Top right
-            // Side positions
-            if (playerCount > 3) positions.push({ x: 5, y: 50 }); // Left
-            if (playerCount > 1) positions.push({ x: 95, y: 50 }); // Right
-            // Bottom positions (for more players)
-            if (playerCount > 6) positions.push({ x: 25, y: 95 }); // Bottom left
-            if (playerCount > 7) positions.push({ x: 75, y: 95 }); // Bottom right
+        // Calculates pip positions based on a fixed seating chart
+        function getPipPosition(opponentPid, myIndex, playerCount, playerOrder) {
+            const seatCoordinates = [
+                { x: 50, y: 5 },   // Top Center
+                { x: 95, y: 50 },  // Right
+                { x: 5, y: 50 },   // Left
+                { x: 75, y: 15 },  // Top Right
+                { x: 25, y: 15 },  // Top Left
+                { x: 80, y: 85 },  // Bottom Right
+                { x: 20, y: 85 },  // Bottom Left
+            ];
 
-            // Filter out my own position and map other players to the available slots
-            const relativeIndex = (playerIndex - myIndex + playerCount) % playerCount;
+            const opponentsInOrder = [];
+            for (let i = 1; i < playerCount; i++) {
+                const playerIndex = (myIndex + i) % playerCount;
+                opponentsInOrder.push(playerOrder[playerIndex]);
+            }
             
-            // A simplified mapping for demonstration
-            const opponentIndex = playerOrder.filter(p => p !== currentPlayerId).indexOf(localGameState.playerOrder[playerIndex]);
-            
-            if (opponentIndex !== -1 && opponentIndex < positions.length) {
-                return positions[opponentIndex];
+            const seatIndex = opponentsInOrder.indexOf(opponentPid);
+
+            if (seatIndex !== -1 && seatIndex < seatCoordinates.length) {
+                return seatCoordinates[seatIndex];
             }
 
-            // Fallback position
-            return { x: 50, y: 50 };
+            return { x: 50, y: 50 }; // Fallback
         }
 
 
@@ -1140,6 +1136,7 @@
         }
         
         function displayRoundEndScreen(gameState) {
+            if (!gameState.roundEndInfo) return; // Guard against missing info
             const { winnerId, points } = gameState.roundEndInfo;
             gameContainer.classList.add('hidden');
             roundEndScreen.classList.remove('hidden');
@@ -1150,7 +1147,7 @@
             roundResultsList.innerHTML = '';
             gameState.playerOrder.forEach(pid => {
                 const p = document.createElement('p');
-                p.textContent = `${gameState.players[pid].name}: +${points[pid]} points (Total: ${gameState.players[pid].score})`;
+                p.textContent = `${gameState.players[pid].name}: +${points[pid] || 0} points (Total: ${gameState.players[pid].score})`;
                 if (pid === winnerId) p.classList.add('winner');
                 roundResultsList.appendChild(p);
             });
