@@ -537,7 +537,7 @@
 <script type="module">
     // Import Firebase modules
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-    import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
     import { getFirestore, doc, getDoc, setDoc, updateDoc, onSnapshot, collection, serverTimestamp, runTransaction } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
     import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-analytics.js";
 
@@ -621,21 +621,17 @@
     // --- Firebase Initialization ---
     async function initializeFirebase() {
         try {
-            // This is the main fix: Handle the case where the environment-provided config is missing.
-            if (typeof __firebase_config === 'undefined' || !__firebase_config) {
-                console.error("Firebase configuration variable '__firebase_config' is missing.");
-                authStatus.textContent = "Connection Error";
-                // Display a user-friendly error on the main screen instead of just in the console.
-                loadingScreen.classList.add('hidden');
-                setupScreen.classList.remove('hidden');
-                lobbyView.innerHTML = `<div class="text-center text-red-400"><p><strong>Fatal Error:</strong> Could not connect to the game service.</p><p>The required Firebase configuration was not found. Please ensure the app is running in the correct environment.</p></div>`;
-                // Disable all buttons to prevent further action.
-                createGameButton.disabled = true;
-                joinGameButton.disabled = true;
-                return; // Stop initialization.
-            }
+            // Your web app's Firebase configuration
+            const firebaseConfig = {
+                apiKey: "AIzaSyCTmUo5UpQW77xhOkI_3XELSISo6WHyqLs",
+                authDomain: "spinner-live.firebaseapp.com",
+                projectId: "spinner-live",
+                storageBucket: "spinner-live.firebasestorage.app",
+                messagingSenderId: "878930500451",
+                appId: "1:878930500451:web:e281c28d5c29218044d156",
+                measurementId: "G-BPHD3B8WDT"
+            };
             
-            const firebaseConfig = JSON.parse(__firebase_config);
             const app = initializeApp(firebaseConfig);
             db = getFirestore(app);
             auth = getAuth(app);
@@ -643,21 +639,16 @@
 
             authStatus.textContent = 'Authenticating...';
             
-            onAuthStateChanged(auth, (user) => {
+            onAuthStateChanged(auth, async (user) => {
                 if (user) {
+                    // User is signed in.
                     currentPlayerId = user.uid;
                     enableLobby();
+                } else {
+                    // User is signed out. Attempt to sign in anonymously.
+                    await signInAnonymously(auth);
                 }
             });
-            
-            // The onAuthStateChanged listener above will handle the user state after sign-in.
-            // We just need to trigger the sign-in process.
-            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                await signInWithCustomToken(auth, __initial_auth_token);
-            } else {
-                await signInAnonymously(auth);
-            }
-
         } catch (error) {
             console.error("Firebase initialization failed:", error);
             authStatus.textContent = "Error: Could not connect. Please refresh.";
