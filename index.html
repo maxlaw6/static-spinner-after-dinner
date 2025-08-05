@@ -165,7 +165,15 @@
             transition: all 0.3s ease;
         }
         #boneyard-count {
-            text-shadow: 0 0 5px #000, 0 0 3px #000;
+            position: absolute;
+            z-index: 10;
+            font-size: 2rem;
+            font-weight: bold;
+            color: white;
+            background-color: rgba(0,0,0,0.6);
+            padding: 2px 10px;
+            border-radius: 12px;
+            text-shadow: 0 0 5px #000;
         }
         #minimap-container {
             position: absolute;
@@ -302,7 +310,7 @@
     <div id="game-container" class="hidden w-full h-screen flex flex-col items-center p-4">
         <div id="game-info" class="bg-gray-900 bg-opacity-70 p-2 rounded-lg shadow-lg w-full max-w-6xl z-10 flex justify-between items-center mb-2 flex-shrink-0">
             <div class="flex items-center gap-4">
-                <button id="main-menu-button" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded transition-colors">Main Menu</button>
+                <button id="main-menu-button" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded transition-colors">New Game / Exit</button>
                 <div>
                     <h2 class="font-bold text-lg">Current Turn: <span id="current-player"></span></h2>
                     <p id="game-status" class="text-sm text-yellow-300">Loading...</p>
@@ -332,7 +340,7 @@
                 <div id="boneyard-container" class="bg-gray-900 bg-opacity-70 p-4 rounded-lg shadow-inner">
                     <h2 class="text-xl font-semibold mb-3 text-center">Boneyard</h2>
                     <div id="boneyard-pile" title="Click to draw a domino">
-                        <span id="boneyard-count" class="font-bold text-2xl text-white z-10">0</span>
+                        <span id="boneyard-count">0</span>
                     </div>
                     <div id="boneyard-buttons" class="mt-2 flex flex-col items-center gap-2">
                         <button id="undo-button" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition-colors">Undo Move</button>
@@ -437,13 +445,7 @@
                 onAuthStateChanged(auth, async (user) => {
                     if (user) {
                         currentPlayerId = user.uid;
-                        const savedGameId = localStorage.getItem('activeDominoGameId');
-                        if (savedGameId) {
-                            authStatus.textContent = `Rejoining game ${savedGameId}...`;
-                            await joinGame(savedGameId);
-                        } else {
-                            enableLobby();
-                        }
+                        enableLobby();
                     } else {
                         await signInAnonymously(auth);
                     }
@@ -532,7 +534,6 @@
 
         async function joinGame(gameId) {
             currentGameId = gameId;
-            localStorage.setItem('activeDominoGameId', gameId);
             lobbyView.classList.add('hidden');
             waitingRoomView.classList.remove('hidden');
             gameIdDisplay.textContent = gameId;
@@ -549,7 +550,6 @@
         }
 
         function leaveGame() {
-            localStorage.removeItem('activeDominoGameId');
             window.location.reload();
         }
         mainMenuButton.addEventListener('click', leaveGame);
