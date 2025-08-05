@@ -191,7 +191,7 @@
             border-color: #FFD700;
             box-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
         }
-        #setup-screen, #round-end-screen, #loading-screen {
+        #setup-screen, #round-end-screen, #loading-screen, #game-over-screen {
             position: fixed;
             top: 0; left: 0;
             width: 100%; height: 100%;
@@ -210,6 +210,16 @@
             border-radius: 10px;
             text-align: center;
             box-shadow: 0 0 20px rgba(255, 215, 0, 0.5);
+        }
+        .winner {
+            color: #FFD700;
+            font-weight: bold;
+        }
+
+        /* Mobile Layout Fixes */
+        #bottom-section-wrapper {
+            overflow-y: auto;
+            max-height: 25vh; /* Adjust as needed */
         }
     </style>
 </head>
@@ -267,10 +277,21 @@
         </div>
     </div>
 
+    <!-- Game Over Screen -->
+    <div id="game-over-screen" class="hidden">
+        <div id="final-score-display" class="w-full max-w-md">
+            <h2 class="text-4xl font-bold text-center mb-4 text-yellow-300">Game Over!</h2>
+            <p id="final-winner-message" class="text-xl mb-6"></p>
+            <div id="final-score-list" class="space-y-2 text-lg mb-8"></div>
+            <button id="main-menu-button-final" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded transition-colors">Main Menu</button>
+        </div>
+    </div>
+
     <!-- Main Game Container -->
     <div id="game-container" class="hidden w-full h-screen flex flex-col items-center p-4">
-        <div id="game-info" class="bg-gray-900 bg-opacity-70 p-2 rounded-lg shadow-lg w-full max-w-6xl z-10 flex justify-between items-center mb-2">
+        <div id="game-info" class="bg-gray-900 bg-opacity-70 p-2 rounded-lg shadow-lg w-full max-w-6xl z-10 flex justify-between items-center mb-2 flex-shrink-0">
             <div class="flex items-center gap-4">
+                <button id="main-menu-button" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded transition-colors">Main Menu</button>
                 <div>
                     <h2 class="font-bold text-lg">Current Turn: <span id="current-player"></span></h2>
                     <p id="game-status" class="text-sm text-yellow-300">Loading...</p>
@@ -288,22 +309,24 @@
                 <div id="scoreboard" class="text-right flex gap-4"></div>
             </div>
         </div>
-        <div id="world" class="w-full max-w-6xl h-full rounded-lg shadow-lg mb-2">
+        <div id="world" class="w-full max-w-6xl h-full rounded-lg shadow-lg mb-2 flex-grow">
             <div id="game-board"></div>
             <div id="minimap-container">
                 <div id="minimap-viewport"></div>
             </div>
         </div>
-        <div class="w-full max-w-6xl z-10 flex justify-between items-start gap-4 mt-2">
-            <div id="all-hands-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 flex-grow"></div>
-            <div id="boneyard-container" class="bg-gray-900 bg-opacity-70 p-4 rounded-lg shadow-inner">
-                <h2 class="text-xl font-semibold mb-3 text-center">Boneyard</h2>
-                <div id="boneyard-pile" title="Click to draw a domino">
-                    <span id="boneyard-count" class="font-bold text-2xl text-white z-10">0</span>
-                </div>
-                <div id="boneyard-buttons" class="mt-2 flex flex-col items-center gap-2">
-                    <button id="undo-button" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition-colors">Undo Move</button>
-                    <button id="end-turn-button" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition-colors hidden">End Turn</button>
+        <div id="bottom-section-wrapper" class="w-full max-w-6xl z-10 flex-shrink-0">
+            <div class="flex justify-between items-start gap-4 mt-2">
+                <div id="all-hands-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 flex-grow"></div>
+                <div id="boneyard-container" class="bg-gray-900 bg-opacity-70 p-4 rounded-lg shadow-inner">
+                    <h2 class="text-xl font-semibold mb-3 text-center">Boneyard</h2>
+                    <div id="boneyard-pile" title="Click to draw a domino">
+                        <span id="boneyard-count" class="font-bold text-2xl text-white z-10">0</span>
+                    </div>
+                    <div id="boneyard-buttons" class="mt-2 flex flex-col items-center gap-2">
+                        <button id="undo-button" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition-colors">Undo Move</button>
+                        <button id="end-turn-button" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition-colors hidden">End Turn</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -351,6 +374,11 @@
         const continueRoundButton = document.getElementById('continue-round-button');
         const minimapContainer = document.getElementById('minimap-container');
         const minimapViewport = document.getElementById('minimap-viewport');
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const finalWinnerMessage = document.getElementById('final-winner-message');
+        const finalScoreList = document.getElementById('final-score-list');
+        const mainMenuButton = document.getElementById('main-menu-button');
+        const mainMenuButtonFinal = document.getElementById('main-menu-button-final');
         
         // --- Firebase & Game State ---
         let db, auth, analytics;
@@ -398,7 +426,13 @@
                 onAuthStateChanged(auth, async (user) => {
                     if (user) {
                         currentPlayerId = user.uid;
-                        enableLobby();
+                        const savedGameId = localStorage.getItem('activeDominoGameId');
+                        if (savedGameId) {
+                            authStatus.textContent = `Rejoining game ${savedGameId}...`;
+                            await joinGame(savedGameId);
+                        } else {
+                            enableLobby();
+                        }
                     } else {
                         await signInAnonymously(auth);
                     }
@@ -487,6 +521,7 @@
 
         async function joinGame(gameId) {
             currentGameId = gameId;
+            localStorage.setItem('activeDominoGameId', gameId);
             lobbyView.classList.add('hidden');
             waitingRoomView.classList.remove('hidden');
             gameIdDisplay.textContent = gameId;
@@ -497,10 +532,17 @@
                     handleGameStateUpdate(docSnap.data());
                 } else {
                     alert("The game has ended or was deleted.");
-                    window.location.reload();
+                    leaveGame();
                 }
             });
         }
+
+        function leaveGame() {
+            localStorage.removeItem('activeDominoGameId');
+            window.location.reload();
+        }
+        mainMenuButton.addEventListener('click', leaveGame);
+        mainMenuButtonFinal.addEventListener('click', leaveGame);
 
         copyGameIdButton.addEventListener('click', () => {
             navigator.clipboard.writeText(currentGameId).then(() => {
@@ -550,7 +592,7 @@
                 setupScreen.classList.remove('hidden');
                 gameContainer.classList.add('hidden');
 
-            } else if (gameState.gameStatus === 'in-progress' || gameState.gameStatus === 'round-over') {
+            } else if (gameState.gameStatus === 'in-progress' || gameState.gameStatus === 'round-over' || gameState.gameStatus === 'finished') {
                 setupScreen.classList.add('hidden');
                 gameContainer.classList.remove('hidden');
                 if (oldTheme !== gameState.currentTheme) {
@@ -563,6 +605,12 @@
                 displayRoundEndScreen(gameState);
             } else {
                 roundEndScreen.classList.add('hidden');
+            }
+
+            if (gameState.gameStatus === 'finished') {
+                showFinalScores(gameState);
+            } else {
+                gameOverScreen.classList.add('hidden');
             }
         }
         
@@ -733,8 +781,10 @@
                     }
                 });
 
+                const isGameOver = gameState.roundNumber >= 10;
+
                 transaction.update(gameRef, {
-                    gameStatus: 'round-over',
+                    gameStatus: isGameOver ? 'finished' : 'round-over',
                     players: updatedPlayers,
                     roundEndInfo: { winnerId, points }
                 });
@@ -743,12 +793,7 @@
 
         continueRoundButton.addEventListener('click', () => {
              if (localGameState.players[currentPlayerId]?.isHost) {
-                 const isGameOver = Object.values(localGameState.players).some(p => p.score >= 100) || localGameState.roundNumber >= 10;
-                 if (isGameOver) {
-                    alert("Game Over! Final scores would be displayed here.");
-                 } else {
-                    startRound();
-                 }
+                startRound();
             }
         });
 
@@ -801,7 +846,7 @@
             gameStatusElement.textContent = statusText;
 
             endTurnButton.classList.toggle('hidden', !isMyTurn || gameState.turnState !== 'PLACED');
-            undoButton.disabled = !isMyTurn || gameState.moveHistory.length === 0;
+            undoButton.disabled = !isMyTurn || (gameState.moveHistory || []).length === 0;
             boneyardPileElement.style.cursor = isMyTurn && gameState.turnState === 'WAITING' ? 'pointer' : 'not-allowed';
         }
 
@@ -855,13 +900,43 @@
             gameState.playerOrder.forEach(pid => {
                 const p = document.createElement('p');
                 p.textContent = `${gameState.players[pid].name}: +${points[pid]} points (Total: ${gameState.players[pid].score})`;
-                if (pid === winnerId) p.classList.add('text-yellow-300', 'font-bold');
+                if (pid === winnerId) p.classList.add('winner');
                 roundResultsList.appendChild(p);
             });
             
             const isHost = gameState.players[currentPlayerId]?.isHost;
             continueRoundButton.disabled = !isHost;
-            continueRoundButton.textContent = isHost ? "Start Next Round" : "Waiting for Host...";
+            continueRoundButton.textContent = isHost ? "Continue" : "Waiting for Host...";
+        }
+
+        function showFinalScores(gameState) {
+            gameContainer.classList.add('hidden');
+            roundEndScreen.classList.add('hidden');
+            gameOverScreen.classList.remove('hidden');
+
+            const finalScores = gameState.playerOrder.map(pid => ({
+                name: gameState.players[pid].name,
+                score: gameState.players[pid].score
+            })).sort((a, b) => a.score - b.score);
+
+            const winnerScore = finalScores[0].score;
+            const winners = finalScores.filter(p => p.score === winnerScore);
+
+            if (winners.length > 1) {
+                finalWinnerMessage.textContent = `It's a tie between ${winners.map(w => w.name).join(' and ')}!`;
+            } else {
+                finalWinnerMessage.textContent = `${winners[0].name} wins the game!`;
+            }
+
+            finalScoreList.innerHTML = '';
+            finalScores.forEach(player => {
+                const p = document.createElement('p');
+                p.textContent = `${player.name}: ${player.score} points`;
+                if (player.score === winnerScore) {
+                    p.classList.add('winner');
+                }
+                finalScoreList.appendChild(p);
+            });
         }
 
         function createDomino(dominoData, isBack = false) {
@@ -952,6 +1027,8 @@
 
             document.addEventListener('mousemove', moveHandler);
             document.addEventListener('mouseup', endHandler, { once: true });
+            document.addEventListener('touchmove', moveHandler, { passive: false });
+            document.addEventListener('touchend', endHandler, { once: true });
         }
 
         function dragDomino(e, targetElement) {
@@ -974,6 +1051,7 @@
 
         async function endDominoDrag(e, dominoObject, origin, targetElement, moveHandler, endHandler) {
             document.removeEventListener('mousemove', moveHandler);
+            document.removeEventListener('touchmove', moveHandler);
             if (!isDraggingDomino) return;
             isDraggingDomino = false;
             
