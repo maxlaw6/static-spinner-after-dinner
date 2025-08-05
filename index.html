@@ -247,9 +247,18 @@
             overflow-y: auto;
             max-height: 30vh; /* More generous height for scrolling */
         }
+        #drag-label {
+            position: fixed; /* Use fixed positioning to stay relative to viewport */
+            transform: translate(-50%, -120%); /* Center above cursor */
+            z-index: 3000; /* Ensure it's on top of everything */
+            pointer-events: none; /* Make it unclickable */
+        }
     </style>
 </head>
 <body class="text-white">
+
+    <!-- Drag Label -->
+    <div id="drag-label" class="hidden bg-black bg-opacity-70 text-white px-3 py-1 rounded-lg"></div>
 
     <!-- Loading Screen -->
     <div id="loading-screen">
@@ -410,6 +419,7 @@
         const finalScoreList = document.getElementById('final-score-list');
         const mainMenuButton = document.getElementById('main-menu-button');
         const mainMenuButtonFinal = document.getElementById('main-menu-button-final');
+        const dragLabel = document.getElementById('drag-label');
         
         // --- Firebase & Game State ---
         let db, auth, analytics;
@@ -1077,6 +1087,9 @@
                 }
             }
 
+            dragLabel.textContent = localGameState.players[currentPlayerId].name;
+            dragLabel.classList.remove('hidden');
+            
             const moveHandler = (ev) => dragDomino(ev);
             const endHandler = (ev) => endDominoDrag(ev, dominoObject, origin, moveHandler, endHandler);
 
@@ -1103,11 +1116,14 @@
                 activeDominoElement.style.left = `${mouseOnBoardX - dominoOffsetX}px`;
                 activeDominoElement.style.top = `${mouseOnBoardY - dominoOffsetY}px`;
             }
+            dragLabel.style.left = `${coords.clientX}px`;
+            dragLabel.style.top = `${coords.clientY}px`;
         }
 
         async function endDominoDrag(e, dominoObject, origin, moveHandler, endHandler) {
             document.removeEventListener('mousemove', moveHandler);
             document.removeEventListener('touchmove', moveHandler);
+            dragLabel.classList.add('hidden');
 
             if (!isDraggingDomino) return;
             isDraggingDomino = false;
