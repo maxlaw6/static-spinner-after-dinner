@@ -422,23 +422,15 @@
                 return;
             }
 
-            // Correctly generate a new document reference with an auto-ID
             const tempGameRef = doc(collection(db, 'games'));
-            // Create a short, user-friendly ID for sharing
             const gameId = tempGameRef.id.substring(0, 6).toUpperCase();
-            // Create the final reference using the short ID
             const gameRef = doc(db, "games", gameId);
 
             const initialGameState = {
                 players: {
-                    [currentPlayerId]: {
-                        name: playerName,
-                        score: 0,
-                        hand: [],
-                        isHost: true
-                    }
+                    [currentPlayerId]: { name: playerName, score: 0, hand: [], isHost: true }
                 },
-                gameStatus: 'waiting', // waiting, in-progress, round-over, finished
+                gameStatus: 'waiting',
                 boardDominos: [],
                 boneyard: [],
                 currentPlayerIndex: 0,
@@ -448,7 +440,6 @@
                 turnState: 'WAITING',
                 mustDrawToStart: false,
                 lastDrawnDominoId: null,
-                moveHistory: [],
                 createdAt: serverTimestamp()
             };
 
@@ -457,15 +448,11 @@
         });
 
         joinGameButton.addEventListener('click', async () => {
-            if (!currentPlayerId) return; // Guard against clicks before auth is ready
+            if (!currentPlayerId) return;
             const gameId = joinGameIdInput.value.trim().toUpperCase();
             const playerName = playerNameInput.value.trim() || `Player ${currentPlayerId.substring(0, 4)}`;
-            if (!gameId) {
-                alert("Please enter a Game ID.");
-                return;
-            }
-            if (!playerName) {
-                alert("Please enter your name.");
+            if (!gameId || !playerName) {
+                alert("Please enter your name and a Game ID.");
                 return;
             }
 
@@ -489,12 +476,7 @@
             }
 
             await updateDoc(gameRef, {
-                [`players.${currentPlayerId}`]: {
-                    name: playerName,
-                    score: 0,
-                    hand: [],
-                    isHost: false
-                },
+                [`players.${currentPlayerId}`]: { name: playerName, score: 0, hand: [], isHost: false },
                 playerOrder: [...gameData.playerOrder, currentPlayerId]
             });
             
@@ -541,7 +523,6 @@
             const playerIds = gameState.playerOrder;
             const playerCount = playerIds.length;
 
-            // Update waiting room
             if (gameState.gameStatus === 'waiting') {
                 playerList.innerHTML = '';
                 playerIds.forEach(pid => {
@@ -625,7 +606,6 @@
                 const newRoundNumber = currentData.roundNumber + 1;
                 const newStartingDouble = 9 - (newRoundNumber - 1);
 
-                // Determine who starts
                 const starterInfo = findRoundStarter(updatedPlayers, playerIds, newStartingDouble);
 
                 transaction.update(gameRef, {
@@ -638,7 +618,6 @@
                     currentPlayerIndex: starterInfo.playerIndex,
                     mustDrawToStart: starterInfo.mustDraw,
                     turnState: 'WAITING',
-                    moveHistory: [],
                     lastDrawnDominoId: null,
                 });
             });
@@ -651,7 +630,6 @@
             const hasSpecificDouble = (hand, val) => hand.some(d => d.top === val && d.bottom === val);
             const hasDoubleSpinner = (hand) => hand.some(d => d.top === SPINNER_VALUE && d.bottom === SPINNER_VALUE);
 
-            // Check for required double
             for (let i = 0; i < playerOrder.length; i++) {
                 const pid = playerOrder[i];
                 if (hasSpecificDouble(players[pid].hand, requiredDoubleValue)) {
@@ -659,7 +637,6 @@
                     break;
                 }
             }
-            // Check for double spinner if no required double found
             if (starterIndex === -1) {
                 for (let i = 0; i < playerOrder.length; i++) {
                     const pid = playerOrder[i];
@@ -669,7 +646,6 @@
                     }
                 }
             }
-            // If still no starter, highest hand draws
             if (starterIndex === -1) {
                 let highestScore = -1;
                 for (let i = 0; i < playerOrder.length; i++) {
@@ -695,12 +671,7 @@
                 const gameState = gameSnap.data();
 
                 const currentTurnPlayerId = gameState.playerOrder[gameState.currentPlayerIndex];
-                if (currentPlayerId !== currentTurnPlayerId) return; // Not your turn
-                if (gameState.turnState === 'PLACED') return; // Already played
-                if (gameState.boneyard.length === 0) {
-                    // Pass turn if boneyard is empty
-                    const nextPlayerIndex = (gameState.currentPlayerIndex + 1) % gameState.playerOrder.length;
-                    transaction.update(gameRef, { currentPlayerIndex: nextPlayerIndex, turnState: 'WAITING' });
+                if (currentPlayerId !== currentTurnPlayerId || gameState.turnState === 'PLACED' || gameState.boneyard.length === 0) {
                     return;
                 }
 
@@ -713,7 +684,7 @@
                 transaction.update(gameRef, {
                     players: updatedPlayers,
                     boneyard: boneyard,
-                    turnState: 'PLACED', // Player drew, now must play or pass
+                    turnState: 'PLACED',
                     lastDrawnDominoId: drawnDomino.id,
                 });
             });
@@ -749,9 +720,9 @@
                 let roundPoints = {};
 
                 Object.keys(updatedPlayers).forEach(pid => {
+                    const handValue = calculateHandValue(updatedPlayers[pid].hand);
                     if (pid !== winnerPlayerId) {
-                        const handValue = calculateHandValue(updatedPlayers[pid].hand);
-                        updatedPlayers[winnerPlayerId].score += handValue; // Winner gets the points
+                        updatedPlayers[winnerPlayerId].score += handValue;
                         roundPoints[pid] = handValue;
                     } else {
                         roundPoints[pid] = 0;
@@ -761,20 +732,15 @@
                 transaction.update(gameRef, {
                     gameStatus: 'round-over',
                     players: updatedPlayers,
-                    roundEndInfo: {
-                        winnerId: winnerPlayerId,
-                        points: roundPoints
-                    }
+                    roundEndInfo: { winnerId, points }
                 });
             });
         }
 
         continueRoundButton.addEventListener('click', () => {
              if (localGameState.players[currentPlayerId]?.isHost) {
-                 // Check for game over condition
                  const isGameOver = Object.values(localGameState.players).some(p => p.score >= 100) || localGameState.roundNumber >= 10;
                  if (isGameOver) {
-                    // TODO: Implement game over logic
                     alert("Game Over! Final scores would be displayed here.");
                  } else {
                     startRound();
@@ -784,11 +750,9 @@
 
         // --- UI Rendering ---
         function renderGameUI(gameState) {
-            const numPlayers = gameState.playerOrder.length;
             const currentTurnPlayerId = gameState.playerOrder[gameState.currentPlayerIndex];
             const isMyTurn = currentPlayerId === currentTurnPlayerId;
             
-            // Render board
             gameBoardElement.innerHTML = '';
             gameState.boardDominos.forEach(domino => {
                 const el = createDomino(domino.dominoData);
@@ -797,11 +761,15 @@
                 el.style.top = `${domino.y}px`;
                 el.style.transform = `rotate(${domino.rotation}deg)`;
                 el.dataset.rotation = domino.rotation;
+                
+                if (isMyTurn) {
+                    el.addEventListener('mousedown', (e) => startDominoDrag(e, domino, 'board'));
+                    el.addEventListener('touchstart', (e) => startDominoDrag(e, domino, 'board'), { passive: false });
+                }
                 gameBoardElement.appendChild(el);
             });
             updateMinimap(gameState.boardDominos);
 
-            // Render hands and scoreboard
             allHandsContainer.innerHTML = '';
             scoreboard.innerHTML = '';
             gameState.playerOrder.forEach(pid => {
@@ -809,11 +777,9 @@
                 renderScoreboardEntry(gameState.players[pid], pid);
             });
             
-            // Update game info
             currentPlayerElement.textContent = gameState.players[currentTurnPlayerId].name;
             boneyardCountElement.textContent = gameState.boneyard.length;
             
-            // Update status text
             let statusText = '';
             if (isMyTurn) {
                 if(gameState.mustDrawToStart) {
@@ -823,14 +789,13 @@
                 } else if (gameState.turnState === 'WAITING') {
                     statusText = "Your turn. Play a domino or draw from the boneyard.";
                 } else if (gameState.turnState === 'PLACED') {
-                    statusText = "You've played or drawn. You can move other tiles or end your turn.";
+                    statusText = "You've played or drawn. You can adjust tiles or end your turn.";
                 }
             } else {
                 statusText = `Waiting for ${gameState.players[currentTurnPlayerId].name} to play...`;
             }
             gameStatusElement.textContent = statusText;
 
-            // Update buttons
             endTurnButton.classList.toggle('hidden', !isMyTurn || gameState.turnState !== 'PLACED');
             endTurnButton.disabled = !isMyTurn || gameState.turnState !== 'PLACED';
             boneyardPileElement.style.cursor = isMyTurn && gameState.turnState === 'WAITING' ? 'pointer' : 'not-allowed';
@@ -838,11 +803,10 @@
 
         function renderPlayerHand(playerData, playerId) {
             const isMe = playerId === currentPlayerId;
+            const currentTurnPlayerId = localGameState.playerOrder[localGameState.currentPlayerIndex];
             
             const section = document.createElement('div');
-            section.id = `player-${playerId}-hand-section`;
             section.className = 'player-hand-section';
-            const currentTurnPlayerId = localGameState.playerOrder[localGameState.currentPlayerIndex];
             section.classList.toggle('current-player', playerId === currentTurnPlayerId);
 
             const title = document.createElement('h3');
@@ -856,8 +820,8 @@
                 let dominoElement;
                 if (isMe) {
                     dominoElement = createDomino(dominoData);
-                    dominoElement.addEventListener('mousedown', (e) => startDominoDrag(e, dominoData));
-                    dominoElement.addEventListener('touchstart', (e) => startDominoDrag(e, dominoData), { passive: false });
+                    dominoElement.addEventListener('mousedown', (e) => startDominoDrag(e, { dominoData }, 'hand'));
+                    dominoElement.addEventListener('touchstart', (e) => startDominoDrag(e, { dominoData }, 'hand'), { passive: false });
                 } else {
                     dominoElement = createDomino(dominoData, true); // Create a back
                 }
@@ -935,12 +899,12 @@
             return container;
         }
 
-        // --- Drag and Drop / Pan and Zoom Logic (largely unchanged) ---
+        // --- Drag, Drop, and Rotation Logic ---
         function getEventCoords(e) {
             return e.type.startsWith('touch') ? e.touches[0] : e;
         }
 
-        function startDominoDrag(e, dominoData) {
+        function startDominoDrag(e, dominoObject, origin) {
             e.stopPropagation();
             const currentTurnPlayerId = localGameState.playerOrder[localGameState.currentPlayerIndex];
             if (currentPlayerId !== currentTurnPlayerId) return;
@@ -959,22 +923,29 @@
             const mouseOnBoardX = boardPosition.x + (coords.clientX - worldRect.left) / zoomLevel;
             const mouseOnBoardY = boardPosition.y + (coords.clientY - worldRect.top) / zoomLevel;
 
-            const dominoRect = activeDominoEl.getBoundingClientRect();
-            const dominoScreenLeft = dominoRect.left;
-            const dominoScreenTop = dominoRect.top;
-            const dominoCurrentLeft = boardPosition.x + (dominoScreenLeft - worldRect.left) / zoomLevel;
-            const dominoCurrentTop = boardPosition.y + (dominoScreenTop - worldRect.top) / zoomLevel;
+            let dominoCurrentLeft, dominoCurrentTop;
+            if (origin === 'board') {
+                dominoCurrentLeft = dominoObject.x;
+                dominoCurrentTop = dominoObject.y;
+            } else {
+                const dominoRect = activeDominoEl.getBoundingClientRect();
+                dominoCurrentLeft = boardPosition.x + (dominoRect.left - worldRect.left) / zoomLevel;
+                dominoCurrentTop = boardPosition.y + (dominoRect.top - worldRect.top) / zoomLevel;
+            }
             
             dominoOffsetX = mouseOnBoardX - dominoCurrentLeft;
             dominoOffsetY = mouseOnBoardY - dominoCurrentTop;
 
-            document.addEventListener('mousemove', (ev) => dragDomino(ev, dominoData));
-            document.addEventListener('mouseup', (ev) => endDominoDrag(ev, dominoData));
-            document.addEventListener('touchmove', (ev) => dragDomino(ev, dominoData), { passive: false });
-            document.addEventListener('touchend', (ev) => endDominoDrag(ev, dominoData));
+            const moveHandler = (ev) => dragDomino(ev);
+            const endHandler = (ev) => endDominoDrag(ev, dominoObject, origin);
+
+            document.addEventListener('mousemove', moveHandler);
+            document.addEventListener('mouseup', endHandler, { once: true });
+            document.addEventListener('touchmove', moveHandler, { passive: false });
+            document.addEventListener('touchend', endHandler, { once: true });
         }
 
-        function dragDomino(e, dominoData) {
+        function dragDomino(e) {
             if (!isDraggingDomino || !activeDominoEl) return;
             e.preventDefault();
             const coords = getEventCoords(e);
@@ -992,10 +963,12 @@
             }
         }
 
-        async function endDominoDrag(e, dominoData) {
+        async function endDominoDrag(e, dominoObject, origin) {
             if (!isDraggingDomino) return;
             isDraggingDomino = false;
             
+            const gameRef = doc(db, "games", currentGameId);
+
             if (wasDragged) {
                  const newX = parseFloat(activeDominoEl.style.left);
                  const newY = parseFloat(activeDominoEl.style.top);
@@ -1005,50 +978,64 @@
                  const isValidPlacement = true; 
 
                  if (isValidPlacement) {
-                    const gameRef = doc(db, "games", currentGameId);
                     await runTransaction(db, async (transaction) => {
                         const gameSnap = await transaction.get(gameRef);
                         if (!gameSnap.exists()) throw "Game does not exist!";
                         const gameState = gameSnap.data();
-
-                        // Remove from hand
-                        const playerHand = gameState.players[currentPlayerId].hand;
-                        const handIndex = playerHand.findIndex(d => d.id === dominoData.id);
-                        if (handIndex > -1) {
-                            playerHand.splice(handIndex, 1);
-                        }
-
-                        // Add to board
-                        const newBoardDominos = [...gameState.boardDominos, {
-                            dominoData, x: newX, y: newY, rotation: newRotation
-                        }];
                         
-                        const updatedPlayers = { ...gameState.players };
-                        updatedPlayers[currentPlayerId].hand = playerHand;
+                        let newBoardDominos = [...gameState.boardDominos];
+                        let updatedPlayers = { ...gameState.players };
 
-                        // Check for round win
-                        if (playerHand.length === 0) {
-                            endRound(currentPlayerId); // This will handle the transaction itself
-                            return; // Stop this transaction
+                        if (origin === 'hand') {
+                            const playerHand = updatedPlayers[currentPlayerId].hand;
+                            const handIndex = playerHand.findIndex(d => d.id === dominoObject.dominoData.id);
+                            if (handIndex > -1) {
+                                playerHand.splice(handIndex, 1);
+                                newBoardDominos.push({ dominoData: dominoObject.dominoData, x: newX, y: newY, rotation: newRotation });
+                                
+                                if (playerHand.length === 0) {
+                                    // This will be handled in a separate transaction by endRound
+                                } else {
+                                    transaction.update(gameRef, {
+                                        boardDominos: newBoardDominos,
+                                        players: updatedPlayers,
+                                        turnState: 'PLACED'
+                                    });
+                                }
+                            }
+                        } else { // origin === 'board'
+                            const boardIndex = newBoardDominos.findIndex(d => d.dominoData.id === dominoObject.dominoData.id);
+                            if (boardIndex > -1) {
+                                newBoardDominos[boardIndex].x = newX;
+                                newBoardDominos[boardIndex].y = newY;
+                                transaction.update(gameRef, { boardDominos: newBoardDominos });
+                            }
                         }
-
-                        transaction.update(gameRef, {
-                            boardDominos: newBoardDominos,
-                            players: updatedPlayers,
-                            turnState: 'PLACED'
-                        });
                     });
+                     if (origin === 'hand' && localGameState.players[currentPlayerId].hand.length === 0) {
+                        endRound(currentPlayerId);
+                    }
                  }
+            } else { // This was a click, not a drag
+                if (origin === 'board') {
+                    const currentRotation = parseInt(dominoObject.rotation || 0);
+                    const newRotation = (currentRotation + 45) % 360;
+                    await runTransaction(db, async (transaction) => {
+                        const gameSnap = await transaction.get(gameRef);
+                        if (!gameSnap.exists()) throw "Game does not exist!";
+                        const gameState = gameSnap.data();
+                        const newBoardDominos = [...gameState.boardDominos];
+                        const boardIndex = newBoardDominos.findIndex(d => d.dominoData.id === dominoObject.dominoData.id);
+                        if (boardIndex > -1) {
+                            newBoardDominos[boardIndex].rotation = newRotation;
+                            transaction.update(gameRef, { boardDominos: newBoardDominos });
+                        }
+                    });
+                }
             }
             
-            activeDominoEl.classList.remove('dragging', 'selected');
+            if(activeDominoEl) activeDominoEl.classList.remove('dragging', 'selected');
             activeDominoEl = null;
-
-            // Clean up listeners
-            document.removeEventListener('mousemove', dragDomino);
-            document.removeEventListener('mouseup', endDominoDrag);
-            document.removeEventListener('touchmove', dragDomino);
-            document.removeEventListener('touchend', endDominoDrag);
         }
 
         function updateBoardTransform() {
@@ -1084,7 +1071,7 @@
             const coords = getEventCoords(e);
             panStart = { x: coords.clientX, y: coords.clientY };
             document.addEventListener('mousemove', pan);
-            document.addEventListener('mouseup', endPan);
+            document.addEventListener('mouseup', endPan, { once: true });
         });
 
         function pan(e) {
@@ -1102,7 +1089,6 @@
             isPanning = false;
             worldElement.classList.remove('panning');
             document.removeEventListener('mousemove', pan);
-            document.removeEventListener('mouseup', endPan);
         }
         
         worldElement.addEventListener('wheel', (e) => {
