@@ -28,6 +28,7 @@
             background-color: #00693E; /* Felt Green */
             background-image: radial-gradient(rgba(255, 255, 255, 0.05) 10%, transparent 0);
             background-size: 5px 5px;
+            border-radius: 20px; /* Rounded corners for the table */
         }
         #world.panning {
             cursor: grabbing;
@@ -253,46 +254,70 @@
             pointer-events: none; /* Make it unclickable */
         }
 
-        /* New Layout Styles */
+        /* --- NEW/ADJUSTED LAYOUT STYLES --- */
         #game-layout {
             display: grid;
-            grid-template-rows: auto 1fr auto;
-            grid-template-columns: auto 1fr auto;
+            grid-template-rows: auto 1fr auto; /* Header, Main Area, My Hand */
             height: 100vh;
             width: 100%;
             padding: 1rem;
             gap: 1rem;
         }
-        #game-info { grid-area: 1 / 1 / 2 / 4; }
-        #left-hand-area { grid-area: 2 / 1 / 3 / 2; }
-        #world-wrapper { grid-area: 2 / 2 / 3 / 3; position: relative; }
-        #right-hand-area { grid-area: 2 / 3 / 4 / 4; }
-        #bottom-hand-area { grid-area: 3 / 1 / 4 / 4; }
-        
-        .side-hand {
+        #game-info {
+            grid-row: 1 / 2;
+        }
+        #main-game-area {
+            grid-row: 2 / 3;
+            position: relative;
             display: flex;
-            flex-direction: column;
-            gap: 0.5rem;
             align-items: center;
-            overflow-y: auto;
-            padding: 0.5rem;
-        }
-        .top-hand {
-            display: flex;
-            gap: 0.5rem;
             justify-content: center;
-            overflow-x: auto;
-            padding: 0.5rem;
         }
-        .side-hand .domino {
-            transform: rotate(90deg);
+        #player-pips-table {
+            position: absolute;
+            width: 95%;
+            height: 95%;
+            max-width: 1200px;
+            max-height: 800px;
+            pointer-events: none; /* Allow clicks to go through to the world */
+        }
+        .player-pip {
+            position: absolute;
+            background-color: rgba(0,0,0,0.6);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            border: 2px solid rgba(255,255,255,0.3);
+            text-align: center;
+            transition: all 0.3s ease;
+            transform: translate(-50%, -50%); /* Center the pip on its coordinates */
+        }
+        .player-pip.current-player {
+            border-color: #FFD700;
+            box-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+        }
+        .player-pip .pip-hand-count {
+            font-size: 0.8rem;
+            color: #a0aec0;
+        }
+        #world-wrapper {
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+        #bottom-hand-area {
+            grid-row: 3 / 4;
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+            gap: 1rem;
         }
         .player-hand {
             display: flex;
             flex-wrap: wrap;
             justify-content: center;
             gap: 0.5rem;
-            max-width: 500px; /* Approx 5-6 dominoes wide */
+            max-width: 600px; /* Approx 6-7 dominoes wide */
         }
         #my-hand-container {
             display: flex;
@@ -301,17 +326,14 @@
 
         @media (max-width: 768px) {
             #game-layout {
-                grid-template-columns: 1fr;
-                grid-template-rows: auto auto 1fr auto;
                 padding: 0.5rem;
                 gap: 0.5rem;
             }
-            #game-info { grid-area: 1 / 1 / 2 / 2; flex-direction: column; align-items: stretch; }
-            #top-hand-area { grid-area: 2 / 1 / 3 / 2; }
-            #world-wrapper { grid-area: 3 / 1 / 4 / 2; }
-            #bottom-hand-area { grid-area: 4 / 1 / 5 / 2; }
-            #left-hand-area, #right-hand-area { display: none; } /* Hide side hands on small screens */
-
+            #game-info { flex-direction: column; align-items: stretch; }
+            #bottom-hand-area {
+                flex-direction: column;
+                align-items: center;
+            }
             .domino {
                 width: 60px;
                 height: 30px;
@@ -323,6 +345,10 @@
             .spinner-icon {
                 width: 18px;
                 height: 18px;
+            }
+            .player-pip {
+                padding: 0.25rem 0.5rem;
+                font-size: 0.8rem;
             }
         }
     </style>
@@ -376,7 +402,7 @@
 
     <!-- Round End Screen -->
     <div id="round-end-screen" class="hidden">
-         <div id="round-end-content" class="w-full max-w-md">
+        <div id="round-end-content" class="w-full max-w-md">
             <h2 class="text-3xl font-bold text-center mb-4" id="round-end-title">Round Over!</h2>
             <p class="text-xl text-yellow-300 mb-4" id="round-winner-message"></p>
             <div id="round-results-list" class="mb-6"></div>
@@ -423,23 +449,25 @@
                 </div>
             </div>
 
-            <div id="left-hand-area" class="side-hand"></div>
-            
-            <div id="world-wrapper">
-                <div id="top-hand-area" class="top-hand absolute top-0 left-0 right-0"></div>
-                <div id="world">
-                    <div id="game-board">
-                        <div id="starting-area"></div>
+            <!-- This area now contains the table and player pips -->
+            <div id="main-game-area">
+                 <div id="player-pips-table">
+                    <!-- Player pips will be injected here by JS -->
+                 </div>
+                 <div id="world-wrapper">
+                    <div id="world">
+                        <div id="game-board">
+                            <div id="starting-area"></div>
+                        </div>
+                        <div id="minimap-container">
+                            <div id="minimap-viewport"></div>
+                        </div>
                     </div>
-                    <div id="minimap-container">
-                        <div id="minimap-viewport"></div>
-                    </div>
-                </div>
+                 </div>
             </div>
 
-            <div id="right-hand-area" class="side-hand"></div>
 
-            <div id="bottom-hand-area" class="flex justify-center items-end gap-4 mt-2">
+            <div id="bottom-hand-area">
                 <div id="my-hand-container" class="flex-grow"></div>
                 <div id="boneyard-container" class="bg-gray-900 bg-opacity-70 p-4 rounded-lg shadow-inner">
                     <h2 class="text-xl font-semibold mb-3 text-center">Boneyard</h2>
@@ -490,9 +518,7 @@
         const undoButton = document.getElementById('undo-button');
         const gameStatusElement = document.getElementById('game-status');
         const myHandContainer = document.getElementById('my-hand-container');
-        const topHandArea = document.getElementById('top-hand-area');
-        const leftHandArea = document.getElementById('left-hand-area');
-        const rightHandArea = document.getElementById('right-hand-area');
+        const playerPipsTable = document.getElementById('player-pips-table'); // New element
         const scoreboard = document.getElementById('scoreboard');
         const themeSwitcher = document.getElementById('theme-switcher');
         const roundEndScreen = document.getElementById('round-end-screen');
@@ -540,13 +566,13 @@
         async function initializeFirebase() {
             try {
                 const firebaseConfig = {
-                  apiKey: "AIzaSyCTmUo5UpQW77xhOkI_3XELSISo6WHyqLs",
-                  authDomain: "spinner-live.firebaseapp.com",
-                  projectId: "spinner-live",
-                  storageBucket: "spinner-live.appspot.com",
-                  messagingSenderId: "878930500451",
-                  appId: "1:878930500451:web:e281c28d5c29218044d156",
-                  measurementId: "G-BPHD3B8WDT"
+                    apiKey: "AIzaSyCTmUo5UpQW77xhOkI_3XELSISo6WHyqLs",
+                    authDomain: "spinner-live.firebaseapp.com",
+                    projectId: "spinner-live",
+                    storageBucket: "spinner-live.appspot.com",
+                    messagingSenderId: "878930500451",
+                    appId: "1:878930500451:web:e281c28d5c29218044d156",
+                    measurementId: "G-BPHD3B8WDT"
                 };
 
                 const app = initializeApp(firebaseConfig);
@@ -924,7 +950,7 @@
                 transaction.update(gameRef, {
                     gameStatus: isGameOver ? 'finished' : 'round-over',
                     players: updatedPlayers,
-                    roundEndInfo: { winnerId, points }
+                    roundEndInfo: { winnerId: winnerPlayerId, points: roundPoints }
                 });
             });
         }
@@ -957,15 +983,13 @@
             });
             updateMinimap(gameState.boardDominos);
 
-            // Clear all hand areas
+            // Render hands and pips
             myHandContainer.innerHTML = '';
-            topHandArea.innerHTML = '';
-            leftHandArea.innerHTML = '';
-            rightHandArea.innerHTML = '';
+            playerPipsTable.innerHTML = '';
             scoreboard.innerHTML = '';
 
-            // Render hands in their correct positions
             renderPlayerHands(gameState);
+            renderPlayerPips(gameState);
 
             gameState.playerOrder.forEach(pid => {
                 renderScoreboardEntry(gameState.players[pid], pid);
@@ -1001,75 +1025,89 @@
             boneyardPileElement.style.cursor = isMyTurn && gameState.turnState === 'WAITING' ? 'pointer' : 'not-allowed';
         }
 
+        // This function now ONLY renders the current player's hand at the bottom
         function renderPlayerHands(gameState) {
-            const playerOrder = gameState.playerOrder;
-            const myIndex = playerOrder.indexOf(currentPlayerId);
-            if (myIndex === -1) return;
-
-            // Render my hand at the bottom
-            renderPlayerHand(gameState.players[currentPlayerId], currentPlayerId, myHandContainer, false);
-
-            // Render other players relative to me
-            const playerCount = playerOrder.length;
-            const otherPlayerAreas = [topHandArea, rightHandArea, leftHandArea]; // Order of preference for opponents
-            
-            let areaIndex = 0;
-            for (let i = 1; i < playerCount; i++) {
-                const playerIndex = (myIndex + i) % playerCount;
-                const playerId = playerOrder[playerIndex];
-                const playerData = gameState.players[playerId];
-                
-                let targetArea;
-                if (playerCount === 2) {
-                    targetArea = topHandArea;
-                } else if (playerCount === 3) {
-                    targetArea = [rightHandArea, leftHandArea][i-1];
-                } else if (playerCount === 4) {
-                     targetArea = [rightHandArea, topHandArea, leftHandArea][i-1];
-                } else {
-                    targetArea = otherPlayerAreas[areaIndex % otherPlayerAreas.length];
-                    areaIndex++;
-                }
-                
-                const isSide = targetArea === leftHandArea || targetArea === rightHandArea;
-                renderPlayerHand(playerData, playerId, targetArea, true, isSide);
-            }
-        }
-
-        function renderPlayerHand(playerData, playerId, container, isOpponent, isSide = false) {
-            container.innerHTML = ''; // Clear the container first
-            const isMe = playerId === currentPlayerId;
-            const currentTurnPlayerId = localGameState.playerOrder[localGameState.currentPlayerIndex];
-            
-            const section = document.createElement('div');
-            section.className = 'player-hand-section w-full';
-            section.classList.toggle('current-player', playerId === currentTurnPlayerId);
-
-            const title = document.createElement('h3');
-            title.className = 'font-bold text-center mb-2';
-            title.textContent = isMe ? "Your Hand" : `${playerData.name}'s Hand (${playerData.hand.length} tiles)`;
+            const myPlayerData = gameState.players[currentPlayerId];
+            if (!myPlayerData) return;
 
             const handDiv = document.createElement('div');
-            handDiv.className = `player-hand flex flex-wrap justify-center gap-2 min-h-[50px] ${isSide ? 'flex-col items-center' : 'flex-row'}`;
-            
-            playerData.hand.forEach(dominoData => {
-                let dominoElement;
-                if (isMe) {
-                    dominoElement = createDomino(dominoData);
-                    dominoElement.addEventListener('mousedown', (e) => startDominoDrag(e, { dominoData }, 'hand'));
-                    dominoElement.addEventListener('touchstart', (e) => startDominoDrag(e, { dominoData }, 'hand'), { passive: false });
-                } else {
-                    dominoElement = createDomino(dominoData, true);
-                    if (isSide) {
-                        dominoElement.style.transform = 'rotate(90deg)';
-                    }
-                }
+            handDiv.className = 'player-hand';
+
+            myPlayerData.hand.forEach(dominoData => {
+                const dominoElement = createDomino(dominoData);
+                dominoElement.addEventListener('mousedown', (e) => startDominoDrag(e, { dominoData }, 'hand'));
+                dominoElement.addEventListener('touchstart', (e) => startDominoDrag(e, { dominoData }, 'hand'), { passive: false });
                 handDiv.appendChild(dominoElement);
             });
 
-            section.appendChild(title);
-            section.appendChild(handDiv);
-            container.appendChild(section);
+            myHandContainer.appendChild(handDiv);
+        }
+
+        // NEW function to render player pips around the table
+        function renderPlayerPips(gameState) {
+            const playerOrder = gameState.playerOrder;
+            const myIndex = playerOrder.indexOf(currentPlayerId);
+            const playerCount = playerOrder.length;
+            const currentTurnPlayerId = playerOrder[gameState.currentPlayerIndex];
+
+            if (myIndex === -1) return;
+
+            playerOrder.forEach((pid, index) => {
+                // Don't create a pip for the current user, their hand is at the bottom
+                if (pid === currentPlayerId) return;
+
+                const playerData = gameState.players[pid];
+                const pip = document.createElement('div');
+                pip.className = 'player-pip';
+                pip.classList.toggle('current-player', pid === currentTurnPlayerId);
+
+                const nameEl = document.createElement('div');
+                nameEl.className = 'pip-name font-bold';
+                nameEl.textContent = playerData.name;
+
+                const countEl = document.createElement('div');
+                countEl.className = 'pip-hand-count';
+                countEl.textContent = `${playerData.hand.length} tiles`;
+
+                pip.appendChild(nameEl);
+                pip.appendChild(countEl);
+
+                // Calculate position around the table
+                const {x, y} = getPipPosition(index, myIndex, playerCount);
+                pip.style.left = `${x}%`;
+                pip.style.top = `${y}%`;
+
+                playerPipsTable.appendChild(pip);
+            });
+        }
+
+        // NEW helper to calculate pip positions
+        function getPipPosition(playerIndex, myIndex, playerCount) {
+            // This creates a circular arrangement of players, with the current player conceptually at the bottom.
+            const positions = [];
+            // Top positions
+            if (playerCount > 2) positions.push({ x: 50, y: 5 }); // Top center
+            if (playerCount > 4) positions.push({ x: 25, y: 5 }); // Top left
+            if (playerCount > 5) positions.push({ x: 75, y: 5 }); // Top right
+            // Side positions
+            if (playerCount > 3) positions.push({ x: 5, y: 50 }); // Left
+            if (playerCount > 1) positions.push({ x: 95, y: 50 }); // Right
+            // Bottom positions (for more players)
+            if (playerCount > 6) positions.push({ x: 25, y: 95 }); // Bottom left
+            if (playerCount > 7) positions.push({ x: 75, y: 95 }); // Bottom right
+
+            // Filter out my own position and map other players to the available slots
+            const relativeIndex = (playerIndex - myIndex + playerCount) % playerCount;
+            
+            // A simplified mapping for demonstration
+            const opponentIndex = playerOrder.filter(p => p !== currentPlayerId).indexOf(localGameState.playerOrder[playerIndex]);
+            
+            if (opponentIndex !== -1 && opponentIndex < positions.length) {
+                return positions[opponentIndex];
+            }
+
+            // Fallback position
+            return { x: 50, y: 50 };
         }
 
 
@@ -1297,7 +1335,7 @@
                  let newX = parseFloat(activeDominoElement.style.left);
                  let newY = parseFloat(activeDominoElement.style.top);
                  let newRotation = parseInt(activeDominoElement.dataset.rotation || 0);
-                 
+                
                 let isValidPlacement = true;
                 if (localGameState.boardDominos.length === 0) {
                     const d = dominoObject.dominoData;
@@ -1393,6 +1431,7 @@
         }
         
         function updateMinimap(boardDominos) {
+            if (!minimapContainer) return;
             const mapSize = minimapContainer.clientWidth;
             const scale = mapSize / BOARD_SIZE;
             const viewWidth = worldElement.clientWidth / zoomLevel;
