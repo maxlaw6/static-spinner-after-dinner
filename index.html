@@ -1064,7 +1064,7 @@
 
             // Render other players' hands
             const playerCount = playerOrder.length;
-            const opponentAreas = [topHandArea, rightHandArea, leftHandArea]; 
+            const opponentAreas = [topHandArea, rightHandArea, leftHandArea, topHandArea, topHandArea]; // Allow top to have multiple players
             let areaIndex = 0;
 
             for (let i = 1; i < playerCount; i++) {
@@ -1080,7 +1080,7 @@
                 } else if (playerCount === 4) {
                     targetArea = [rightHandArea, topHandArea, leftHandArea][i-1];
                 } else {
-                    targetArea = opponentAreas[areaIndex % opponentAreas.length];
+                    targetArea = opponentAreas[areaIndex];
                     areaIndex++;
                 }
                 
@@ -1091,10 +1091,14 @@
         }
 
         function renderOpponentHand(playerData, playerId, container) {
-            container.innerHTML = '';
+            // Don't clear container if it's the top one, to allow multiple players
+            if(container !== topHandArea) {
+                container.innerHTML = '';
+            }
+            
             const isSide = container === leftHandArea || container === rightHandArea;
             const section = document.createElement('div');
-            section.className = 'opponent-hand-section w-full h-full';
+            section.className = 'opponent-hand-section';
             section.classList.toggle('current-player', playerId === localGameState.playerOrder[localGameState.currentPlayerIndex]);
 
             const title = document.createElement('h3');
