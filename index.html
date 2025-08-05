@@ -99,7 +99,7 @@
         .domino.dragging {
             cursor: grabbing;
             transition: none;
-            z-index: 2000;
+            z-index: 3000; /* Ensure dragged domino is on top */
         }
 
         /* Pip and Spinner Styles */
@@ -372,8 +372,9 @@
             grid-row: 3 / 4;
             display: flex;
             justify-content: center;
-            align-items: flex-end;
-            gap: 1rem;
+            align-items: center; /* Changed from flex-end */
+            gap: 1.5rem; /* Increased gap */
+            width: 100%;
         }
         .player-hand {
             display: flex;
@@ -387,6 +388,13 @@
             display: flex;
             justify-content: center;
             max-height: 150px; /* IPAD FIX */
+            flex-grow: 1; /* Allow hand to take up space */
+        }
+        #boneyard-container {
+            flex-shrink: 0; /* Prevent boneyard from shrinking */
+        }
+        #boneyard-buttons {
+            flex-direction: row; /* Align buttons horizontally */
         }
 
         @media (max-width: 768px) {
@@ -529,7 +537,7 @@
 <div id="boneyard-pile" title="Click to draw a domino">
 <span id="boneyard-count">0</span>
 </div>
-<div class="mt-2 flex flex-col items-center gap-2" id="boneyard-buttons">
+<div class="mt-2 flex items-center gap-2" id="boneyard-buttons">
 <button class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition-colors" id="undo-button">Undo Move</button>
 <button class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition-colors hidden" id="end-turn-button">End Turn</button>
 </div>
@@ -619,8 +627,9 @@
     let dominoOffsetX = 0;
     let dominoOffsetY = 0;
     let initialPinchDistance = null;
-    let activeDominoElement = null; // Keep track of the element being dragged
-    let draggedDominoData = null; // Keep track of the data for the dragged domino
+    let activeDominoElement = null; // The visual element being dragged
+    let draggedDominoData = null; // The data object for the domino being dragged
+    let originalHandElement = null; // The original domino element in the hand
 
     // --- Firebase Initialization ---
     async function initializeFirebase() {
@@ -682,7 +691,6 @@
         if (!currentPlayerId) return;
         const playerName = playerNameInput.value.trim() || `Player ${currentPlayerId.substring(0, 4)}`;
         
-        // Use a temporary reference to get a unique ID, then create a more readable one.
         const tempGameRef = doc(collection(db, 'games'));
         const gameId = tempGameRef.id.substring(0, 6).toUpperCase();
         const gameRef = doc(db, "games", gameId);
@@ -691,19 +699,19 @@
             players: {
                 [currentPlayerId]: { name: playerName, score: 0, hand: [], isHost: true }
             },
-            gameStatus: 'waiting', // 'waiting', 'in-progress', 'round-over', 'finished'
+            gameStatus: 'waiting',
             boardDominos: [],
             boneyard: [],
             currentPlayerIndex: 0,
             playerOrder: [currentPlayerId],
             roundNumber: 0,
             currentStartingDouble: 9,
-            turnState: 'WAITING', // 'WAITING', 'PLACED'
+            turnState: 'WAITING',
             mustDrawToStart: false,
             lastDrawnDominoId: null,
             moveHistory: [],
             currentTheme: 'classic',
-            actionStatus: null, // For displaying messages like "Player is moving a tile"
+            actionStatus: null,
             createdAt: serverTimestamp()
         };
 
@@ -739,7 +747,6 @@
             return;
         }
 
-        // Add the new player to the game
         await updateDoc(gameRef, {
             [`players.${currentPlayerId}`]: { name: playerName, score: 0, hand: [], isHost: false },
             playerOrder: [...gameData.playerOrder, currentPlayerId]
@@ -754,7 +761,6 @@
         waitingRoomView.classList.remove('hidden');
         gameIdDisplay.textContent = gameId;
         
-        // Listen for real-time updates to the game state
         if (unsubscribeGameListener) unsubscribeGameListener();
         unsubscribeGameListener = onSnapshot(doc(db, "games", currentGameId), (docSnap) => {
             if (docSnap.exists()) {
@@ -767,14 +773,12 @@
     }
 
     function leaveGame() {
-        // A simple reload is the easiest way to reset the client state
         window.location.reload();
     }
     mainMenuButton.addEventListener('click', leaveGame);
     mainMenuButtonFinal.addEventListener('click', leaveGame);
 
     copyGameIdButton.addEventListener('click', () => {
-        // Use a hidden textarea for robust copying
         const textArea = document.createElement("textarea");
         textArea.value = currentGameId;
         document.body.appendChild(textArea);
@@ -821,7 +825,7 @@
             
             const canStart = isHost && playerCount >= 2 && playerCount <= 8;
             startGameButton.disabled = !canStart;
-            reDealButton.classList.toggle('hidden', true); // Hide re-deal in lobby
+            reDealButton.classList.toggle('hidden', true);
 
             if (isHost) {
                 if (playerCount < 2) {
@@ -835,7 +839,6 @@
                 waitingMessage.textContent = "Waiting for the host to start the game...";
             }
 
-            // Ensure correct screens are shown/hidden
             waitingRoomView.classList.remove('hidden');
             setupScreen.classList.remove('hidden');
             gameContainer.classList.add('hidden');
@@ -846,7 +849,6 @@
             if (oldTheme !== gameState.currentTheme) {
                 themeSwitcher.value = gameState.currentTheme;
             }
-            // Center the board only on the first transition from waiting to in-progress
             if (wasWaiting && gameState.gameStatus === 'in-progress') {
                 centerBoardOnStart();
             }
@@ -855,14 +857,12 @@
             renderGameUI(gameState);
         }
         
-        // Handle round end screen visibility
         if (gameState.gameStatus === 'round-over') {
             displayRoundEndScreen(gameState);
         } else {
             roundEndScreen.classList.add('hidden');
         }
 
-        // Handle game over screen visibility
         if (gameState.gameStatus === 'finished') {
             showFinalScores(gameState);
         } else {
@@ -902,7 +902,7 @@
             const deck = generateDeck();
             shuffle(deck);
 
-            const dominoesPerPlayer = numPlayers <= 4 ? 7 : 5; // Adjust dealing logic for more players
+            const dominoesPerPlayer = numPlayers <= 4 ? 7 : 5;
             const updatedPlayers = { ...currentData.players };
 
             playerIds.forEach(pid => {
@@ -910,20 +910,19 @@
             });
 
             const newRoundNumber = currentData.roundNumber + 1;
-            const newStartingDouble = 9 - ((newRoundNumber - 1) % 10); // Cycle through doubles 9 down to 0
+            const newStartingDouble = 9 - ((newRoundNumber - 1) % 10);
 
             let newPlayerIndex;
             let newMustDraw = false;
 
-            // Winner of the previous round starts the next.
             if (currentData.roundNumber > 0 && currentData.roundEndInfo?.winnerId) {
                 newPlayerIndex = playerIds.indexOf(currentData.roundEndInfo.winnerId);
-                if (newPlayerIndex === -1) { // Fallback if winner not found
+                if (newPlayerIndex === -1) {
                     const starterInfo = findRoundStarter(updatedPlayers, playerIds, newStartingDouble);
                     newPlayerIndex = starterInfo.playerIndex;
                     newMustDraw = starterInfo.mustDraw;
                 }
-            } else { // First round logic
+            } else {
                 const starterInfo = findRoundStarter(updatedPlayers, playerIds, newStartingDouble);
                 newPlayerIndex = starterInfo.playerIndex;
                 newMustDraw = starterInfo.mustDraw;
@@ -941,7 +940,7 @@
                 turnState: 'WAITING',
                 lastDrawnDominoId: null,
                 moveHistory: [],
-                roundEndInfo: null // Clear previous round info
+                roundEndInfo: null
             });
         });
     }
@@ -953,7 +952,6 @@
         const hasSpecificDouble = (hand, val) => hand.some(d => d.top === val && d.bottom === val);
         const hasDoubleSpinner = (hand) => hand.some(d => d.top === SPINNER_VALUE && d.bottom === SPINNER_VALUE);
 
-        // Find player with the required double
         for (let i = 0; i < playerOrder.length; i++) {
             const pid = playerOrder[i];
             if (hasSpecificDouble(players[pid].hand, requiredDoubleValue)) {
@@ -961,7 +959,6 @@
                 break;
             }
         }
-        // If not found, find player with double spinner
         if (starterIndex === -1) {
             for (let i = 0; i < playerOrder.length; i++) {
                 const pid = playerOrder[i];
@@ -971,7 +968,6 @@
                 }
             }
         }
-        // If still not found, highest hand value must draw
         if (starterIndex === -1) {
             let highestScore = -1;
             for (let i = 0; i < playerOrder.length; i++) {
@@ -997,9 +993,8 @@
             const gameState = gameSnap.data();
 
             const currentTurnPlayerId = gameState.playerOrder[gameState.currentPlayerIndex];
-            // Check if it's the current player's turn and they are in a state where drawing is allowed.
             if (currentPlayerId !== currentTurnPlayerId || gameState.turnState === 'PLACED' || gameState.boneyard.length === 0) {
-                return; // Exit if not allowed to draw
+                return;
             }
 
             const boneyard = [...gameState.boneyard];
@@ -1011,14 +1006,14 @@
             transaction.update(gameRef, {
                 players: updatedPlayers,
                 boneyard: boneyard,
-                turnState: 'PLACED', // After drawing, the player has made their move for the turn
+                turnState: 'PLACED',
                 lastDrawnDominoId: drawnDomino.id,
             });
         });
     }
     boneyardPileElement.addEventListener('click', drawFromBoneyard);
     boneyardPileElement.addEventListener('touchstart', (e) => {
-        e.preventDefault(); // Prevent ghost clicks
+        e.preventDefault();
         drawFromBoneyard();
     }, { passive: false });
 
@@ -1029,7 +1024,7 @@
         await updateDoc(gameRef, {
             currentPlayerIndex: nextPlayerIndex,
             turnState: 'WAITING',
-            moveHistory: [] // Clear history for next player
+            moveHistory: []
         });
     }
     endTurnButton.addEventListener('click', confirmTurn);
@@ -1053,8 +1048,6 @@
         const currentTurnPlayerId = gameState.playerOrder[gameState.currentPlayerIndex];
         const isMyTurn = currentPlayerId === currentTurnPlayerId;
         
-        // This is the core principle: The UI is a reflection of the state.
-        // Clear the board and re-render everything based on the new gameState.
         gameBoardElement.innerHTML = '<div id="starting-area"></div>';
         gameState.boardDominos.forEach(domino => {
             const el = createDomino(domino.dominoData);
@@ -1065,7 +1058,6 @@
             el.dataset.rotation = domino.rotation;
             el.dataset.id = domino.dominoData.id;
             
-            // Only the current player can interact with board dominos
             if (isMyTurn) {
                 el.addEventListener('mousedown', (e) => startDominoDrag(e, domino, 'board'));
                 el.addEventListener('touchstart', (e) => startDominoDrag(e, domino, 'board'), { passive: false });
@@ -1074,7 +1066,6 @@
         });
         updateMinimap(gameState.boardDominos);
 
-        // Render hands and scoreboard
         myHandContainer.innerHTML = '';
         scoreboard.innerHTML = '';
         topHandArea.innerHTML = '';
@@ -1108,7 +1099,6 @@
         }
         gameStatusElement.textContent = statusText;
 
-        // Control button visibility based on state
         endTurnButton.classList.toggle('hidden', !(isMyTurn && gameState.turnState === 'PLACED'));
         undoButton.disabled = !(isMyTurn && (gameState.moveHistory || []).length > 0);
         boneyardPileElement.style.cursor = isMyTurn && gameState.turnState === 'WAITING' ? 'pointer' : 'not-allowed';
@@ -1119,7 +1109,6 @@
         const myIndex = playerOrder.indexOf(currentPlayerId);
         if (myIndex === -1) return;
 
-        // Render my hand at the bottom
         const myPlayerData = gameState.players[currentPlayerId];
         if (myPlayerData) {
             const myHandDiv = document.createElement('div');
@@ -1134,7 +1123,6 @@
             myHandContainer.appendChild(myHandDiv);
         }
 
-        // Render other players' hands
         const playerCount = playerOrder.length;
         const opponentAreas = [topHandArea, rightHandArea, leftHandArea, topHandArea, topHandArea]; 
         let areaIndex = 0;
@@ -1163,7 +1151,6 @@
     }
 
     function renderOpponentHand(playerData, playerId, container) {
-        // Don't clear container if it's the top one, to allow multiple players
         if(container !== topHandArea) {
             container.innerHTML = '';
         }
@@ -1181,7 +1168,7 @@
         handDiv.className = isSide ? 'side-hand-grid' : 'top-hand';
         
         playerData.hand.forEach(() => {
-            const dominoElement = createDomino(null, true); // Create back of domino
+            const dominoElement = createDomino(null, true);
             handDiv.appendChild(dominoElement);
         });
 
@@ -1198,20 +1185,18 @@
     }
 
     function renderBoneyard(boneyard, isMyTurn, turnState) {
-        boneyardPileElement.innerHTML = ''; // Clear previous content
-        boneyardPileElement.classList.remove('can-draw'); // Reset animation class
+        boneyardPileElement.innerHTML = '';
+        boneyardPileElement.classList.remove('can-draw');
 
-        // Add instructional text and flash animation if it's the player's turn to draw
         if (isMyTurn && turnState === 'WAITING' && boneyard.length > 0) {
             const message = document.createElement('div');
             message.id = 'boneyard-message';
             message.textContent = 'Click to Draw';
             boneyardPileElement.appendChild(message);
-            boneyardPileElement.classList.add('can-draw'); // Add class to trigger flash
+            boneyardPileElement.classList.add('can-draw');
         }
 
-        // Create the visual stack inside the box
-        const stackSize = Math.min(boneyard.length, 5); // Show up to 5 dominoes for the stack effect
+        const stackSize = Math.min(boneyard.length, 5);
         for (let i = 0; i < stackSize; i++) {
             const domino = document.createElement('div');
             domino.className = 'domino domino-back boneyard-domino';
@@ -1225,9 +1210,8 @@
     }
     
     function displayRoundEndScreen(gameState) {
-        if (!gameState.roundEndInfo) return; // Guard against missing info
+        if (!gameState.roundEndInfo) return;
         
-        // This check prevents the screen from appearing if the game is already over
         if (gameState.gameStatus === 'finished') {
             gameOverScreen.classList.remove('hidden');
             gameContainer.classList.add('hidden');
@@ -1343,33 +1327,32 @@
     async function updateActionStatus(text) {
         if (currentGameId) {
             const gameRef = doc(db, "games", currentGameId);
-            // This is a "fire and forget" update for a transient status message
             await updateDoc(gameRef, { actionStatus: text });
         }
     }
 
     function startDominoDrag(e, dominoObject, origin) {
         e.stopPropagation();
-        if (isDraggingDomino) return; // Prevent multiple drags
+        if (isDraggingDomino) return;
 
         const currentTurnPlayerId = localGameState.playerOrder[localGameState.currentPlayerIndex];
         if (currentPlayerId !== currentTurnPlayerId) return;
         
-        activeDominoElement = e.currentTarget;
-        draggedDominoData = dominoObject; // Store the data
+        originalHandElement = e.currentTarget;
+        draggedDominoData = dominoObject;
         isDraggingDomino = true;
         wasDragged = false;
         
         const coords = getEventCoords(e);
         dragStartPos = { x: coords.clientX, y: coords.clientY };
         
-        // Clone the domino for dragging to avoid issues with original element
-        const clone = activeDominoElement.cloneNode(true);
-        clone.style.position = 'absolute';
-        clone.style.pointerEvents = 'none';
-        clone.classList.add('dragging');
-        gameBoardElement.appendChild(clone);
-        activeDominoElement = clone; // The clone is now the element we move
+        // Create a clone for visual dragging
+        activeDominoElement = originalHandElement.cloneNode(true);
+        activeDominoElement.classList.add('dragging');
+        document.body.appendChild(activeDominoElement); // Append to body to ensure visibility
+
+        // Hide original element
+        originalHandElement.style.visibility = 'hidden';
 
         const worldRect = worldElement.getBoundingClientRect();
         const mouseOnBoardX = boardPosition.x + (coords.clientX - worldRect.left) / zoomLevel;
@@ -1378,15 +1361,15 @@
         if (origin === 'board') {
             dominoOffsetX = mouseOnBoardX - dominoObject.x;
             dominoOffsetY = mouseOnBoardY - dominoObject.y;
-        } else { // from hand
+        } else {
             dominoOffsetX = DOMINO_WIDTH / 2;
             dominoOffsetY = DOMINO_HEIGHT / 2;
         }
-
-        // Hide original element in hand if dragging from hand
-        if (origin === 'hand') {
-            e.currentTarget.style.visibility = 'hidden';
-        }
+        
+        // Initial position of the clone
+        activeDominoElement.style.position = 'absolute';
+        activeDominoElement.style.left = `${coords.clientX - (DOMINO_WIDTH / 2)}px`;
+        activeDominoElement.style.top = `${coords.clientY - (DOMINO_HEIGHT / 2)}px`;
 
         updateActionStatus(`${localGameState.players[currentPlayerId].name} is moving a tile...`);
         
@@ -1405,14 +1388,10 @@
         const coords = getEventCoords(e);
         if (Math.abs(coords.clientX - dragStartPos.x) > 5 || Math.abs(coords.clientY - dragStartPos.y) > 5) {
             wasDragged = true;
-            const worldRect = worldElement.getBoundingClientRect();
-            const mouseOnBoardX = boardPosition.x + (coords.clientX - worldRect.left) / zoomLevel;
-            const mouseOnBoardY = boardPosition.y + (coords.clientY - worldRect.top) / zoomLevel;
-            
-            let currentRotation = parseInt(activeDominoElement.dataset.rotation || 0);
-            activeDominoElement.style.left = `${mouseOnBoardX - dominoOffsetX}px`;
-            activeDominoElement.style.top = `${mouseOnBoardY - dominoOffsetY}px`;
         }
+        // Update position of the clone
+        activeDominoElement.style.left = `${coords.clientX - (DOMINO_WIDTH / 2)}px`;
+        activeDominoElement.style.top = `${coords.clientY - (DOMINO_HEIGHT / 2)}px`;
     }
 
     async function endDominoDrag(e, origin, moveHandler, endHandler) {
@@ -1421,21 +1400,20 @@
         updateActionStatus(null);
 
         if (!isDraggingDomino) return;
-        
-        // Make original element visible again if it was from the hand
-        if (origin === 'hand') {
-            const originalElement = myHandContainer.querySelector(`.domino[data-id="${draggedDominoData.dominoData.id}"]`);
-            if (originalElement) {
-                originalElement.style.visibility = 'visible';
-            }
-        }
-        
+
         const gameRef = doc(db, "games", currentGameId);
 
         if (wasDragged) {
-            let newX = parseFloat(activeDominoElement.style.left);
-            let newY = parseFloat(activeDominoElement.style.top);
-            let newRotation = parseInt(activeDominoElement.dataset.rotation || 0);
+            const coords = e.changedTouches ? e.changedTouches[0] : e;
+            const worldRect = worldElement.getBoundingClientRect();
+            
+            // Calculate final position on the game board
+            const finalXOnBoard = boardPosition.x + (coords.clientX - worldRect.left) / zoomLevel - (DOMINO_WIDTH / 2);
+            const finalYOnBoard = boardPosition.y + (coords.clientY - worldRect.top) / zoomLevel - (DOMINO_HEIGHT / 2);
+            
+            let newX = finalXOnBoard;
+            let newY = finalYOnBoard;
+            let newRotation = parseInt(originalHandElement.dataset.rotation || 0);
             
             let isValidPlacement = true;
             if (localGameState.boardDominos.length === 0) {
@@ -1447,7 +1425,6 @@
                     isValidPlacement = false;
                     showMessage(`Must start with Double ${required} or Double Spinner!`);
                 } else {
-                    // Snap to center
                     newX = (BOARD_SIZE / 2) - (DOMINO_HEIGHT / 2);
                     newY = (BOARD_SIZE / 2) - (DOMINO_WIDTH / 2);
                     newRotation = 90;
@@ -1501,7 +1478,7 @@
                                     boardDominos: newBoardDominos,
                                     players: updatedPlayers,
                                     turnState: 'PLACED',
-                                    moveHistory: [] // Reset history after a valid play
+                                    moveHistory: []
                                 });
                             }
                         }
@@ -1516,12 +1493,11 @@
                     }
                 });
              }
-        } else { // This was a click, not a drag
+        } else { // Click, not a drag
             if (origin === 'board') {
                 const currentRotation = parseInt(draggedDominoData.rotation || 0);
                 const newRotation = (currentRotation + 45) % 360;
                 await runTransaction(db, async (transaction) => {
-                    const gameRef = doc(db, "games", currentGameId);
                     const gameSnap = await transaction.get(gameRef);
                     if (!gameSnap.exists()) throw "Game does not exist!";
                     const gameState = gameSnap.data();
@@ -1538,8 +1514,10 @@
         }
         
         // Cleanup
-        activeDominoElement.remove(); // Remove the clone
+        originalHandElement.style.visibility = 'visible';
+        activeDominoElement.remove();
         activeDominoElement = null;
+        originalHandElement = null;
         draggedDominoData = null;
         isDraggingDomino = false;
     }
@@ -1552,7 +1530,6 @@
     }
 
     function updateBoardTransform() {
-        // Apply transform to the game board itself, not the container
         gameBoardElement.style.transform = `translate(${-boardPosition.x}px, ${-boardPosition.y}px) scale(${zoomLevel})`;
         updateMinimap(localGameState.boardDominos || []);
     }
@@ -1584,9 +1561,8 @@
     }
     
     worldElement.addEventListener('mousedown', (e) => {
-        if (e.touches && e.touches.length > 1) return; // Ignore if it's a multi-touch gesture
+        if (e.touches && e.touches.length > 1) return;
         if (isDraggingDomino) return;
-        // Only pan if clicking on the background
         if (e.target !== worldElement && e.target !== gameBoardElement && e.target !== document.getElementById('world-wrapper')) return;
         isPanning = true;
         worldElement.classList.add('panning');
@@ -1621,7 +1597,7 @@
     worldElement.addEventListener('touchstart', (e) => {
         if (e.touches.length === 2) {
             e.preventDefault();
-            isPanning = true; // Use panning state for two-finger gestures
+            isPanning = true;
             initialPinchDistance = getPinchDistance(e);
             panStart = getAverageTouch(e);
         }
@@ -1630,13 +1606,11 @@
     worldElement.addEventListener('touchmove', (e) => {
         if (e.touches.length === 2 && isPanning) {
             e.preventDefault();
-            // Pinch-to-zoom
             const newPinchDistance = getPinchDistance(e);
             const zoomFactor = newPinchDistance / initialPinchDistance;
             handleZoom(zoomFactor - 1, panStart.x, panStart.y);
             initialPinchDistance = newPinchDistance;
 
-            // Two-finger pan
             const newAvgTouch = getAverageTouch(e);
             const dx = newAvgTouch.x - panStart.x;
             const dy = newAvgTouch.y - panStart.y;
