@@ -358,7 +358,8 @@
                 <p class="mb-2 font-bold">Players Joined:</p>
                 <div id="player-list" class="space-y-2 mb-6"></div>
                 <p id="waiting-message" class="mb-4 text-gray-400">Waiting for more players...</p>
-                <button id="start-game-button" class="w-full bg-green-600 hover:bg-green-700 font-bold py-3 px-4 rounded transition-colors" disabled>Start Game</button>
+                <button id="start-game-button" class="w-full bg-green-600 hover:bg-green-700 font-bold py-3 px-4 rounded transition-colors" disabled>Deal</button>
+                <button id="re-deal-button" class="w-full bg-yellow-600 hover:bg-yellow-700 text-black font-bold py-3 px-4 rounded transition-colors mt-2 hidden">Re-Deal</button>
             </div>
         </div>
     </div>
@@ -461,6 +462,7 @@
         const createGameButton = document.getElementById('create-game-button');
         const joinGameButton = document.getElementById('join-game-button');
         const startGameButton = document.getElementById('start-game-button');
+        const reDealButton = document.getElementById('re-deal-button');
         const playerNameInput = document.getElementById('player-name');
         const joinGameIdInput = document.getElementById('join-game-id');
         const gameIdDisplay = document.getElementById('game-id-display');
@@ -668,6 +670,11 @@
                 startRound();
             }
         });
+        reDealButton.addEventListener('click', () => {
+             if (localGameState.players[currentPlayerId]?.isHost) {
+                startRound();
+            }
+        });
 
         // --- Main Game State Handler ---
         function handleGameStateUpdate(gameState) {
@@ -677,6 +684,7 @@
             localGameState = gameState;
             const playerIds = gameState.playerOrder;
             const playerCount = playerIds.length;
+            const isHost = gameState.players[currentPlayerId]?.isHost;
 
             if (gameState.gameStatus === 'waiting') {
                 playerList.innerHTML = '';
@@ -686,9 +694,9 @@
                     playerList.appendChild(p);
                 });
                 
-                const isHost = gameState.players[currentPlayerId]?.isHost;
                 const canStart = isHost && playerCount >= 2 && playerCount <= 8;
                 startGameButton.disabled = !canStart;
+                reDealButton.classList.toggle('hidden', !isHost);
 
                 if (isHost) {
                     if (playerCount < 2) {
@@ -1287,6 +1295,7 @@
                     if (!isCorrectDouble && !isDoubleSpinner) {
                         isValidPlacement = false;
                         gameStatusElement.textContent = `Must start with Double ${required} or Double Spinner!`;
+                        // This will trigger a re-render which puts the domino back in the hand
                         const originalParent = document.querySelector(`#my-hand-container .player-hand`);
                         if(originalParent) originalParent.appendChild(activeDominoElement);
                     } else {
