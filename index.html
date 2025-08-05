@@ -110,6 +110,8 @@
             width: 8px;
             height: 8px;
             border-radius: 50%;
+            border: 1px solid rgba(0,0,0,0.1);
+            box-shadow: inset 0 1px 2px rgba(0,0,0,0.3);
         }
         .pip-color-0 { background-color: #cbd5e0; }
         .pip-color-1 { background-color: #EADCA6; }
@@ -236,6 +238,11 @@
         }
 
         /* Mobile Layout Fixes */
+        #game-container {
+            display: grid;
+            grid-template-rows: auto 1fr auto;
+            height: 100vh;
+        }
         #bottom-section-wrapper {
             overflow-y: auto;
             max-height: 30vh; /* More generous height for scrolling */
@@ -307,8 +314,8 @@
     </div>
 
     <!-- Main Game Container -->
-    <div id="game-container" class="hidden w-full h-screen flex flex-col items-center p-4">
-        <div id="game-info" class="bg-gray-900 bg-opacity-70 p-2 rounded-lg shadow-lg w-full max-w-6xl z-10 flex justify-between items-center mb-2 flex-shrink-0">
+    <div id="game-container" class="hidden w-full h-screen p-4">
+        <div id="game-info" class="bg-gray-900 bg-opacity-70 p-2 rounded-lg shadow-lg w-full max-w-6xl z-10 flex justify-between items-center mb-2 flex-shrink-0 mx-auto">
             <div class="flex items-center gap-4">
                 <button id="main-menu-button" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded transition-colors">New Game / Exit</button>
                 <div>
@@ -317,6 +324,10 @@
                 </div>
             </div>
             <div class="flex items-center gap-4">
+                 <div class="text-right">
+                    <p class="text-xs text-gray-400">Game ID</p>
+                    <p id="game-id-header" class="font-mono text-yellow-300"></p>
+                 </div>
                  <select id="theme-switcher" class="bg-gray-700 text-white rounded p-2">
                     <option value="classic">Classic</option>
                     <option value="dr_edell">Dr. Edell</option>
@@ -328,13 +339,13 @@
                 <div id="scoreboard" class="text-right flex gap-4"></div>
             </div>
         </div>
-        <div id="world" class="w-full max-w-6xl h-full rounded-lg shadow-lg mb-2 flex-grow">
+        <div id="world" class="w-full max-w-6xl h-full rounded-lg shadow-lg mb-2 flex-grow mx-auto">
             <div id="game-board"></div>
             <div id="minimap-container">
                 <div id="minimap-viewport"></div>
             </div>
         </div>
-        <div id="bottom-section-wrapper" class="w-full max-w-6xl z-10 flex-shrink-0">
+        <div id="bottom-section-wrapper" class="w-full max-w-6xl z-10 flex-shrink-0 mx-auto">
             <div class="flex justify-between items-start gap-4 mt-2">
                 <div id="all-hands-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 flex-grow"></div>
                 <div id="boneyard-container" class="bg-gray-900 bg-opacity-70 p-4 rounded-lg shadow-inner">
@@ -372,6 +383,7 @@
         const playerNameInput = document.getElementById('player-name');
         const joinGameIdInput = document.getElementById('join-game-id');
         const gameIdDisplay = document.getElementById('game-id-display');
+        const gameIdHeader = document.getElementById('game-id-header');
         const copyGameIdButton = document.getElementById('copy-game-id');
         const playerList = document.getElementById('player-list');
         const waitingMessage = document.getElementById('waiting-message');
@@ -612,6 +624,7 @@
                 if (oldTheme !== gameState.currentTheme) {
                     themeSwitcher.value = gameState.currentTheme;
                 }
+                gameIdHeader.textContent = currentGameId;
                 renderGameUI(gameState);
             }
             
@@ -848,7 +861,7 @@
                 if(gameState.mustDrawToStart) {
                     statusText = "You have the highest hand. Draw to find the starting double.";
                 } else if (gameState.boardDominos.length === 0) {
-                    statusText = "You have the starting tile! Place it on the board.";
+                    statusText = `You must play the Double ${gameState.currentStartingDouble} or Double Spinner.`;
                 } else if (gameState.turnState === 'WAITING') {
                     statusText = "Your turn. Play a domino or draw from the boneyard.";
                 } else if (gameState.turnState === 'PLACED') {
@@ -1107,7 +1120,20 @@
                  const newY = parseFloat(activeDominoElement.style.top);
                  const newRotation = parseInt(activeDominoElement.dataset.rotation || 0);
                  
-                 const isValidPlacement = true; // TODO: Add placement validation
+                let isValidPlacement = true;
+                if (localGameState.boardDominos.length === 0) {
+                    const d = dominoObject.dominoData;
+                    const required = localGameState.currentStartingDouble;
+                    const isCorrectDouble = d.top === required && d.bottom === required;
+                    const isDoubleSpinner = d.top === SPINNER_VALUE && d.bottom === SPINNER_VALUE;
+                    if (!isCorrectDouble && !isDoubleSpinner) {
+                        isValidPlacement = false;
+                        gameStatusElement.textContent = `Must start with Double ${required} or Double Spinner!`;
+                        // This will trigger a re-render which puts the domino back in the hand
+                        const originalParent = document.querySelector(`#player-${currentPlayerId}-hand-section .player-hand`);
+                        if(originalParent) originalParent.appendChild(activeDominoElement);
+                    }
+                }
 
                  if (isValidPlacement) {
                     await runTransaction(db, async (transaction) => {
@@ -1128,14 +1154,14 @@
                                 
                                 if (playerHand.length === 0) {
                                     isRoundWinner = true;
-                                } else {
-                                    transaction.update(gameRef, {
-                                        boardDominos: newBoardDominos,
-                                        players: updatedPlayers,
-                                        turnState: 'PLACED',
-                                        moveHistory: [] // Clear history on new placement
-                                    });
-                                }
+                                } 
+                                
+                                transaction.update(gameRef, {
+                                    boardDominos: newBoardDominos,
+                                    players: updatedPlayers,
+                                    turnState: isRoundWinner ? 'WAITING' : 'PLACED',
+                                    moveHistory: [] // Clear history on new placement
+                                });
                             }
                         } else { // origin === 'board'
                             const boardIndex = newBoardDominos.findIndex(d => d.dominoData.id === dominoObject.dominoData.id);
