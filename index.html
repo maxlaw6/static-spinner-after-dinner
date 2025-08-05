@@ -59,6 +59,17 @@
             background-color: #2d3748; /* bg-gray-700 */
             border: 1px solid #4a5568; /* bg-gray-600 */
             box-shadow: 0 2px 5px rgba(0,0,0,0.4);
+            position: relative;
+        }
+        .domino-back::after {
+            content: '';
+            position: absolute;
+            left: 50%;
+            top: 10%;
+            height: 80%;
+            width: 2px;
+            background-color: rgba(0,0,0,0.2);
+            transform: translateX(-50%);
         }
         .player-hand .domino {
             position: relative;
@@ -149,8 +160,8 @@
         }
         .boneyard-domino {
             position: absolute;
-            background-color: #f7f7f7;
-            border: 1px solid #555;
+            background-color: #2d3748;
+            border: 1px solid #4a5568;
             transition: all 0.3s ease;
         }
         #boneyard-count {
@@ -219,7 +230,7 @@
         /* Mobile Layout Fixes */
         #bottom-section-wrapper {
             overflow-y: auto;
-            max-height: 25vh; /* Adjust as needed */
+            max-height: 30vh; /* More generous height for scrolling */
         }
     </style>
 </head>
@@ -826,8 +837,8 @@
                 renderScoreboardEntry(gameState.players[pid], pid);
             });
             
+            renderBoneyard(gameState.boneyard);
             currentPlayerElement.textContent = gameState.players[currentTurnPlayerId].name;
-            boneyardCountElement.textContent = gameState.boneyard.length;
             
             let statusText = '';
             if (isMyTurn) {
@@ -845,7 +856,11 @@
             }
             gameStatusElement.textContent = statusText;
 
-            endTurnButton.classList.toggle('hidden', !isMyTurn || gameState.turnState !== 'PLACED');
+            if (isMyTurn && gameState.turnState === 'PLACED') {
+                endTurnButton.classList.remove('hidden');
+            } else {
+                endTurnButton.classList.add('hidden');
+            }
             undoButton.disabled = !isMyTurn || (gameState.moveHistory || []).length === 0;
             boneyardPileElement.style.cursor = isMyTurn && gameState.turnState === 'WAITING' ? 'pointer' : 'not-allowed';
         }
@@ -886,6 +901,21 @@
             const scoreEntry = document.createElement('p');
             scoreEntry.textContent = `${playerData.name}: ${playerData.score}`;
             scoreboard.appendChild(scoreEntry);
+        }
+
+        function renderBoneyard(boneyard) {
+            boneyardPileElement.innerHTML = '';
+            const pileSize = Math.min(boneyard.length, 10);
+            for (let i = 0; i < pileSize; i++) {
+                const domino = document.createElement('div');
+                domino.className = 'domino boneyard-domino';
+                domino.style.transform = `rotate(${Math.random() * 20 - 10}deg) translateX(${Math.random() * 8 - 4}px)`;
+                domino.style.bottom = `${i * 2}px`;
+                domino.style.left = `${Math.random() * 4 - 2}px`;
+                boneyardPileElement.appendChild(domino);
+            }
+            boneyardCountElement.textContent = boneyard.length;
+            boneyardPileElement.appendChild(boneyardCountElement);
         }
         
         function displayRoundEndScreen(gameState) {
@@ -1038,6 +1068,7 @@
             if (Math.abs(coords.clientX - dragStartPos.x) > 5 || Math.abs(coords.clientY - dragStartPos.y) > 5) {
                 wasDragged = true;
                 if (targetElement.parentElement !== gameBoardElement) {
+                    targetElement.style.position = 'absolute'; // Ensure it can be positioned
                     gameBoardElement.appendChild(targetElement);
                     targetElement.classList.add('dragging');
                 }
