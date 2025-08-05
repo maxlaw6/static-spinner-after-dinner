@@ -1307,9 +1307,7 @@
                     if (!isCorrectDouble && !isDoubleSpinner) {
                         isValidPlacement = false;
                         gameStatusElement.textContent = `Must start with Double ${required} or Double Spinner!`;
-                        // This will trigger a re-render which puts the domino back in the hand
-                        const originalParent = document.querySelector(`#my-hand-container .player-hand`);
-                        if(originalParent) originalParent.appendChild(activeDominoElement);
+                        activeDominoElement.remove(); // Remove from board to be re-rendered in hand
                     } else {
                         // Snap to center
                         newX = (BOARD_SIZE / 2) - (DOMINO_HEIGHT / 2);
@@ -1381,7 +1379,6 @@
             }
             activeDominoElement = null;
         }
-
         // --- Pan and Zoom Logic ---
         function centerBoardOnStart() {
             zoomLevel = 1.0;
