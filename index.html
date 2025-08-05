@@ -10,11 +10,14 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
         /* General Body and Layout Styles */
+        html, body {
+            height: 100%;
+            overflow: hidden;
+        }
         body {
             font-family: 'Inter', sans-serif;
             user-select: none;
             touch-action: none;
-            overflow: hidden;
             background-color: #1f2937; /* bg-gray-800 */
         }
 
@@ -64,7 +67,7 @@
             box-shadow: 0 2px 5px rgba(0,0,0,0.2), inset 0 0 2px rgba(0,0,0,0.2);
             transform-origin: center center;
             color: #1a1a1a;
-            transition: transform 0.2s ease, box-shadow 0.2s ease, top 0.2s ease, left 0.2s ease;
+            transition: box-shadow 0.2s ease;
         }
         .domino.domino-back {
             background-color: #f7f7f7; /* Ivory color for opponent hands */
@@ -284,7 +287,7 @@
         #game-layout {
             display: grid;
             grid-template-rows: auto 1fr auto;
-            height: 100vh;
+            height: 100%; /* IPAD FIX */
             width: 100%;
             padding: 1rem;
             gap: 1rem;
@@ -295,6 +298,7 @@
             position: relative;
             display: grid;
             place-items: center;
+            min-height: 0; /* IPAD FIX */
         }
         #main-game-area > * {
             grid-column: 1 / -1;
@@ -370,10 +374,12 @@
             justify-content: center;
             gap: 0.5rem;
             max-width: 600px;
+            overflow-y: auto; /* IPAD FIX */
         }
         #my-hand-container {
             display: flex;
             justify-content: center;
+            max-height: 150px; /* IPAD FIX */
         }
 
         @media (max-width: 768px) {
@@ -1289,12 +1295,11 @@
 
         function startDominoDrag(e, dominoObject, origin) {
             e.stopPropagation();
+            if (isDraggingDomino) return; // BUG FIX: Prevent multiple drags
+
             const currentTurnPlayerId = localGameState.playerOrder[localGameState.currentPlayerIndex];
             if (currentPlayerId !== currentTurnPlayerId) return;
-            // BUG FIX: Removed restrictive turn state check to allow playing after drawing.
-            // The server-side transaction is the source of truth for valid moves.
-            // if (origin === 'hand' && localGameState.turnState === 'PLACED') return;
-
+            
             activeDominoElement = e.currentTarget;
             isDraggingDomino = true;
             wasDragged = false;
@@ -1350,11 +1355,9 @@
                 const worldRect = worldElement.getBoundingClientRect();
                 const mouseOnBoardX = boardPosition.x + (coords.clientX - worldRect.left) / zoomLevel;
                 const mouseOnBoardY = boardPosition.y + (coords.clientY - worldRect.top) / zoomLevel;
-                activeDominoElement.style.left = `${mouseOnBoardX - dominoOffsetX}px`;
-                activeDominoElement.style.top = `${mouseOnBoardY - dominoOffsetY}px`;
+                // Use transform for smoother dragging
+                activeDominoElement.style.transform = `translate(${mouseOnBoardX - dominoOffsetX}px, ${mouseOnBoardY - dominoOffsetY}px) rotate(${activeDominoElement.dataset.rotation || 0}deg)`;
             }
-            dragLabel.style.left = `${coords.clientX}px`;
-            dragLabel.style.top = `${coords.clientY}px`;
         }
 
         async function endDominoDrag(e, dominoObject, origin, moveHandler, endHandler) {
@@ -1373,8 +1376,6 @@
                  let newRotation = parseInt(activeDominoElement.dataset.rotation || 0);
                 
                 let isValidPlacement = true;
-                // Note: Full placement validation logic is still needed here for a complete game.
-                // This fix focuses on the state transaction bug.
                 if (localGameState.boardDominos.length === 0) {
                     const d = dominoObject.dominoData;
                     const required = localGameState.currentStartingDouble;
@@ -1383,7 +1384,6 @@
                     if (!isCorrectDouble && !isDoubleSpinner) {
                         isValidPlacement = false;
                         gameStatusElement.textContent = `Must start with Double ${required} or Double Spinner!`;
-                        // BUG FIX: Do not remove the element. The next state update will re-render it correctly in the hand.
                         activeDominoElement.remove(); 
                     } else {
                         newX = (BOARD_SIZE / 2) - (DOMINO_HEIGHT / 2);
@@ -1410,7 +1410,6 @@
                                 newBoardDominos.push({ dominoData: playedDomino, x: newX, y: newY, rotation: newRotation });
                                 
                                 if (playerHand.length === 0) {
-                                    // --- MERGED endRound LOGIC ---
                                     const winnerPlayerId = currentPlayerId;
                                     let roundPoints = {};
                                     let totalPointsForWinner = 0;
@@ -1436,7 +1435,6 @@
                                         turnState: 'WAITING'
                                     });
                                 } else {
-                                    // --- REGULAR MOVE ---
                                     transaction.update(gameRef, {
                                         boardDominos: newBoardDominos,
                                         players: updatedPlayers,
