@@ -358,8 +358,7 @@
                 <p class="mb-2 font-bold">Players Joined:</p>
                 <div id="player-list" class="space-y-2 mb-6"></div>
                 <p id="waiting-message" class="mb-4 text-gray-400">Waiting for more players...</p>
-                <button id="start-game-button" class="w-full bg-green-600 hover:bg-green-700 font-bold py-3 px-4 rounded transition-colors" disabled>Deal</button>
-                <button id="re-deal-button" class="w-full bg-yellow-600 hover:bg-yellow-700 text-black font-bold py-3 px-4 rounded transition-colors mt-2 hidden">Re-Deal</button>
+                <button id="start-game-button" class="w-full bg-green-600 hover:bg-green-700 font-bold py-3 px-4 rounded transition-colors" disabled>Start Game</button>
             </div>
         </div>
     </div>
@@ -396,6 +395,7 @@
                     </div>
                 </div>
                 <div class="flex items-center gap-4">
+                     <button id="re-deal-button" class="bg-yellow-600 hover:bg-yellow-700 text-black font-bold py-2 px-4 rounded transition-colors">Re-Deal</button>
                      <div class="text-right">
                         <p class="text-xs text-gray-400">Game ID</p>
                         <p id="game-id-header" class="font-mono text-yellow-300"></p>
@@ -696,7 +696,8 @@
                 
                 const canStart = isHost && playerCount >= 2 && playerCount <= 8;
                 startGameButton.disabled = !canStart;
-                reDealButton.classList.toggle('hidden', !isHost);
+                reDealButton.classList.toggle('hidden', !isHost || gameState.gameStatus !== 'in-progress');
+
 
                 if (isHost) {
                     if (playerCount < 2) {
@@ -724,6 +725,7 @@
                     centerBoardOnStart();
                 }
                 gameIdHeader.textContent = currentGameId;
+                reDealButton.classList.toggle('hidden', !isHost);
                 renderGameUI(gameState);
             }
             
