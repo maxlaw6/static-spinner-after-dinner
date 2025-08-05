@@ -197,12 +197,13 @@
             border: 2px solid rgba(255, 255, 255, 0.3);
             border-radius: 4px;
             z-index: 2000;
-            pointer-events: none;
+            cursor: pointer;
         }
         #minimap-viewport {
             position: absolute;
             background-color: rgba(255, 255, 255, 0.25);
             border: 1px solid rgba(255, 255, 255, 0.7);
+            pointer-events: none;
         }
         .minimap-dot {
             position: absolute;
@@ -294,7 +295,7 @@
                 padding: 0.5rem;
                 gap: 0.5rem;
             }
-            #game-info { grid-area: 1 / 1 / 2 / 2; }
+            #game-info { grid-area: 1 / 1 / 2 / 2; flex-direction: column; align-items: stretch; }
             #top-hand-area { grid-area: 2 / 1 / 3 / 2; }
             #world-wrapper { grid-area: 3 / 1 / 4 / 2; }
             #bottom-hand-area { grid-area: 4 / 1 / 5 / 2; }
@@ -1026,7 +1027,7 @@
 
             const title = document.createElement('h3');
             title.className = 'font-bold text-center mb-2';
-            title.textContent = isMe ? "Your Hand" : `${playerData.name}'s Hand`;
+            title.textContent = isMe ? "Your Hand" : `${playerData.name}'s Hand (${playerData.hand.length} tiles)`;
 
             const handDiv = document.createElement('div');
             handDiv.className = `player-hand flex flex-wrap justify-center gap-2 min-h-[50px] ${isSide ? 'flex-col items-center' : 'flex-row'}`;
