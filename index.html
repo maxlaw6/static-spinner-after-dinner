@@ -38,6 +38,16 @@
             height: 2500px;
             transform-origin: top left;
         }
+        #starting-area {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            width: 42px;
+            height: 82px;
+            border: 2px dashed rgba(255, 255, 255, 0.4);
+            border-radius: 8px;
+        }
 
         /* Domino Styles */
         .domino {
@@ -349,7 +359,9 @@
             </div>
         </div>
         <div id="world" class="w-full max-w-6xl h-full rounded-lg shadow-lg mb-2 flex-grow mx-auto">
-            <div id="game-board"></div>
+            <div id="game-board">
+                <div id="starting-area"></div>
+            </div>
             <div id="minimap-container">
                 <div id="minimap-viewport"></div>
             </div>
@@ -596,6 +608,8 @@
         // --- Main Game State Handler ---
         function handleGameStateUpdate(gameState) {
             const oldTheme = localGameState.currentTheme;
+            const wasWaiting = localGameState.gameStatus === 'waiting';
+
             localGameState = gameState;
             const playerIds = gameState.playerOrder;
             const playerCount = playerIds.length;
@@ -633,6 +647,9 @@
                 gameContainer.classList.remove('hidden');
                 if (oldTheme !== gameState.currentTheme) {
                     themeSwitcher.value = gameState.currentTheme;
+                }
+                if (wasWaiting && gameState.gameStatus === 'in-progress') {
+                    centerBoardOnStart();
                 }
                 gameIdHeader.textContent = currentGameId;
                 renderGameUI(gameState);
@@ -839,7 +856,7 @@
             const currentTurnPlayerId = gameState.playerOrder[gameState.currentPlayerIndex];
             const isMyTurn = currentPlayerId === currentTurnPlayerId;
             
-            gameBoardElement.innerHTML = '';
+            gameBoardElement.innerHTML = '<div id="starting-area"></div>'; // Clear and add starting area
             gameState.boardDominos.forEach(domino => {
                 const el = createDomino(domino.dominoData);
                 el.style.position = 'absolute';
@@ -931,14 +948,21 @@
 
         function renderBoneyard(boneyard) {
             boneyardPileElement.innerHTML = '';
-            const pileSize = Math.min(boneyard.length, 10);
-            for (let i = 0; i < pileSize; i++) {
-                const domino = document.createElement('div');
-                domino.className = 'domino boneyard-domino';
-                domino.style.transform = `rotate(${Math.random() * 20 - 10}deg) translateX(${Math.random() * 8 - 4}px)`;
-                domino.style.bottom = `${i * 2}px`;
-                domino.style.left = `${Math.random() * 4 - 2}px`;
-                boneyardPileElement.appendChild(domino);
+            const pileCount = 3;
+            const basePileSize = Math.floor(boneyard.length / pileCount);
+            const extra = boneyard.length % pileCount;
+            
+            let dominoIndex = 0;
+            for (let p = 0; p < pileCount; p++) {
+                const pileSize = basePileSize + (p < extra ? 1 : 0);
+                for (let i = 0; i < Math.min(pileSize, 5); i++) {
+                    const domino = document.createElement('div');
+                    domino.className = 'domino boneyard-domino';
+                    const xOffset = (p - 1) * 20;
+                    domino.style.transform = `rotate(${Math.random() * 20 - 10}deg) translateX(${xOffset + (Math.random() * 8 - 4)}px)`;
+                    domino.style.bottom = `${i * 2}px`;
+                    boneyardPileElement.appendChild(domino);
+                }
             }
             boneyardCountElement.textContent = boneyard.length;
             boneyardPileElement.appendChild(boneyardCountElement);
@@ -1132,9 +1156,9 @@
             let isRoundWinner = false;
 
             if (wasDragged) {
-                 const newX = parseFloat(activeDominoElement.style.left);
-                 const newY = parseFloat(activeDominoElement.style.top);
-                 const newRotation = parseInt(activeDominoElement.dataset.rotation || 0);
+                 let newX = parseFloat(activeDominoElement.style.left);
+                 let newY = parseFloat(activeDominoElement.style.top);
+                 let newRotation = parseInt(activeDominoElement.dataset.rotation || 0);
                  
                 let isValidPlacement = true;
                 if (localGameState.boardDominos.length === 0) {
@@ -1148,6 +1172,11 @@
                         // This will trigger a re-render which puts the domino back in the hand
                         const originalParent = document.querySelector(`#player-${currentPlayerId}-hand-section .player-hand`);
                         if(originalParent) originalParent.appendChild(activeDominoElement);
+                    } else {
+                        // Snap to center
+                        newX = (BOARD_SIZE / 2) - (DOMINO_HEIGHT / 2);
+                        newY = (BOARD_SIZE / 2) - (DOMINO_WIDTH / 2);
+                        newRotation = 90;
                     }
                 }
 
@@ -1216,6 +1245,13 @@
         }
 
         // --- Pan and Zoom Logic ---
+        function centerBoardOnStart() {
+            zoomLevel = 1.0;
+            boardPosition.x = (BOARD_SIZE / 2) - (worldElement.clientWidth / 2);
+            boardPosition.y = (BOARD_SIZE / 2) - (worldElement.clientHeight / 2);
+            updateBoardTransform();
+        }
+
         function updateBoardTransform() {
             gameBoardElement.style.transform = `translate(-${boardPosition.x}px, -${boardPosition.y}px) scale(${zoomLevel})`;
             updateMinimap(localGameState.boardDominos || []);
