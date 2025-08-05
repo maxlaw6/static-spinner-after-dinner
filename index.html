@@ -422,6 +422,7 @@
         let dominoOffsetX = 0;
         let dominoOffsetY = 0;
         let initialPinchDistance = null;
+        let activeDominoElement = null; // Keep track of the element being dragged
 
         // --- Firebase Initialization ---
         async function initializeFirebase() {
@@ -1029,6 +1030,7 @@
             const currentTurnPlayerId = localGameState.playerOrder[localGameState.currentPlayerIndex];
             if (currentPlayerId !== currentTurnPlayerId) return;
 
+            activeDominoElement = e.currentTarget;
             isDraggingDomino = true;
             wasDragged = false;
             
@@ -1044,7 +1046,7 @@
                 dominoCurrentLeft = dominoObject.x;
                 dominoCurrentTop = dominoObject.y;
             } else {
-                const dominoRect = e.currentTarget.getBoundingClientRect();
+                const dominoRect = activeDominoElement.getBoundingClientRect();
                 dominoCurrentLeft = boardPosition.x + (dominoRect.left - worldRect.left) / zoomLevel;
                 dominoCurrentTop = boardPosition.y + (dominoRect.top - worldRect.top) / zoomLevel;
             }
@@ -1052,8 +1054,8 @@
             dominoOffsetX = mouseOnBoardX - dominoCurrentLeft;
             dominoOffsetY = mouseOnBoardY - dominoCurrentTop;
 
-            const moveHandler = (ev) => dragDomino(ev, e.currentTarget);
-            const endHandler = (ev) => endDominoDrag(ev, dominoObject, origin, e.currentTarget, moveHandler, endHandler);
+            const moveHandler = (ev) => dragDomino(ev);
+            const endHandler = (ev) => endDominoDrag(ev, dominoObject, origin, moveHandler, endHandler);
 
             document.addEventListener('mousemove', moveHandler);
             document.addEventListener('mouseup', endHandler, { once: true });
@@ -1061,37 +1063,38 @@
             document.addEventListener('touchend', endHandler, { once: true });
         }
 
-        function dragDomino(e, targetElement) {
-            if (!isDraggingDomino) return;
+        function dragDomino(e) {
+            if (!isDraggingDomino || !activeDominoElement) return;
             e.preventDefault();
             const coords = getEventCoords(e);
             if (Math.abs(coords.clientX - dragStartPos.x) > 5 || Math.abs(coords.clientY - dragStartPos.y) > 5) {
                 wasDragged = true;
-                if (targetElement.parentElement !== gameBoardElement) {
-                    targetElement.style.position = 'absolute'; // Ensure it can be positioned
-                    gameBoardElement.appendChild(targetElement);
-                    targetElement.classList.add('dragging');
+                if (activeDominoElement.parentElement !== gameBoardElement) {
+                    activeDominoElement.style.position = 'absolute'; // Ensure it can be positioned
+                    gameBoardElement.appendChild(activeDominoElement);
+                    activeDominoElement.classList.add('dragging');
                 }
                 const worldRect = worldElement.getBoundingClientRect();
                 const mouseOnBoardX = boardPosition.x + (coords.clientX - worldRect.left) / zoomLevel;
                 const mouseOnBoardY = boardPosition.y + (coords.clientY - worldRect.top) / zoomLevel;
-                targetElement.style.left = `${mouseOnBoardX - dominoOffsetX}px`;
-                targetElement.style.top = `${mouseOnBoardY - dominoOffsetY}px`;
+                activeDominoElement.style.left = `${mouseOnBoardX - dominoOffsetX}px`;
+                activeDominoElement.style.top = `${mouseOnBoardY - dominoOffsetY}px`;
             }
         }
 
-        async function endDominoDrag(e, dominoObject, origin, targetElement, moveHandler, endHandler) {
+        async function endDominoDrag(e, dominoObject, origin, moveHandler, endHandler) {
             document.removeEventListener('mousemove', moveHandler);
             document.removeEventListener('touchmove', moveHandler);
+
             if (!isDraggingDomino) return;
             isDraggingDomino = false;
             
             const gameRef = doc(db, "games", currentGameId);
 
             if (wasDragged) {
-                 const newX = parseFloat(targetElement.style.left);
-                 const newY = parseFloat(targetElement.style.top);
-                 const newRotation = parseInt(targetElement.dataset.rotation || 0);
+                 const newX = parseFloat(activeDominoElement.style.left);
+                 const newY = parseFloat(activeDominoElement.style.top);
+                 const newRotation = parseInt(activeDominoElement.dataset.rotation || 0);
                  
                  const isValidPlacement = true; // TODO: Add placement validation
 
@@ -1156,6 +1159,7 @@
                     });
                 }
             }
+            activeDominoElement = null;
         }
 
         // --- Pan and Zoom Logic ---
