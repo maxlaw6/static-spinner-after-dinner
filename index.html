@@ -277,6 +277,14 @@
                 </div>
             </div>
             <div class="flex items-center gap-4">
+                 <select id="theme-switcher" class="bg-gray-700 text-white rounded p-2">
+                    <option value="classic">Classic</option>
+                    <option value="dr_edell">Dr. Edell</option>
+                    <option value="austin">Austin</option>
+                    <option value="rose">Rose</option>
+                    <option value="anna">Anna</option>
+                    <option value="kate">Kate</option>
+                </select>
                 <div id="scoreboard" class="text-right flex gap-4"></div>
             </div>
         </div>
@@ -293,7 +301,8 @@
                 <div id="boneyard-pile" title="Click to draw a domino">
                     <span id="boneyard-count" class="font-bold text-2xl text-white z-10">0</span>
                 </div>
-                <div id="boneyard-buttons" class="mt-2 flex justify-center">
+                <div id="boneyard-buttons" class="mt-2 flex flex-col items-center gap-2">
+                    <button id="undo-button" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition-colors">Undo Move</button>
                     <button id="end-turn-button" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition-colors hidden">End Turn</button>
                 </div>
             </div>
@@ -330,9 +339,11 @@
         const boneyardCountElement = document.getElementById('boneyard-count');
         const currentPlayerElement = document.getElementById('current-player');
         const endTurnButton = document.getElementById('end-turn-button');
+        const undoButton = document.getElementById('undo-button');
         const gameStatusElement = document.getElementById('game-status');
         const allHandsContainer = document.getElementById('all-hands-container');
         const scoreboard = document.getElementById('scoreboard');
+        const themeSwitcher = document.getElementById('theme-switcher');
         const roundEndScreen = document.getElementById('round-end-screen');
         const roundEndTitle = document.getElementById('round-end-title');
         const roundWinnerMessage = document.getElementById('round-winner-message');
@@ -350,11 +361,8 @@
 
         const SPINNER_VALUE = -1;
         const BOARD_SIZE = 2500;
-        const DOMINO_WIDTH = 80;
-        const DOMINO_HEIGHT = 40;
         
         // --- Interaction State ---
-        let activeDominoEl = null;
         let isDraggingDomino = false;
         let wasDragged = false;
         let dragStartPos = { x: 0, y: 0 };
@@ -364,14 +372,13 @@
         let zoomLevel = 1.0;
         const MIN_ZOOM = 0.3;
         const MAX_ZOOM = 3.0;
-        let originalParent = null;
         let dominoOffsetX = 0;
         let dominoOffsetY = 0;
+        let initialPinchDistance = null;
 
         // --- Firebase Initialization ---
         async function initializeFirebase() {
             try {
-                // Your web app's Firebase configuration
                 const firebaseConfig = {
                   apiKey: "AIzaSyCTmUo5UpQW77xhOkI_3XELSISo6WHyqLs",
                   authDomain: "spinner-live.firebaseapp.com",
@@ -382,7 +389,6 @@
                   measurementId: "G-BPHD3B8WDT"
                 };
 
-                // Initialize Firebase
                 const app = initializeApp(firebaseConfig);
                 db = getFirestore(app);
                 auth = getAuth(app);
@@ -391,11 +397,9 @@
                 authStatus.textContent = 'Authenticating...';
                 onAuthStateChanged(auth, async (user) => {
                     if (user) {
-                        // User is signed in.
                         currentPlayerId = user.uid;
                         enableLobby();
                     } else {
-                        // User is signed out. Sign in anonymously.
                         await signInAnonymously(auth);
                     }
                 });
@@ -415,13 +419,9 @@
 
         // --- Lobby and Game Setup ---
         createGameButton.addEventListener('click', async () => {
-            if (!currentPlayerId) return; // Guard against clicks before auth is ready
+            if (!currentPlayerId) return;
             const playerName = playerNameInput.value.trim() || `Player ${currentPlayerId.substring(0, 4)}`;
-            if (!playerName) {
-                alert("Please enter your name.");
-                return;
-            }
-
+            
             const tempGameRef = doc(collection(db, 'games'));
             const gameId = tempGameRef.id.substring(0, 6).toUpperCase();
             const gameRef = doc(db, "games", gameId);
@@ -440,6 +440,8 @@
                 turnState: 'WAITING',
                 mustDrawToStart: false,
                 lastDrawnDominoId: null,
+                moveHistory: [],
+                currentTheme: 'classic',
                 createdAt: serverTimestamp()
             };
 
@@ -501,14 +503,10 @@
         }
 
         copyGameIdButton.addEventListener('click', () => {
-            const tempInput = document.createElement('input');
-            document.body.appendChild(tempInput);
-            tempInput.value = currentGameId;
-            tempInput.select();
-            document.execCommand('copy');
-            document.body.removeChild(tempInput);
-            copyGameIdButton.textContent = 'Copied!';
-            setTimeout(() => { copyGameIdButton.textContent = 'Copy'; }, 2000);
+            navigator.clipboard.writeText(currentGameId).then(() => {
+                copyGameIdButton.textContent = 'Copied!';
+                setTimeout(() => { copyGameIdButton.textContent = 'Copy'; }, 2000);
+            });
         });
 
         startGameButton.addEventListener('click', () => {
@@ -519,6 +517,7 @@
 
         // --- Main Game State Handler ---
         function handleGameStateUpdate(gameState) {
+            const oldTheme = localGameState.currentTheme;
             localGameState = gameState;
             const playerIds = gameState.playerOrder;
             const playerCount = playerIds.length;
@@ -554,6 +553,9 @@
             } else if (gameState.gameStatus === 'in-progress' || gameState.gameStatus === 'round-over') {
                 setupScreen.classList.add('hidden');
                 gameContainer.classList.remove('hidden');
+                if (oldTheme !== gameState.currentTheme) {
+                    themeSwitcher.value = gameState.currentTheme;
+                }
                 renderGameUI(gameState);
             }
             
@@ -564,7 +566,7 @@
             }
         }
         
-        // --- Core Game Logic (Online) ---
+        // --- Core Game Logic ---
         function generateDeck() {
             const deck = [];
             for (let i = 0; i <= 9; i++) {
@@ -619,6 +621,7 @@
                     mustDrawToStart: starterInfo.mustDraw,
                     turnState: 'WAITING',
                     lastDrawnDominoId: null,
+                    moveHistory: []
                 });
             });
         }
@@ -696,7 +699,8 @@
             const nextPlayerIndex = (localGameState.currentPlayerIndex + 1) % localGameState.playerOrder.length;
             await updateDoc(gameRef, {
                 currentPlayerIndex: nextPlayerIndex,
-                turnState: 'WAITING'
+                turnState: 'WAITING',
+                moveHistory: [] // Clear history for next player
             });
         }
         endTurnButton.addEventListener('click', confirmTurn);
@@ -797,7 +801,7 @@
             gameStatusElement.textContent = statusText;
 
             endTurnButton.classList.toggle('hidden', !isMyTurn || gameState.turnState !== 'PLACED');
-            endTurnButton.disabled = !isMyTurn || gameState.turnState !== 'PLACED';
+            undoButton.disabled = !isMyTurn || gameState.moveHistory.length === 0;
             boneyardPileElement.style.cursor = isMyTurn && gameState.turnState === 'WAITING' ? 'pointer' : 'not-allowed';
         }
 
@@ -823,7 +827,7 @@
                     dominoElement.addEventListener('mousedown', (e) => startDominoDrag(e, { dominoData }, 'hand'));
                     dominoElement.addEventListener('touchstart', (e) => startDominoDrag(e, { dominoData }, 'hand'), { passive: false });
                 } else {
-                    dominoElement = createDomino(dominoData, true); // Create a back
+                    dominoElement = createDomino(dominoData, true);
                 }
                 handDiv.appendChild(dominoElement);
             });
@@ -882,7 +886,18 @@
                 const iconContainer = document.createElement('div');
                 iconContainer.className = 'spinner-icon';
                 iconContainer.style.transform = 'rotate(-90deg)';
-                iconContainer.innerHTML = `<svg viewBox="0 0 24 24" class="w-full h-full"><g stroke="#B91C1C" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M 12 12 L 12 4 L 6 4" /><path d="M 12 12 L 12 4 L 6 4" transform="rotate(60 12 12)" /><path d="M 12 12 L 12 4 L 6 4" transform="rotate(120 12 12)" /><path d="M 12 12 L 12 4 L 6 4" transform="rotate(180 12 12)" /><path d="M 12 12 L 12 4 L 6 4" transform="rotate(240 12 12)" /><path d="M 12 12 L 12 4 L 6 4" transform="rotate(300 12 12)" /></g></svg>`;
+                const theme = localGameState.currentTheme || 'classic';
+                switch (theme) {
+                    case 'classic':
+                        iconContainer.innerHTML = `<svg viewBox="0 0 24 24" class="w-full h-full"><g stroke="#B91C1C" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M 12 12 L 12 4 L 6 4" /><path d="M 12 12 L 12 4 L 6 4" transform="rotate(60 12 12)" /><path d="M 12 12 L 12 4 L 6 4" transform="rotate(120 12 12)" /><path d="M 12 12 L 12 4 L 6 4" transform="rotate(180 12 12)" /><path d="M 12 12 L 12 4 L 6 4" transform="rotate(240 12 12)" /><path d="M 12 12 L 12 4 L 6 4" transform="rotate(300 12 12)" /></g></svg>`;
+                        break;
+                    case 'dr_edell': iconContainer.innerHTML = '<div>🫁</div><div>🩺</div>'; break;
+                    case 'austin': iconContainer.innerHTML = `<svg viewBox="0 0 24 24" class="w-full h-full"><path fill="#FFDE00" d="M12,2C6.48,2,2,6.48,2,12s4.48,10,10,10s10-4.48,10-10S17.52,2,12,2z"/><path fill="#000000" d="M8.5,10.5c0.83,0,1.5-0.67,1.5-1.5S9.33,7.5,8.5,7.5S7,8.17,7,9S7.67,10.5,8.5,10.5z M15.5,10.5c0.83,0,1.5-0.67,1.5-1.5S16.33,7.5,15.5,7.5S14,8.17,14,9S14.67,10.5,15.5,10.5z"/><path fill="#D9534F" d="M18,14c-1.1,0-2-0.9-2-2s0.9-2,2-2s2,0.9,2,2S19.1,14,18,14z M6,14c-1.1,0-2-0.9-2-2s0.9-2,2-2s2,0.9,2,2S7.1,14,6,14z"/><path fill="#000000" d="M12,15c-1.66,0-3-1.34-3-3h1c0,1.1,0.9,2,2,2s2-0.9,2-2h1C15,13.66,13.66,15,12,15z"/></svg>`; break;
+                    case 'rose': iconContainer.innerHTML = '<div>✍️</div><div>🧩</div>'; break;
+                    case 'anna': iconContainer.innerHTML = `<svg version="1.0" xmlns="http://www.w3.org/2000/svg" width="300pt" height="155pt" viewBox="0 0 300 155" preserveAspectRatio="xMidYMid meet"><g transform="translate(0,155) scale(0.1,-0.1)" fill="red" stroke="red"><path d="M599 1217 c-92 -35 -157 -104 -182 -194 -7 -29 -17 -43 -28 -43 -26 0 -69 -39 -69 -64 0 -28 33 -64 65 -72 19 -5 28 -19 45 -68 42 -126 159 -271 285 -351 28 -18 83 -49 122 -69 l73 -36 87 44 c206 103 340 248 402 433 12 34 21 82 21 107 l0 45 45 7 c25 3 61 3 80 0 34 -7 35 -8 35 -52 0 -24 9 -73 21 -107 62 -185 196 -330 402 -433 l87 -44 81 41 c204 102 350 256 404 426 13 39 23 53 41 57 32 8 64 45 64 72 0 25 -43 64 -71 64 -11 0 -19 7 -19 18 0 29 -49 124 -80 153 -16 15 -48 38 -72 51 -87 46 -253 24 -324 -43 l-22 -21 -43 31 c-73 54 -177 74 -259 51 -84 -23 -167 -101 -185 -173 -6 -23 -9 -24 -43 -15 -20 6 -64 7 -97 4 l-60 -6 -24 51 c-73 152 -283 195 -430 88 l-43 -31 -22 21 c-60 56 -211 86 -287 58z m205 -42 c18 -8 38 -21 45 -29 7 -9 17 -13 22 -10 5 3 9 1 9 -4 0 -21 40 -19 71 4 35 26 113 52 177 58 43 5 125 -19 158 -47 25 -20 49 -47 48 -55 0 -10 15 -28 58 -73 31 -32 35 -39 23 -49 -8 -7 -15 -19 -15 -26 0 -8 -3 -14 -7 -14 -5 0 -9 -23 -11 -51 -1 -28 -9 -64 -17 -80 -8 -15 -15 -34 -15 -42 0 -8 -7 -20 -15 -27 -8 -7 -15 -21 -15 -31 0 -11 -3 -19 -8 -19 -4 0 -16 -17 -27 -37 -23 -43 -122 -143 -180 -181 -22 -15 -74 -45 -116 -66 l-77 -39 -58 29 c-33 15 -62 27 -66 26 -5 -1 -8 2 -8 8 0 5 -6 10 -13 10 -8 0 -22 9 -32 20 -10 11 -23 20 -29 20 -7 0 -19 8 -27 18 -8 9 -38 38 -65 63 -43 40 -109 125 -107 139 0 3 -8 16 -18 29 -10 12 -21 38 -25 56 -3 18 -14 42 -25 54 -10 11 -19 25 -19 31 0 5 -6 10 -12 10 -7 0 -21 11 -31 25 -17 24 -17 24 21 54 25 21 42 45 51 75 16 55 75 121 135 150 38 18 59 22 117 18 39 -2 85 -10 103 -17z m1211 -19 c63 -38 95 -45 114 -22 16 19 100 58 111 51 5 -3 11 -2 14 3 5 8 104 8 136 0 44 -11 144 -93 134 -110 -3 -4 -1 -8 4 -8 5 0 15 -19 23 -42 7 -24 31 -60 51 -80 l38 -37 -31 -30 c-17 -17 -35 -31 -40 -31 -5 0 -12 -12 -15 -27 -12 -51 -54 -133 -96 -190 -58 -79 -71 -93 -85 -93 -7 0 -12 -5 -10 -10 1 -6 -11 -18 -27 -28 -16 -9 -40 -26 -53 -37 -50 -43 -162 -100 -193 -99 -18 1 -50 12 -70 25 -8 5 -26 14 -39 19 -99 43 -264 205 -312 308 -44 93 -46 98 -58 177 -7 46 -16 74 -28 83 -15 11 -16 14 -3 22 8 5 17 7 21 5 3 -3 12 7 19 20 7 14 17 25 22 25 4 0 8 6 8 14 0 13 41 60 88 100 26 22 81 32 162 29 44 -1 68 -9 115 -37z"/><path d="M631 1138 c-74 -21 -118 -73 -140 -165 -16 -67 -4 -127 47 -232 56 -114 164 -217 315 -300 l57 -32 48 27 c26 15 56 32 67 38 195 107 340 346 304 501 -16 69 -33 100 -71 128 -82 59 -192 55 -268 -11 -38 -32 -77 -99 -65 -111 3 -3 8 5 12 17 3 12 9 22 13 22 4 0 11 11 14 25 4 14 13 25 21 25 8 0 15 4 15 9 0 18 86 51 134 51 69 0 117 -27 148 -85 51 -95 48 -184 -9 -291 -20 -38 -41 -74 -47 -80 -6 -7 -33 -37 -61 -68 -27 -31 -55 -56 -62 -56 -7 0 -18 -9 -25 -20 -7 -11 -16 -20 -21 -20 -4 0 -31 -16 -61 -36 -50 -33 -92 -41 -112 -21 -4 4 -14 7 -21 7 -8 0 -34 14 -58 30 -24 17 -48 30 -54 30 -6 0 -18 11 -27 25 -9 14 -20 25 -25 25 -36 0 -190 225 -173 252 4 6 3 8 -3 5 -11 -7 -23 45 -23 104 0 70 50 150 116 185 25 13 132 13 154 0 50 -30 95 -75 110 -110 12 -27 19 -34 19 -21 2 51 -76 129 -151 152 -50 15 -70 15 -117 1z"/><path d="M1820 1141 c-89 -27 -126 -69 -150 -168 -34 -147 92 -363 285 -486 130 -82 125 -81 189 -47 154 81 259 180 320 305 64 127 65 234 5 321 -68 99 -214 106 -312 15 -31 -28 -57 -72 -57 -93 1 -7 8 1 17 17 23 44 101 115 126 116 12 0 41 2 63 5 112 15 208 -113 188 -247 -6 -40 -58 -167 -74 -179 -3 -3 -16 -21 -28 -40 -11 -19 -34 -47 -50 -62 -23 -21 -32 -24 -43 -15 -11 10 -11 9 -2 -3 10 -13 -3 -25 -70 -73 -45 -31 -90 -57 -99 -57 -9 0 -19 -4 -23 -9 -6 -10 -158 65 -163 80 -2 5 -8 7 -13 3 -5 -3 -12 2 -15 10 -3 9 -11 16 -18 16 -38 0 -206 231 -192 266 3 8 1 14 -5 14 -6 0 -9 7 -5 15 3 8 1 15 -4 15 -14 0 -12 83 3 132 6 22 30 61 52 85 38 43 43 45 106 50 49 4 73 1 97 -11 42 -22 86 -66 108 -107 9 -19 19 -29 21 -22 14 40 -72 125 -149 148 -56 16 -70 17 -108 6z"/></g></svg>`; break;
+                    case 'kate': iconContainer.innerHTML = `<svg viewBox="0 0 100 100" class="w-full h-full"><rect x="10" y="25" width="80" height="50" rx="10" ry="10" fill="#F0C68C"/><path d="M 20 25 C 10 15, 10 5, 25 5 L 35 5 L 30 25 Z" fill="#6B4F4F"/><path d="M 80 25 C 90 15, 90 5, 75 5 L 65 5 L 70 25 Z" fill="#6B4F4F"/><circle cx="40" cy="45" r="5" fill="#2D2D2D"/><circle cx="60" cy="45" r="5" fill="#2D2D2D"/><path d="M 50 55 Q 45 60, 50 65 Q 55 60, 50 55 Z" fill="#2D2D2D"/><path d="M 35 70 C 40 65, 60 65, 65 70" stroke="#2D2D2D" stroke-width="3" fill="none"/><path d="M 30 35 Q 40 30, 50 35 Q 60 30, 70 35" stroke="#6B4F4F" stroke-width="2" fill="none"/></svg>`; break;
+                    default: iconContainer.textContent = 'S';
+                }
                 container.appendChild(iconContainer);
                 return container;
             }
@@ -899,7 +914,7 @@
             return container;
         }
 
-        // --- Drag, Drop, and Rotation Logic ---
+        // --- Touch, Drag, Drop, and Rotation Logic ---
         function getEventCoords(e) {
             return e.type.startsWith('touch') ? e.touches[0] : e;
         }
@@ -909,16 +924,12 @@
             const currentTurnPlayerId = localGameState.playerOrder[localGameState.currentPlayerIndex];
             if (currentPlayerId !== currentTurnPlayerId) return;
 
-            activeDominoEl = e.currentTarget;
             isDraggingDomino = true;
             wasDragged = false;
             
             const coords = getEventCoords(e);
             dragStartPos = { x: coords.clientX, y: coords.clientY };
             
-            activeDominoEl.classList.add('selected');
-            originalParent = activeDominoEl.parentElement;
-
             const worldRect = worldElement.getBoundingClientRect();
             const mouseOnBoardX = boardPosition.x + (coords.clientX - worldRect.left) / zoomLevel;
             const mouseOnBoardY = boardPosition.y + (coords.clientY - worldRect.top) / zoomLevel;
@@ -928,7 +939,7 @@
                 dominoCurrentLeft = dominoObject.x;
                 dominoCurrentTop = dominoObject.y;
             } else {
-                const dominoRect = activeDominoEl.getBoundingClientRect();
+                const dominoRect = e.currentTarget.getBoundingClientRect();
                 dominoCurrentLeft = boardPosition.x + (dominoRect.left - worldRect.left) / zoomLevel;
                 dominoCurrentTop = boardPosition.y + (dominoRect.top - worldRect.top) / zoomLevel;
             }
@@ -936,46 +947,44 @@
             dominoOffsetX = mouseOnBoardX - dominoCurrentLeft;
             dominoOffsetY = mouseOnBoardY - dominoCurrentTop;
 
-            const moveHandler = (ev) => dragDomino(ev);
-            const endHandler = (ev) => endDominoDrag(ev, dominoObject, origin);
+            const moveHandler = (ev) => dragDomino(ev, e.currentTarget);
+            const endHandler = (ev) => endDominoDrag(ev, dominoObject, origin, e.currentTarget, moveHandler, endHandler);
 
             document.addEventListener('mousemove', moveHandler);
             document.addEventListener('mouseup', endHandler, { once: true });
-            document.addEventListener('touchmove', moveHandler, { passive: false });
-            document.addEventListener('touchend', endHandler, { once: true });
         }
 
-        function dragDomino(e) {
-            if (!isDraggingDomino || !activeDominoEl) return;
+        function dragDomino(e, targetElement) {
+            if (!isDraggingDomino) return;
             e.preventDefault();
             const coords = getEventCoords(e);
             if (Math.abs(coords.clientX - dragStartPos.x) > 5 || Math.abs(coords.clientY - dragStartPos.y) > 5) {
                 wasDragged = true;
-                if (activeDominoEl.parentElement !== gameBoardElement) {
-                    gameBoardElement.appendChild(activeDominoEl);
-                    activeDominoEl.classList.add('dragging');
+                if (targetElement.parentElement !== gameBoardElement) {
+                    gameBoardElement.appendChild(targetElement);
+                    targetElement.classList.add('dragging');
                 }
                 const worldRect = worldElement.getBoundingClientRect();
                 const mouseOnBoardX = boardPosition.x + (coords.clientX - worldRect.left) / zoomLevel;
                 const mouseOnBoardY = boardPosition.y + (coords.clientY - worldRect.top) / zoomLevel;
-                activeDominoEl.style.left = `${mouseOnBoardX - dominoOffsetX}px`;
-                activeDominoEl.style.top = `${mouseOnBoardY - dominoOffsetY}px`;
+                targetElement.style.left = `${mouseOnBoardX - dominoOffsetX}px`;
+                targetElement.style.top = `${mouseOnBoardY - dominoOffsetY}px`;
             }
         }
 
-        async function endDominoDrag(e, dominoObject, origin) {
+        async function endDominoDrag(e, dominoObject, origin, targetElement, moveHandler, endHandler) {
+            document.removeEventListener('mousemove', moveHandler);
             if (!isDraggingDomino) return;
             isDraggingDomino = false;
             
             const gameRef = doc(db, "games", currentGameId);
 
             if (wasDragged) {
-                 const newX = parseFloat(activeDominoEl.style.left);
-                 const newY = parseFloat(activeDominoEl.style.top);
-                 const newRotation = parseInt(activeDominoEl.dataset.rotation || 0);
+                 const newX = parseFloat(targetElement.style.left);
+                 const newY = parseFloat(targetElement.style.top);
+                 const newRotation = parseInt(targetElement.dataset.rotation || 0);
                  
-                 // TODO: Add placement validation logic here
-                 const isValidPlacement = true; 
+                 const isValidPlacement = true; // TODO: Add placement validation
 
                  if (isValidPlacement) {
                     await runTransaction(db, async (transaction) => {
@@ -985,6 +994,7 @@
                         
                         let newBoardDominos = [...gameState.boardDominos];
                         let updatedPlayers = { ...gameState.players };
+                        let newMoveHistory = [...(gameState.moveHistory || [])];
 
                         if (origin === 'hand') {
                             const playerHand = updatedPlayers[currentPlayerId].hand;
@@ -994,21 +1004,23 @@
                                 newBoardDominos.push({ dominoData: dominoObject.dominoData, x: newX, y: newY, rotation: newRotation });
                                 
                                 if (playerHand.length === 0) {
-                                    // This will be handled in a separate transaction by endRound
+                                    // Let endRound handle the state update
                                 } else {
                                     transaction.update(gameRef, {
                                         boardDominos: newBoardDominos,
                                         players: updatedPlayers,
-                                        turnState: 'PLACED'
+                                        turnState: 'PLACED',
+                                        moveHistory: [] // Clear history on new placement
                                     });
                                 }
                             }
                         } else { // origin === 'board'
                             const boardIndex = newBoardDominos.findIndex(d => d.dominoData.id === dominoObject.dominoData.id);
                             if (boardIndex > -1) {
+                                newMoveHistory.push({ type: 'reposition', dominoId: dominoObject.dominoData.id, from: { x: newBoardDominos[boardIndex].x, y: newBoardDominos[boardIndex].y } });
                                 newBoardDominos[boardIndex].x = newX;
                                 newBoardDominos[boardIndex].y = newY;
-                                transaction.update(gameRef, { boardDominos: newBoardDominos });
+                                transaction.update(gameRef, { boardDominos: newBoardDominos, moveHistory: newMoveHistory });
                             }
                         }
                     });
@@ -1025,19 +1037,19 @@
                         if (!gameSnap.exists()) throw "Game does not exist!";
                         const gameState = gameSnap.data();
                         const newBoardDominos = [...gameState.boardDominos];
+                        let newMoveHistory = [...(gameState.moveHistory || [])];
                         const boardIndex = newBoardDominos.findIndex(d => d.dominoData.id === dominoObject.dominoData.id);
                         if (boardIndex > -1) {
+                            newMoveHistory.push({ type: 'rotate', dominoId: dominoObject.dominoData.id, from: newBoardDominos[boardIndex].rotation });
                             newBoardDominos[boardIndex].rotation = newRotation;
-                            transaction.update(gameRef, { boardDominos: newBoardDominos });
+                            transaction.update(gameRef, { boardDominos: newBoardDominos, moveHistory: newMoveHistory });
                         }
                     });
                 }
             }
-            
-            if(activeDominoEl) activeDominoEl.classList.remove('dragging', 'selected');
-            activeDominoEl = null;
         }
 
+        // --- Pan and Zoom Logic ---
         function updateBoardTransform() {
             gameBoardElement.style.transform = `translate(-${boardPosition.x}px, -${boardPosition.y}px) scale(${zoomLevel})`;
             updateMinimap(localGameState.boardDominos || []);
@@ -1064,6 +1076,7 @@
         }
         
         worldElement.addEventListener('mousedown', (e) => {
+            if (e.touches && e.touches.length > 1) return; // Ignore if it's a multi-touch gesture
             if (isDraggingDomino) return;
             if (e.target !== worldElement && e.target !== gameBoardElement) return;
             isPanning = true;
@@ -1092,20 +1105,105 @@
         }
         
         worldElement.addEventListener('wheel', (e) => {
-            if (!worldElement.contains(e.target)) return;
             e.preventDefault();
+            handleZoom(e.deltaY * -0.01, e.clientX, e.clientY);
+        }, { passive: false });
+
+        worldElement.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 2) {
+                e.preventDefault();
+                isPanning = true; // Use panning state for two-finger gestures
+                initialPinchDistance = getPinchDistance(e);
+                panStart = getAverageTouch(e);
+            }
+        }, { passive: false });
+
+        worldElement.addEventListener('touchmove', (e) => {
+            if (e.touches.length === 2 && isPanning) {
+                e.preventDefault();
+                // Pinch-to-zoom
+                const newPinchDistance = getPinchDistance(e);
+                const zoomFactor = newPinchDistance / initialPinchDistance;
+                handleZoom(zoomFactor - 1, panStart.x, panStart.y);
+                initialPinchDistance = newPinchDistance;
+
+                // Two-finger pan
+                const newAvgTouch = getAverageTouch(e);
+                const dx = newAvgTouch.x - panStart.x;
+                const dy = newAvgTouch.y - panStart.y;
+                boardPosition.x -= dx / zoomLevel;
+                boardPosition.y -= dy / zoomLevel;
+                panStart = newAvgTouch;
+                updateBoardTransform();
+            }
+        }, { passive: false });
+
+        worldElement.addEventListener('touchend', (e) => {
+            if (e.touches.length < 2) {
+                isPanning = false;
+                initialPinchDistance = null;
+            }
+        });
+
+        function getPinchDistance(e) {
+            const t1 = e.touches[0];
+            const t2 = e.touches[1];
+            return Math.sqrt(Math.pow(t1.clientX - t2.clientX, 2) + Math.pow(t1.clientY - t2.clientY, 2));
+        }
+
+        function getAverageTouch(e) {
+            const t1 = e.touches[0];
+            const t2 = e.touches[1];
+            return { x: (t1.clientX + t2.clientX) / 2, y: (t1.clientY + t2.clientY) / 2 };
+        }
+
+        function handleZoom(delta, clientX, clientY) {
             const rect = worldElement.getBoundingClientRect();
-            const mouseX = e.clientX - rect.left;
-            const mouseY = e.clientY - rect.top;
+            const mouseX = clientX - rect.left;
+            const mouseY = clientY - rect.top;
             const worldX_before = (mouseX / zoomLevel) + boardPosition.x;
             const worldY_before = (mouseY / zoomLevel) + boardPosition.y;
-            const delta = e.deltaY * -0.005;
-            const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoomLevel + delta));
+            
+            const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoomLevel * (1 + delta)));
+            
             boardPosition.x = worldX_before - (mouseX / newZoom);
             boardPosition.y = worldY_before - (mouseY / newZoom);
             zoomLevel = newZoom;
             updateBoardTransform();
-        }, { passive: false });
+        }
+
+        // --- Undo and Theme Logic ---
+        undoButton.addEventListener('click', async () => {
+            const gameRef = doc(db, "games", currentGameId);
+            await runTransaction(db, async (transaction) => {
+                const gameSnap = await transaction.get(gameRef);
+                if (!gameSnap.exists()) return;
+                const gameState = gameSnap.data();
+                if (!gameState.moveHistory || gameState.moveHistory.length === 0) return;
+
+                const newMoveHistory = [...gameState.moveHistory];
+                const lastMove = newMoveHistory.pop();
+                const newBoardDominos = [...gameState.boardDominos];
+                const dominoIndex = newBoardDominos.findIndex(d => d.dominoData.id === lastMove.dominoId);
+
+                if (dominoIndex > -1) {
+                    if (lastMove.type === 'reposition') {
+                        newBoardDominos[dominoIndex].x = lastMove.from.x;
+                        newBoardDominos[dominoIndex].y = lastMove.from.y;
+                    } else if (lastMove.type === 'rotate') {
+                        newBoardDominos[dominoIndex].rotation = lastMove.from;
+                    }
+                    transaction.update(gameRef, { boardDominos: newBoardDominos, moveHistory: newMoveHistory });
+                }
+            });
+        });
+
+        themeSwitcher.addEventListener('change', async (e) => {
+            if (currentGameId) {
+                const gameRef = doc(db, "games", currentGameId);
+                await updateDoc(gameRef, { currentTheme: e.target.value });
+            }
+        });
 
         // --- Initial Load ---
         window.onload = initializeFirebase;
