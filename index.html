@@ -975,11 +975,13 @@
 
             // Render hands and pips
             myHandContainer.innerHTML = '';
-            playerPipsTable.innerHTML = '';
             scoreboard.innerHTML = '';
+            topHandArea.innerHTML = '';
+            leftHandArea.innerHTML = '';
+            rightHandArea.innerHTML = '';
+
 
             renderPlayerHands(gameState);
-            renderPlayerPips(gameState);
 
             gameState.playerOrder.forEach(pid => {
                 renderScoreboardEntry(gameState.players[pid], pid);
@@ -1015,89 +1017,75 @@
             boneyardPileElement.style.cursor = isMyTurn && gameState.turnState === 'WAITING' ? 'pointer' : 'not-allowed';
         }
 
-        // This function now ONLY renders the current player's hand at the bottom
         function renderPlayerHands(gameState) {
+            const playerOrder = gameState.playerOrder;
+            const myIndex = playerOrder.indexOf(currentPlayerId);
+            if (myIndex === -1) return;
+
+            // Render my hand at the bottom
             const myPlayerData = gameState.players[currentPlayerId];
-            if (!myPlayerData) return;
+            if (myPlayerData) {
+                const myHandDiv = document.createElement('div');
+                myHandDiv.className = 'player-hand';
+                myPlayerData.hand.forEach(dominoData => {
+                    const dominoElement = createDomino(dominoData);
+                    dominoElement.addEventListener('mousedown', (e) => startDominoDrag(e, { dominoData }, 'hand'));
+                    dominoElement.addEventListener('touchstart', (e) => startDominoDrag(e, { dominoData }, 'hand'), { passive: false });
+                    myHandDiv.appendChild(dominoElement);
+                });
+                myHandContainer.appendChild(myHandDiv);
+            }
+
+            // Render other players' hands
+            const playerCount = playerOrder.length;
+            const opponentAreas = [topHandArea, rightHandArea, leftHandArea]; 
+            let areaIndex = 0;
+
+            for (let i = 1; i < playerCount; i++) {
+                const playerIndex = (myIndex + i) % playerCount;
+                const playerId = playerOrder[playerIndex];
+                const playerData = gameState.players[playerId];
+                
+                let targetArea;
+                if (playerCount === 2) {
+                    targetArea = topHandArea;
+                } else if (playerCount === 3) {
+                    targetArea = [rightHandArea, leftHandArea][i-1];
+                } else if (playerCount === 4) {
+                    targetArea = [rightHandArea, topHandArea, leftHandArea][i-1];
+                } else {
+                    targetArea = opponentAreas[areaIndex % opponentAreas.length];
+                    areaIndex++;
+                }
+                
+                if (targetArea) {
+                    renderOpponentHand(playerData, playerId, targetArea);
+                }
+            }
+        }
+
+        function renderOpponentHand(playerData, playerId, container) {
+            container.innerHTML = '';
+            const isSide = container === leftHandArea || container === rightHandArea;
+            const section = document.createElement('div');
+            section.className = 'opponent-hand-section w-full h-full';
+            section.classList.toggle('current-player', playerId === localGameState.playerOrder[localGameState.currentPlayerIndex]);
+
+            const title = document.createElement('h3');
+            title.className = 'font-bold text-center mb-2 text-sm';
+            title.textContent = `${playerData.name}`;
 
             const handDiv = document.createElement('div');
-            handDiv.className = 'player-hand';
-
-            myPlayerData.hand.forEach(dominoData => {
-                const dominoElement = createDomino(dominoData);
-                dominoElement.addEventListener('mousedown', (e) => startDominoDrag(e, { dominoData }, 'hand'));
-                dominoElement.addEventListener('touchstart', (e) => startDominoDrag(e, { dominoData }, 'hand'), { passive: false });
+            handDiv.className = isSide ? 'side-hand' : 'top-hand';
+            
+            playerData.hand.forEach(() => {
+                const dominoElement = createDomino(null, true); // Create back of domino
                 handDiv.appendChild(dominoElement);
             });
 
-            myHandContainer.appendChild(handDiv);
-        }
-
-        // Renders player pips around the table
-        function renderPlayerPips(gameState) {
-            const playerOrder = gameState.playerOrder;
-            const myIndex = playerOrder.indexOf(currentPlayerId);
-            const playerCount = playerOrder.length;
-            const currentTurnPlayerId = playerOrder[gameState.currentPlayerIndex];
-
-            if (myIndex === -1) return;
-
-            playerOrder.forEach((pid) => {
-                if (pid === currentPlayerId) return; // Don't create a pip for the current user
-
-                const playerData = gameState.players[pid];
-                const pip = document.createElement('div');
-                pip.className = 'player-pip';
-                pip.classList.toggle('current-player', pid === currentTurnPlayerId);
-
-                const nameEl = document.createElement('div');
-                nameEl.className = 'pip-name font-bold';
-                nameEl.textContent = playerData.name;
-
-                const countEl = document.createElement('div');
-                countEl.className = 'pip-hand-count';
-                // UPDATED: Added an SVG icon for better visualization
-                countEl.innerHTML = `
-                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M7 3a1 1 0 000 2h6a1 1 0 100-2H7zM4 7a1 1 0 011-1h10a1 1 0 110 2H5a1 1 0 01-1-1zM2 11a1 1 0 011-1h14a1 1 0 110 2H3a1 1 0 01-1-1z"></path></svg>
-                    <span>${playerData.hand.length}</span>
-                `;
-
-                pip.appendChild(nameEl);
-                pip.appendChild(countEl);
-
-                const {x, y} = getPipPosition(pid, myIndex, playerCount, playerOrder);
-                pip.style.left = `${x}%`;
-                pip.style.top = `${y}%`;
-
-                playerPipsTable.appendChild(pip);
-            });
-        }
-
-        // Calculates pip positions based on a fixed seating chart
-        function getPipPosition(opponentPid, myIndex, playerCount, playerOrder) {
-            const seatCoordinates = [
-                { x: 50, y: 5 },   // Top Center
-                { x: 95, y: 50 },  // Right
-                { x: 5, y: 50 },   // Left
-                { x: 75, y: 15 },  // Top Right
-                { x: 25, y: 15 },  // Top Left
-                { x: 80, y: 85 },  // Bottom Right
-                { x: 20, y: 85 },  // Bottom Left
-            ];
-
-            const opponentsInOrder = [];
-            for (let i = 1; i < playerCount; i++) {
-                const playerIndex = (myIndex + i) % playerCount;
-                opponentsInOrder.push(playerOrder[playerIndex]);
-            }
-            
-            const seatIndex = opponentsInOrder.indexOf(opponentPid);
-
-            if (seatIndex !== -1 && seatIndex < seatCoordinates.length) {
-                return seatCoordinates[seatIndex];
-            }
-
-            return { x: 50, y: 50 }; // Fallback
+            section.appendChild(title);
+            section.appendChild(handDiv);
+            container.appendChild(section);
         }
 
 
