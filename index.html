@@ -197,6 +197,13 @@
             text-shadow: 0 0 3px #000;
             pointer-events: none;
         }
+        @keyframes flash-border {
+            0%, 100% { border-color: #a0aec0; }
+            50% { border-color: #FFD700; }
+        }
+        #boneyard-pile.can-draw {
+            animation: flash-border 1.5s infinite;
+        }
         #minimap-container {
             position: absolute;
             top: 10px;
@@ -1133,30 +1140,27 @@
 
         function renderBoneyard(boneyard, isMyTurn, turnState) {
             boneyardPileElement.innerHTML = ''; // Clear previous content
-            
-            // Add instructional text if it's the player's turn to draw
+            boneyardPileElement.classList.remove('can-draw'); // Reset animation class
+
+            // Add instructional text and flash animation if it's the player's turn to draw
             if (isMyTurn && turnState === 'WAITING' && boneyard.length > 0) {
                 const message = document.createElement('div');
                 message.id = 'boneyard-message';
                 message.textContent = 'Click to Draw';
                 boneyardPileElement.appendChild(message);
+                boneyardPileElement.classList.add('can-draw'); // Add class to trigger flash
             }
 
-            const pileCount = 3;
-            const basePileSize = Math.floor(boneyard.length / pileCount);
-            const extra = boneyard.length % pileCount;
-            
-            for (let p = 0; p < pileCount; p++) {
-                const pileSize = basePileSize + (p < extra ? 1 : 0);
-                for (let i = 0; i < Math.min(pileSize, 5); i++) {
-                    const domino = document.createElement('div');
-                    domino.className = 'domino domino-back boneyard-domino'; // Use domino-back for ivory color
-                    const xOffset = (p - 1) * 20;
-                    domino.style.transform = `rotate(${Math.random() * 20 - 10}deg) translateX(${xOffset + (Math.random() * 8 - 4)}px)`;
-                    domino.style.bottom = `${i * 2}px`;
-                    boneyardPileElement.appendChild(domino);
-                }
+            // Create the visual stack inside the box
+            const stackSize = Math.min(boneyard.length, 5); // Show up to 5 dominoes for the stack effect
+            for (let i = 0; i < stackSize; i++) {
+                const domino = document.createElement('div');
+                domino.className = 'domino domino-back boneyard-domino';
+                // Static positioning for a neat stack
+                domino.style.transform = `translateX(${i * 2}px) translateY(-${i * 2}px)`;
+                boneyardPileElement.appendChild(domino);
             }
+
             boneyardCountElement.textContent = boneyard.length;
             boneyardPileElement.appendChild(boneyardCountElement);
         }
@@ -1380,7 +1384,7 @@
                         isValidPlacement = false;
                         gameStatusElement.textContent = `Must start with Double ${required} or Double Spinner!`;
                         // BUG FIX: Do not remove the element. The next state update will re-render it correctly in the hand.
-                        // activeDominoElement.remove(); 
+                        activeDominoElement.remove(); 
                     } else {
                         newX = (BOARD_SIZE / 2) - (DOMINO_HEIGHT / 2);
                         newY = (BOARD_SIZE / 2) - (DOMINO_WIDTH / 2);
