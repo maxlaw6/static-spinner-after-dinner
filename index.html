@@ -129,6 +129,10 @@
         }
 
         /* UI Components */
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
         #boneyard-pile {
             border: 2px dashed #a0aec0;
             min-height: 50px;
@@ -151,10 +155,6 @@
         }
         #boneyard-count {
             text-shadow: 0 0 5px #000, 0 0 3px #000;
-        }
-        #undo-button:disabled, #end-turn-button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
         }
         #minimap-container {
             position: absolute;
@@ -233,14 +233,14 @@
                     <input type="text" id="player-name" class="w-full p-2 rounded bg-gray-700 text-white" placeholder="Enter your name">
                 </div>
                 <div class="flex gap-4 mb-6">
-                    <button id="create-game-button" class="w-full bg-green-600 hover:bg-green-700 font-bold py-3 px-4 rounded transition-colors">Create New Game</button>
+                    <button id="create-game-button" class="w-full bg-green-600 hover:bg-green-700 font-bold py-3 px-4 rounded transition-colors" disabled>Create New Game</button>
                 </div>
                 <div class="text-center my-4">OR</div>
                 <div class="mb-4">
                     <label for="join-game-id" class="block mb-2">Join Existing Game:</label>
                     <input type="text" id="join-game-id" class="w-full p-2 rounded bg-gray-700 text-white" placeholder="Enter Game ID">
                 </div>
-                <button id="join-game-button" class="w-full bg-blue-600 hover:bg-blue-700 font-bold py-3 px-4 rounded transition-colors">Join Game</button>
+                <button id="join-game-button" class="w-full bg-blue-600 hover:bg-blue-700 font-bold py-3 px-4 rounded transition-colors" disabled>Join Game</button>
             </div>
             <div id="waiting-room-view" class="hidden text-center">
                 <h2 class="text-2xl font-bold mb-4">Waiting Room</h2>
@@ -388,15 +388,12 @@
                 auth = getAuth(app);
                 analytics = getAnalytics(app);
 
-
                 authStatus.textContent = 'Authenticating...';
                 onAuthStateChanged(auth, async (user) => {
                     if (user) {
                         // User is signed in.
                         currentPlayerId = user.uid;
-                        authStatus.textContent = `Authenticated as Player ${currentPlayerId.substring(0, 6)}`;
-                        loadingScreen.classList.add('hidden');
-                        setupScreen.classList.remove('hidden');
+                        enableLobby();
                     } else {
                         // User is signed out. Sign in anonymously.
                         await signInAnonymously(auth);
@@ -407,9 +404,18 @@
                 authStatus.textContent = "Error: Could not connect to game services. Please refresh.";
             }
         }
+        
+        function enableLobby() {
+            authStatus.textContent = 'Ready to Play!';
+            loadingScreen.classList.add('hidden');
+            setupScreen.classList.remove('hidden');
+            createGameButton.disabled = false;
+            joinGameButton.disabled = false;
+        }
 
         // --- Lobby and Game Setup ---
         createGameButton.addEventListener('click', async () => {
+            if (!currentPlayerId) return; // Guard against clicks before auth is ready
             const playerName = playerNameInput.value.trim() || `Player ${currentPlayerId.substring(0, 4)}`;
             if (!playerName) {
                 alert("Please enter your name.");
@@ -451,6 +457,7 @@
         });
 
         joinGameButton.addEventListener('click', async () => {
+            if (!currentPlayerId) return; // Guard against clicks before auth is ready
             const gameId = joinGameIdInput.value.trim().toUpperCase();
             const playerName = playerNameInput.value.trim() || `Player ${currentPlayerId.substring(0, 4)}`;
             if (!gameId) {
