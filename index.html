@@ -263,6 +263,35 @@
             z-index: 3000; /* Ensure it's on top of everything */
             pointer-events: none; /* Make it unclickable */
         }
+
+        @media (max-width: 640px) {
+            #game-info {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 0.5rem;
+            }
+            #game-info > div {
+                justify-content: space-between;
+            }
+            #bottom-section-wrapper > div {
+                flex-direction: column;
+            }
+            #all-hands-container {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            .domino {
+                width: 60px;
+                height: 30px;
+            }
+            .pip {
+                width: 6px;
+                height: 6px;
+            }
+            .spinner-icon {
+                width: 18px;
+                height: 18px;
+            }
+        }
     </style>
 </head>
 <body class="text-white">
@@ -526,6 +555,7 @@
                 lastDrawnDominoId: null,
                 moveHistory: [],
                 currentTheme: 'classic',
+                actionStatus: null,
                 createdAt: serverTimestamp()
             };
 
@@ -884,7 +914,9 @@
             currentPlayerElement.textContent = gameState.players[currentTurnPlayerId].name;
             
             let statusText = '';
-            if (isMyTurn) {
+            if (gameState.actionStatus) {
+                statusText = gameState.actionStatus;
+            } else if (isMyTurn) {
                 if(gameState.mustDrawToStart) {
                     statusText = "You have the highest hand. Draw to find the starting double.";
                 } else if (gameState.boardDominos.length === 0) {
@@ -1074,6 +1106,13 @@
             return e.type.startsWith('touch') ? e.touches[0] : e;
         }
 
+        async function updateActionStatus(text) {
+            if (currentGameId) {
+                const gameRef = doc(db, "games", currentGameId);
+                await updateDoc(gameRef, { actionStatus: text });
+            }
+        }
+
         function startDominoDrag(e, dominoObject, origin) {
             e.stopPropagation();
             const currentTurnPlayerId = localGameState.playerOrder[localGameState.currentPlayerIndex];
@@ -1098,7 +1137,6 @@
                 dominoOffsetX = mouseOnBoardX - dominoCurrentLeft;
                 dominoOffsetY = mouseOnBoardY - dominoCurrentTop;
             } else {
-                // For touch, center the domino on the finger
                 if (e.type.startsWith('touch')) {
                     dominoOffsetX = DOMINO_WIDTH / 2;
                     dominoOffsetY = DOMINO_HEIGHT / 2;
@@ -1111,8 +1149,7 @@
                 }
             }
 
-            dragLabel.textContent = localGameState.players[currentPlayerId].name;
-            dragLabel.classList.remove('hidden');
+            updateActionStatus(`${localGameState.players[currentPlayerId].name} is moving a tile...`);
             
             const moveHandler = (ev) => dragDomino(ev);
             const endHandler = (ev) => endDominoDrag(ev, dominoObject, origin, moveHandler, endHandler);
@@ -1130,7 +1167,7 @@
             if (Math.abs(coords.clientX - dragStartPos.x) > 5 || Math.abs(coords.clientY - dragStartPos.y) > 5) {
                 wasDragged = true;
                 if (activeDominoElement.parentElement !== gameBoardElement) {
-                    activeDominoElement.style.position = 'absolute'; // Ensure it can be positioned
+                    activeDominoElement.style.position = 'absolute';
                     gameBoardElement.appendChild(activeDominoElement);
                     activeDominoElement.classList.add('dragging');
                 }
@@ -1140,14 +1177,12 @@
                 activeDominoElement.style.left = `${mouseOnBoardX - dominoOffsetX}px`;
                 activeDominoElement.style.top = `${mouseOnBoardY - dominoOffsetY}px`;
             }
-            dragLabel.style.left = `${coords.clientX}px`;
-            dragLabel.style.top = `${coords.clientY}px`;
         }
 
         async function endDominoDrag(e, dominoObject, origin, moveHandler, endHandler) {
             document.removeEventListener('mousemove', moveHandler);
             document.removeEventListener('touchmove', moveHandler);
-            dragLabel.classList.add('hidden');
+            updateActionStatus(null);
 
             if (!isDraggingDomino) return;
             isDraggingDomino = false;
@@ -1169,7 +1204,6 @@
                     if (!isCorrectDouble && !isDoubleSpinner) {
                         isValidPlacement = false;
                         gameStatusElement.textContent = `Must start with Double ${required} or Double Spinner!`;
-                        // This will trigger a re-render which puts the domino back in the hand
                         const originalParent = document.querySelector(`#player-${currentPlayerId}-hand-section .player-hand`);
                         if(originalParent) originalParent.appendChild(activeDominoElement);
                     } else {
