@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8"/>
-    <meta content="width=device-width, initial-scale=1.0, user-scalable=no" name="viewport"/>
+    <meta content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/>
     <title>Spinner after Dinner</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com" rel="preconnect"/>
@@ -13,10 +13,13 @@
         html, body {
             height: 100%;
             overflow: hidden;
+            /* Prevent pull-to-refresh and other gestures on mobile */
+            overscroll-behavior: none;
         }
         body {
             font-family: 'Inter', sans-serif;
             user-select: none;
+            -webkit-user-select: none; /* Safari */
             touch-action: none;
             background-color: #1f2937; /* bg-gray-800 */
         }
@@ -41,6 +44,7 @@
             width: 2500px;
             height: 2500px;
             transform-origin: top left;
+            will-change: transform; /* Performance hint for the browser */
         }
         #starting-area {
             position: absolute;
@@ -68,6 +72,7 @@
             transform-origin: center center;
             color: #1a1a1a;
             transition: box-shadow 0.2s ease, transform 0.3s ease, top 0.3s ease, left 0.3s ease;
+            -webkit-tap-highlight-color: transparent; /* Remove tap highlight on iOS */
         }
         .domino.domino-back {
             background-color: #f7f7f7; /* Ivory color for opponent hands */
@@ -98,8 +103,10 @@
         }
         .domino.dragging {
             cursor: grabbing;
-            transition: none;
-            z-index: 3000; /* Ensure dragged domino is on top */
+            transition: none !important; /* Disable transitions while dragging for immediate feedback */
+            z-index: 3000 !important; /* Ensure dragged domino is on top */
+            position: absolute !important; /* Ensure it's positioned relative to the viewport */
+            opacity: 0.9;
         }
 
         /* Pip and Spinner Styles */
@@ -201,8 +208,8 @@
             pointer-events: none;
         }
         @keyframes flash-border {
-            0%, 100% { border-color: #a0aec0; }
-            50% { border-color: #FFD700; }
+            0%, 100% { border-color: #a0aec0; box-shadow: none; }
+            50% { border-color: #FFD700; box-shadow: 0 0 10px rgba(255, 215, 0, 0.5); }
         }
         #boneyard-pile.can-draw {
             animation: flash-border 1.5s infinite;
@@ -279,12 +286,6 @@
             color: #FFD700;
             font-weight: bold;
         }
-        #drag-label {
-            position: fixed;
-            transform: translate(-50%, -120%);
-            z-index: 3000;
-            pointer-events: none;
-        }
 
         /* --- LAYOUT STYLES --- */
         #game-container {
@@ -294,7 +295,7 @@
         #game-layout {
             display: grid;
             grid-template-rows: auto 1fr auto;
-            height: 100%; /* IPAD FIX */
+            height: 100%;
             width: 100%;
             padding: 1rem;
             gap: 1rem;
@@ -372,8 +373,8 @@
             grid-row: 3 / 4;
             display: flex;
             justify-content: center;
-            align-items: center; /* Changed from flex-end */
-            gap: 1.5rem; /* Increased gap */
+            align-items: center;
+            gap: 1.5rem;
             width: 100%;
         }
         .player-hand {
@@ -425,125 +426,127 @@
     </div>
 </div>
 
-<!-- Drag Label -->
-<div class="hidden bg-black bg-opacity-70 text-white px-3 py-1 rounded-lg" id="drag-label"></div>
 <!-- Loading Screen -->
-<div id="loading-screen">
-<div class="text-center">
-<h1 class="text-3xl font-bold">Connecting to Game Service...</h1>
-<p id="auth-status">Initializing...</p>
+<div id="loading-screen" class="flex items-center justify-center">
+    <div class="text-center">
+        <h1 class="text-3xl font-bold">Connecting to Game Service...</h1>
+        <p id="auth-status">Initializing...</p>
+    </div>
 </div>
-</div>
+
 <!-- Setup / Lobby Screen -->
 <div class="hidden" id="setup-screen">
-<div class="bg-gray-800 p-8 rounded-lg shadow-2xl text-white w-full max-w-md">
-<h1 class="text-3xl font-bold text-center mb-6">Spinner after Dinner</h1>
-<div id="lobby-view">
-<div class="mb-4">
-<label class="block mb-2" for="player-name">Your Name:</label>
-<input class="w-full p-2 rounded bg-gray-700 text-white" id="player-name" placeholder="Enter your name" type="text"/>
+    <div class="bg-gray-800 p-8 rounded-lg shadow-2xl text-white w-full max-w-md">
+        <h1 class="text-3xl font-bold text-center mb-6">Spinner after Dinner</h1>
+        <div id="lobby-view">
+            <div class="mb-4">
+                <label class="block mb-2" for="player-name">Your Name:</label>
+                <input class="w-full p-2 rounded bg-gray-700 text-white" id="player-name" placeholder="Enter your name" type="text"/>
+            </div>
+            <div class="flex gap-4 mb-6">
+                <button class="w-full bg-green-600 hover:bg-green-700 font-bold py-3 px-4 rounded transition-colors" disabled id="create-game-button">Create New Game</button>
+            </div>
+            <div class="text-center my-4">OR</div>
+            <div class="mb-4">
+                <label class="block mb-2" for="join-game-id">Join Existing Game:</label>
+                <input class="w-full p-2 rounded bg-gray-700 text-white" id="join-game-id" placeholder="Enter Game ID" type="text"/>
+            </div>
+            <button class="w-full bg-blue-600 hover:bg-blue-700 font-bold py-3 px-4 rounded transition-colors" disabled id="join-game-button">Join Game</button>
+        </div>
+        <div class="hidden text-center" id="waiting-room-view">
+            <h2 class="text-2xl font-bold mb-4">Waiting Room</h2>
+            <p class="mb-2">Share this Game ID with others:</p>
+            <div class="bg-gray-900 p-3 rounded-lg mb-4 flex items-center justify-center">
+                <span class="text-2xl font-mono text-yellow-300" id="game-id-display"></span>
+                <button class="ml-4 bg-gray-600 hover:bg-gray-500 text-sm py-1 px-2 rounded" id="copy-game-id">Copy</button>
+            </div>
+            <p class="mb-2 font-bold">Players Joined:</p>
+            <div class="space-y-2 mb-6" id="player-list"></div>
+            <p class="mb-4 text-gray-400" id="waiting-message">Waiting for more players...</p>
+            <button class="w-full bg-green-600 hover:bg-green-700 font-bold py-3 px-4 rounded transition-colors" disabled id="start-game-button">Start Game</button>
+        </div>
+    </div>
 </div>
-<div class="flex gap-4 mb-6">
-<button class="w-full bg-green-600 hover:bg-green-700 font-bold py-3 px-4 rounded transition-colors" disabled="" id="create-game-button">Create New Game</button>
-</div>
-<div class="text-center my-4">OR</div>
-<div class="mb-4">
-<label class="block mb-2" for="join-game-id">Join Existing Game:</label>
-<input class="w-full p-2 rounded bg-gray-700 text-white" id="join-game-id" placeholder="Enter Game ID" type="text"/>
-</div>
-<button class="w-full bg-blue-600 hover:bg-blue-700 font-bold py-3 px-4 rounded transition-colors" disabled="" id="join-game-button">Join Game</button>
-</div>
-<div class="hidden text-center" id="waiting-room-view">
-<h2 class="text-2xl font-bold mb-4">Waiting Room</h2>
-<p class="mb-2">Share this Game ID with others:</p>
-<div class="bg-gray-900 p-3 rounded-lg mb-4">
-<span class="text-2xl font-mono text-yellow-300" id="game-id-display"></span>
-<button class="ml-4 bg-gray-600 hover:bg-gray-500 text-sm py-1 px-2 rounded" id="copy-game-id">Copy</button>
-</div>
-<p class="mb-2 font-bold">Players Joined:</p>
-<div class="space-y-2 mb-6" id="player-list"></div>
-<p class="mb-4 text-gray-400" id="waiting-message">Waiting for more players...</p>
-<button class="w-full bg-green-600 hover:bg-green-700 font-bold py-3 px-4 rounded transition-colors" disabled="" id="start-game-button">Start Game</button>
-</div>
-</div>
-</div>
+
 <!-- Round End Screen -->
 <div class="hidden" id="round-end-screen">
-<div class="w-full max-w-md" id="round-end-content">
-<h2 class="text-3xl font-bold text-center mb-4" id="round-end-title">Round Over!</h2>
-<p class="text-xl text-yellow-300 mb-4" id="round-winner-message"></p>
-<div class="mb-6" id="round-results-list"></div>
-<button class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded transition-colors" id="continue-round-button">Continue</button>
+    <div class="w-full max-w-md" id="round-end-content">
+        <h2 class="text-3xl font-bold text-center mb-4" id="round-end-title">Round Over!</h2>
+        <p class="text-xl text-yellow-300 mb-4" id="round-winner-message"></p>
+        <div class="mb-6" id="round-results-list"></div>
+        <button class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded transition-colors" id="continue-round-button">Continue</button>
+    </div>
 </div>
-</div>
+
 <!-- Game Over Screen -->
 <div class="hidden" id="game-over-screen">
-<div class="w-full max-w-md" id="final-score-display">
-<h2 class="text-4xl font-bold text-center mb-4 text-yellow-300">Game Over!</h2>
-<p class="text-xl mb-6" id="final-winner-message"></p>
-<div class="space-y-2 text-lg mb-8" id="final-score-list"></div>
-<button class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded transition-colors" id="main-menu-button-final">Main Menu</button>
+    <div class="w-full max-w-md" id="final-score-display">
+        <h2 class="text-4xl font-bold text-center mb-4 text-yellow-300">Game Over!</h2>
+        <p class="text-xl mb-6" id="final-winner-message"></p>
+        <div class="space-y-2 text-lg mb-8" id="final-score-list"></div>
+        <button class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded transition-colors" id="main-menu-button-final">Main Menu</button>
+    </div>
 </div>
-</div>
+
 <!-- Main Game Container -->
 <div class="hidden" id="game-container">
-<div id="game-layout">
-<div class="bg-gray-900 bg-opacity-70 p-2 rounded-lg shadow-lg flex justify-between items-center flex-wrap" id="game-info">
-<div class="flex items-center gap-4">
-<button class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded transition-colors" id="main-menu-button">New Game / Exit</button>
-<div>
-<h2 class="font-bold text-lg">Current Turn: <span id="current-player"></span></h2>
-<p class="text-sm text-yellow-300" id="game-status">Loading...</p>
-</div>
-</div>
-<div class="flex items-center gap-4">
-<button class="bg-yellow-600 hover:bg-yellow-700 text-black font-bold py-2 px-4 rounded transition-colors" id="re-deal-button">Re-Deal</button>
-<div class="text-right">
-<p class="text-xs text-gray-400">Game ID</p>
-<p class="font-mono text-yellow-300" id="game-id-header"></p>
-</div>
-<select class="bg-gray-700 text-white rounded p-2" id="theme-switcher">
-<option value="classic">Classic</option>
-<option value="dr_edell">Dr. Edell</option>
-<option value="austin">Austin</option>
-<option value="rose">Rose</option>
-<option value="anna">Anna</option>
-<option value="kate">Kate</option>
-</select>
-<div class="text-right flex gap-4" id="scoreboard"></div>
-</div>
-</div>
-<div id="main-game-area">
-<div id="opponent-hands-container">
-<div id="top-hand-area"></div>
-<div id="left-hand-area"></div>
-<div id="right-hand-area"></div>
-</div>
-<div id="world-wrapper">
-<div id="world">
-<div id="game-board">
-<div id="starting-area"></div>
-</div>
-<div id="minimap-container">
-<div id="minimap-viewport"></div>
-</div>
-</div>
-</div>
-</div>
-<div id="bottom-hand-area">
-<div class="flex-grow" id="my-hand-container"></div>
-<div class="bg-gray-900 bg-opacity-70 p-4 rounded-lg shadow-inner" id="boneyard-container">
-<h2 class="text-xl font-semibold mb-3 text-center">Boneyard</h2>
-<div id="boneyard-pile" title="Click to draw a domino">
-<span id="boneyard-count">0</span>
-</div>
-<div class="mt-2 flex items-center gap-2" id="boneyard-buttons">
-<button class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition-colors" id="undo-button">Undo Move</button>
-<button class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition-colors hidden" id="end-turn-button">End Turn</button>
-</div>
-</div>
-</div>
-</div>
+    <div id="game-layout">
+        <div class="bg-gray-900 bg-opacity-70 p-2 rounded-lg shadow-lg flex justify-between items-center flex-wrap" id="game-info">
+            <div class="flex items-center gap-4">
+                <button class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded transition-colors" id="main-menu-button">New Game / Exit</button>
+                <div>
+                    <h2 class="font-bold text-lg">Current Turn: <span id="current-player"></span></h2>
+                    <p class="text-sm text-yellow-300" id="game-status">Loading...</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-4">
+                <button class="bg-yellow-600 hover:bg-yellow-700 text-black font-bold py-2 px-4 rounded transition-colors" id="re-deal-button">Re-Deal</button>
+                <div class="text-right">
+                    <p class="text-xs text-gray-400">Game ID</p>
+                    <p class="font-mono text-yellow-300" id="game-id-header"></p>
+                </div>
+                <select class="bg-gray-700 text-white rounded p-2" id="theme-switcher">
+                    <option value="classic">Classic</option>
+                    <option value="dr_edell">Dr. Edell</option>
+                    <option value="austin">Austin</option>
+                    <option value="rose">Rose</option>
+                    <option value="anna">Anna</option>
+                    <option value="kate">Kate</option>
+                </select>
+                <div class="text-right flex gap-4" id="scoreboard"></div>
+            </div>
+        </div>
+        <div id="main-game-area">
+            <div id="opponent-hands-container">
+                <div id="top-hand-area"></div>
+                <div id="left-hand-area"></div>
+                <div id="right-hand-area"></div>
+            </div>
+            <div id="world-wrapper">
+                <div id="world">
+                    <div id="game-board">
+                        <div id="starting-area"></div>
+                    </div>
+                    <div id="minimap-container">
+                        <div id="minimap-viewport"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div id="bottom-hand-area">
+            <div class="flex-grow" id="my-hand-container"></div>
+            <div class="bg-gray-900 bg-opacity-70 p-4 rounded-lg shadow-inner" id="boneyard-container">
+                <h2 class="text-xl font-semibold mb-3 text-center">Boneyard</h2>
+                <div id="boneyard-pile" title="Click to draw a domino">
+                    <span id="boneyard-count">0</span>
+                </div>
+                <div class="mt-2 flex items-center gap-2" id="boneyard-buttons">
+                    <button class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition-colors" id="undo-button">Undo Move</button>
+                    <button class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition-colors hidden" id="end-turn-button">End Turn</button>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 <!-- Firebase SDK -->
 <script type="module">
@@ -597,7 +600,6 @@
     const finalScoreList = document.getElementById('final-score-list');
     const mainMenuButton = document.getElementById('main-menu-button');
     const mainMenuButtonFinal = document.getElementById('main-menu-button-final');
-    const dragLabel = document.getElementById('drag-label');
     const messageModal = document.getElementById('message-modal');
     const messageText = document.getElementById('message-text');
     const messageOkButton = document.getElementById('message-ok-button');
@@ -629,7 +631,7 @@
     let initialPinchDistance = null;
     let activeDominoElement = null; // The visual element being dragged
     let draggedDominoData = null; // The data object for the domino being dragged
-    let originalHandElement = null; // The original domino element in the hand
+    let originalDominoElement = null; // The original domino element in the hand or on the board
 
     // --- Firebase Initialization ---
     async function initializeFirebase() {
@@ -639,7 +641,7 @@
                 apiKey: "AIzaSyCTmUo5UpQW77xhOkI_3XELSISo6WHyqLs",
                 authDomain: "spinner-live.firebaseapp.com",
                 projectId: "spinner-live",
-                storageBucket: "spinner-live.firebasestorage.app",
+                storageBucket: "spinner-live.appspot.com",
                 messagingSenderId: "878930500451",
                 appId: "1:878930500451:web:e281c28d5c29218044d156",
                 measurementId: "G-BPHD3B8WDT"
@@ -779,28 +781,35 @@
     mainMenuButtonFinal.addEventListener('click', leaveGame);
 
     copyGameIdButton.addEventListener('click', () => {
-        const textArea = document.createElement("textarea");
-        textArea.value = currentGameId;
-        document.body.appendChild(textArea);
-        textArea.select();
-        try {
-            document.execCommand('copy');
+        navigator.clipboard.writeText(currentGameId).then(() => {
             copyGameIdButton.textContent = 'Copied!';
-        } catch (err) {
-            console.error('Failed to copy: ', err);
-            copyGameIdButton.textContent = 'Failed!';
-        }
-        document.body.removeChild(textArea);
-        setTimeout(() => { copyGameIdButton.textContent = 'Copy'; }, 2000);
+            setTimeout(() => { copyGameIdButton.textContent = 'Copy'; }, 2000);
+        }).catch(err => {
+            console.error('Failed to copy text: ', err);
+            // Fallback for older browsers
+            const textArea = document.createElement("textarea");
+            textArea.value = currentGameId;
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            try {
+                document.execCommand('copy');
+                copyGameIdButton.textContent = 'Copied!';
+            } catch (err) {
+                copyGameIdButton.textContent = 'Failed!';
+            }
+            document.body.removeChild(textArea);
+            setTimeout(() => { copyGameIdButton.textContent = 'Copy'; }, 2000);
+        });
     });
 
     startGameButton.addEventListener('click', () => {
-         if (localGameState.players[currentPlayerId]?.isHost) {
+        if (localGameState.players[currentPlayerId]?.isHost) {
             startRound();
         }
     });
     reDealButton.addEventListener('click', () => {
-         if (localGameState.players[currentPlayerId]?.isHost) {
+        if (localGameState.players[currentPlayerId]?.isHost) {
             startRound();
         }
     });
@@ -1038,7 +1047,7 @@
     }
 
     continueRoundButton.addEventListener('click', () => {
-         if (localGameState.players[currentPlayerId]?.isHost) {
+        if (localGameState.players[currentPlayerId]?.isHost) {
             startRound();
         }
     });
@@ -1102,6 +1111,7 @@
         endTurnButton.classList.toggle('hidden', !(isMyTurn && gameState.turnState === 'PLACED'));
         undoButton.disabled = !(isMyTurn && (gameState.moveHistory || []).length > 0);
         boneyardPileElement.style.cursor = isMyTurn && gameState.turnState === 'WAITING' ? 'pointer' : 'not-allowed';
+        boneyardPileElement.classList.toggle('can-draw', isMyTurn && gameState.turnState === 'WAITING' && gameState.boneyard.length > 0);
     }
 
     function renderPlayerHands(gameState) {
@@ -1186,14 +1196,12 @@
 
     function renderBoneyard(boneyard, isMyTurn, turnState) {
         boneyardPileElement.innerHTML = '';
-        boneyardPileElement.classList.remove('can-draw');
-
+        
         if (isMyTurn && turnState === 'WAITING' && boneyard.length > 0) {
             const message = document.createElement('div');
             message.id = 'boneyard-message';
             message.textContent = 'Click to Draw';
             boneyardPileElement.appendChild(message);
-            boneyardPileElement.classList.add('can-draw');
         }
 
         const stackSize = Math.min(boneyard.length, 5);
@@ -1321,7 +1329,7 @@
 
     // --- Touch, Drag, Drop, and Rotation Logic ---
     function getEventCoords(e) {
-        return e.type.startsWith('touch') ? e.touches[0] : e;
+        return e.touches?.[0] || e.changedTouches?.[0] || e;
     }
 
     async function updateActionStatus(text) {
@@ -1338,7 +1346,7 @@
         const currentTurnPlayerId = localGameState.playerOrder[localGameState.currentPlayerIndex];
         if (currentPlayerId !== currentTurnPlayerId) return;
         
-        originalHandElement = e.currentTarget;
+        originalDominoElement = e.currentTarget;
         draggedDominoData = dominoObject;
         isDraggingDomino = true;
         wasDragged = false;
@@ -1346,33 +1354,28 @@
         const coords = getEventCoords(e);
         dragStartPos = { x: coords.clientX, y: coords.clientY };
         
-        // Create a clone for visual dragging
-        activeDominoElement = originalHandElement.cloneNode(true);
+        // --- OPTIMIZATION: Create a clone for visual dragging ---
+        // This clone is appended to the body to escape any parent containers and z-index issues.
+        activeDominoElement = originalDominoElement.cloneNode(true);
         activeDominoElement.classList.add('dragging');
-        document.body.appendChild(activeDominoElement); // Append to body to ensure visibility
+        document.body.appendChild(activeDominoElement);
 
-        // Hide original element
-        originalHandElement.style.visibility = 'hidden';
+        // --- OPTIMIZATION: Hide original element cleanly ---
+        originalDominoElement.style.opacity = '0.3';
 
-        const worldRect = worldElement.getBoundingClientRect();
-        const mouseOnBoardX = boardPosition.x + (coords.clientX - worldRect.left) / zoomLevel;
-        const mouseOnBoardY = boardPosition.y + (coords.clientY - worldRect.top) / zoomLevel;
-
-        if (origin === 'board') {
-            dominoOffsetX = mouseOnBoardX - dominoObject.x;
-            dominoOffsetY = mouseOnBoardY - dominoObject.y;
-        } else {
-            dominoOffsetX = DOMINO_WIDTH / 2;
-            dominoOffsetY = DOMINO_HEIGHT / 2;
-        }
+        // --- OPTIMIZATION: Calculate click offset for a natural drag feel ---
+        // This ensures the domino doesn't "jump" to center on the cursor.
+        const rect = originalDominoElement.getBoundingClientRect();
+        dominoOffsetX = coords.clientX - rect.left;
+        dominoOffsetY = coords.clientY - rect.top;
         
-        // Initial position of the clone
-        activeDominoElement.style.position = 'absolute';
-        activeDominoElement.style.left = `${coords.clientX - (DOMINO_WIDTH / 2)}px`;
-        activeDominoElement.style.top = `${coords.clientY - (DOMINO_HEIGHT / 2)}px`;
+        // Position the clone exactly where the original was, then it will be moved by dragDomino
+        activeDominoElement.style.left = `${coords.clientX - dominoOffsetX}px`;
+        activeDominoElement.style.top = `${coords.clientY - dominoOffsetY}px`;
 
         updateActionStatus(`${localGameState.players[currentPlayerId].name} is moving a tile...`);
         
+        // Use named functions for easy removal
         const moveHandler = (ev) => dragDomino(ev);
         const endHandler = (ev) => endDominoDrag(ev, origin, moveHandler, endHandler);
 
@@ -1384,17 +1387,18 @@
 
     function dragDomino(e) {
         if (!isDraggingDomino || !activeDominoElement) return;
-        e.preventDefault();
+        e.preventDefault(); // Crucial for smooth touch dragging
         const coords = getEventCoords(e);
         if (Math.abs(coords.clientX - dragStartPos.x) > 5 || Math.abs(coords.clientY - dragStartPos.y) > 5) {
             wasDragged = true;
         }
-        // Update position of the clone
-        activeDominoElement.style.left = `${coords.clientX - (DOMINO_WIDTH / 2)}px`;
-        activeDominoElement.style.top = `${coords.clientY - (DOMINO_HEIGHT / 2)}px`;
+        // --- OPTIMIZATION: Update position of the clone using the stored offset ---
+        activeDominoElement.style.left = `${coords.clientX - dominoOffsetX}px`;
+        activeDominoElement.style.top = `${coords.clientY - dominoOffsetY}px`;
     }
 
     async function endDominoDrag(e, origin, moveHandler, endHandler) {
+        // Clean up event listeners immediately
         document.removeEventListener('mousemove', moveHandler);
         document.removeEventListener('touchmove', moveHandler);
         updateActionStatus(null);
@@ -1404,16 +1408,17 @@
         const gameRef = doc(db, "games", currentGameId);
 
         if (wasDragged) {
-            const coords = e.changedTouches ? e.changedTouches[0] : e;
+            const coords = getEventCoords(e);
             const worldRect = worldElement.getBoundingClientRect();
             
-            // Calculate final position on the game board
-            const finalXOnBoard = boardPosition.x + (coords.clientX - worldRect.left) / zoomLevel - (DOMINO_WIDTH / 2);
-            const finalYOnBoard = boardPosition.y + (coords.clientY - worldRect.top) / zoomLevel - (DOMINO_HEIGHT / 2);
+            // --- OPTIMIZATION: Calculate final position on the game board accurately ---
+            // This accounts for board pan, zoom, and the initial click offset on the domino.
+            const finalXOnBoard = boardPosition.x + (coords.clientX - worldRect.left) / zoomLevel - (dominoOffsetX / zoomLevel);
+            const finalYOnBoard = boardPosition.y + (coords.clientY - worldRect.top) / zoomLevel - (dominoOffsetY / zoomLevel);
             
             let newX = finalXOnBoard;
             let newY = finalYOnBoard;
-            let newRotation = parseInt(originalHandElement.dataset.rotation || 0);
+            let newRotation = parseInt(originalDominoElement.dataset.rotation || 0);
             
             let isValidPlacement = true;
             if (localGameState.boardDominos.length === 0) {
@@ -1425,6 +1430,7 @@
                     isValidPlacement = false;
                     showMessage(`Must start with Double ${required} or Double Spinner!`);
                 } else {
+                    // Snap to center for the first piece
                     newX = (BOARD_SIZE / 2) - (DOMINO_HEIGHT / 2);
                     newY = (BOARD_SIZE / 2) - (DOMINO_WIDTH / 2);
                     newRotation = 90;
@@ -1449,6 +1455,7 @@
                             newBoardDominos.push({ dominoData: playedDomino, x: newX, y: newY, rotation: newRotation });
                             
                              if (playerHand.length === 0) {
+                                // Player has won the round
                                 const winnerPlayerId = currentPlayerId;
                                 let roundPoints = {};
                                 let totalPointsForWinner = 0;
@@ -1474,11 +1481,12 @@
                                     turnState: 'WAITING'
                                 });
                             } else {
+                                // Continue turn
                                 transaction.update(gameRef, {
                                     boardDominos: newBoardDominos,
                                     players: updatedPlayers,
                                     turnState: 'PLACED',
-                                    moveHistory: []
+                                    moveHistory: [] // Clear history after a successful play
                                 });
                             }
                         }
@@ -1514,10 +1522,10 @@
         }
         
         // Cleanup
-        originalHandElement.style.visibility = 'visible';
+        originalDominoElement.style.opacity = '1';
         activeDominoElement.remove();
         activeDominoElement = null;
-        originalHandElement = null;
+        originalDominoElement = null;
         draggedDominoData = null;
         isDraggingDomino = false;
     }
@@ -1563,13 +1571,18 @@
     worldElement.addEventListener('mousedown', (e) => {
         if (e.touches && e.touches.length > 1) return;
         if (isDraggingDomino) return;
-        if (e.target !== worldElement && e.target !== gameBoardElement && e.target !== document.getElementById('world-wrapper')) return;
+        // Ensure panning only starts on the background
+        if (e.target !== worldElement && e.target !== gameBoardElement && e.target.id !== 'world-wrapper') return;
         isPanning = true;
         worldElement.classList.add('panning');
         const coords = getEventCoords(e);
         panStart = { x: coords.clientX, y: coords.clientY };
-        document.addEventListener('mousemove', pan);
-        document.addEventListener('mouseup', endPan, { once: true });
+        
+        const panMove = (ev) => pan(ev);
+        const endPanMove = () => endPan(panMove, endPanMove);
+
+        document.addEventListener('mousemove', panMove);
+        document.addEventListener('mouseup', endPanMove, { once: true });
     });
 
     function pan(e) {
@@ -1583,10 +1596,11 @@
         updateBoardTransform();
     }
 
-    function endPan() {
+    function endPan(panMove, endPanMove) {
         isPanning = false;
         worldElement.classList.remove('panning');
-        document.removeEventListener('mousemove', pan);
+        document.removeEventListener('mousemove', panMove);
+        document.removeEventListener('mouseup', endPanMove);
     }
     
     worldElement.addEventListener('wheel', (e) => {
