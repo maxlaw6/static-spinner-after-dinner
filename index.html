@@ -273,7 +273,7 @@
             display: flex;
             flex-wrap: wrap;
             gap: 4px;
-            justify-content: flex-start;
+            justify-content: center; /* Centered the pips */
         }
         #setup-screen, #round-end-screen, #loading-screen, #game-over-screen, #message-modal {
             position: fixed;
@@ -495,11 +495,7 @@
                  <div id="game-log" class="flex-grow ml-4"></div>
             </div>
             <div class="flex items-center gap-4">
-                <button class="bg-yellow-600 hover:bg-yellow-700 text-black font-bold py-2 px-4 rounded transition-colors" id="re-deal-button">Re-Deal</button>
-                <div class="text-right">
-                    <p class="text-xs text-gray-400">Game ID</p>
-                    <p class="font-mono text-yellow-300" id="game-id-header"></p>
-                </div>
+                <button class="bg-yellow-600 hover:bg-yellow-700 text-black font-bold py-2 px-4 rounded transition-colors" id="re-deal-button">Next Round</button>
                 <select class="bg-gray-700 text-white rounded p-2" id="theme-switcher">
                     <option value="classic">Classic</option>
                     <option value="dr_edell">Dr. Edell</option>
@@ -1472,8 +1468,14 @@
             )) {
                 // If dropped outside, don't place it, just clean up. The tile will reappear in the hand.
             } else {
-                const finalXOnBoard = boardPosition.x + (coords.clientX - worldRect.left) / zoomLevel - (dominoOffsetX / zoomLevel);
-                const finalYOnBoard = boardPosition.y + (coords.clientY - worldRect.top) / zoomLevel - (dominoOffsetY / zoomLevel);
+                // CORRECTED COORDINATE CALCULATION
+                const mouseXOnBoard = (coords.clientX - worldRect.left) / zoomLevel + boardPosition.x;
+                const mouseYOnBoard = (coords.clientY - worldRect.top) / zoomLevel + boardPosition.y;
+                
+                // The final position is the mouse position on the board minus the initial click offset within the domino.
+                // The offset is NOT scaled by zoom because the domino itself isn't scaled, its parent is.
+                const finalXOnBoard = mouseXOnBoard - dominoOffsetX;
+                const finalYOnBoard = mouseYOnBoard - dominoOffsetY;
                 
                 let newX = finalXOnBoard;
                 let newY = finalYOnBoard;
