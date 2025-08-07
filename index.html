@@ -1473,8 +1473,8 @@
                 
                 // The final position is the mouse position on the board minus the initial click offset within the domino.
                 // The offset is NOT scaled by zoom because the domino itself isn't scaled, its parent is.
-                const finalXOnBoard = mouseXOnBoard - dominoOffsetX;
-                const finalYOnBoard = mouseYOnBoard - dominoOffsetY;
+                const finalXOnBoard = mouseXOnBoard - (dominoOffsetX / zoomLevel);
+                const finalYOnBoard = mouseYOnBoard - (dominoOffsetY / zoomLevel);
                 
                 let newX = finalXOnBoard;
                 let newY = finalYOnBoard;
