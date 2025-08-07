@@ -145,23 +145,26 @@
         .pip-color-7 { background-color: #A0522D; }
         .pip-color-8 { background-color: #9370DB; }
         .pip-color-9 { background-color: #808080; }
+        
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
         .spinner-icon {
             width: 24px;
             height: 24px;
             grid-column: 1 / -1;
             grid-row: 1 / -1;
-            font-size: 11px;
-            line-height: 1.1;
             display: flex;
-            flex-direction: column;
             align-items: center;
             justify-content: center;
         }
-        .spinner-icon svg, .spinner-icon img {
+        .spinner-icon svg {
             width: 100%;
             height: 100%;
-            object-fit: contain;
+            animation: spin 2s linear infinite;
         }
+
 
         /* UI Components */
         button:disabled {
@@ -170,8 +173,8 @@
         }
         #boneyard-pile {
             border: 2px dashed #a0aec0;
-            min-height: 50px;
-            min-width: 90px;
+            height: 60px; /* Give it a fixed height */
+            width: 100px; /* Give it a fixed width */
             display: flex;
             align-items: center;
             justify-content: center;
@@ -179,20 +182,30 @@
             transition: background-color 0.2s, box-shadow 0.2s;
             position: relative;
             border-radius: 8px;
+            background-color: rgba(0,0,0,0.2);
         }
         #boneyard-pile:hover {
             background-color: rgba(255,255,255,0.1);
         }
-        .boneyard-domino {
-            position: absolute;
-            background-color: #f7f7f7; /* Ivory color */
+        #boneyard-stack {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+        }
+        .boneyard-domino-display {
+            width: 80px;
+            height: 40px;
             border: 1px solid #a0aec0;
-            transition: all 0.3s ease;
+            background-color: #f7f7f7;
+            border-radius: 6px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
         }
         #boneyard-count {
             position: absolute;
             z-index: 10;
-            font-size: 2rem;
+            font-size: 1.5rem;
             font-weight: bold;
             color: white;
             background-color: rgba(0,0,0,0.6);
@@ -543,11 +556,12 @@
             <div class="bg-gray-900 bg-opacity-70 p-4 rounded-lg shadow-inner" id="boneyard-container">
                 <h2 class="text-xl font-semibold mb-3 text-center">Boneyard</h2>
                 <div id="boneyard-pile" title="Click to draw a domino">
+                    <div id="boneyard-stack"></div>
                     <span id="boneyard-count">0</span>
                 </div>
                 <div class="mt-2 flex items-center justify-center gap-2" id="boneyard-buttons">
-                    <button class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition-colors" id="undo-button">Undo Move</button>
-                    <button class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition-colors hidden" id="end-turn-button">End Turn</button>
+                    <button class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition-colors" id="undo-button">Undo</button>
+                    <button class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition-colors" id="end-turn-button">End Turn</button>
                 </div>
             </div>
         </div>
@@ -583,6 +597,7 @@
         worldElement: document.getElementById('world'),
         gameBoardElement: document.getElementById('game-board'),
         boneyardPileElement: document.getElementById('boneyard-pile'),
+        boneyardStack: document.getElementById('boneyard-stack'),
         boneyardCountElement: document.getElementById('boneyard-count'),
         currentPlayerElement: document.getElementById('current-player'),
         endTurnButton: document.getElementById('end-turn-button'),
@@ -1131,7 +1146,7 @@
         dom.gameStatusElement.textContent = statusText;
 
         // Update UI controls based on state
-        dom.endTurnButton.classList.toggle('hidden', !(isMyTurn && gameState.turnState === 'PLACED'));
+        dom.endTurnButton.disabled = !(isMyTurn && gameState.turnState === 'PLACED');
         dom.undoButton.disabled = !(isMyTurn && (gameState.moveHistory || []).length > 0);
         dom.boneyardPileElement.style.cursor = (isMyTurn && gameState.turnState === 'WAITING' && gameState.boneyard.length > 0) ? 'pointer' : 'not-allowed';
         dom.boneyardPileElement.classList.toggle('can-draw', isMyTurn && gameState.turnState === 'WAITING' && gameState.boneyard.length > 0);
@@ -1150,8 +1165,13 @@
             myPlayerData.hand.forEach(dominoData => {
                 const dominoElement = createDomino(dominoData);
                 dominoElement.dataset.id = dominoData.id;
-                dominoElement.addEventListener('mousedown', (e) => startDominoDrag(e, { dominoData }, 'hand'));
-                dominoElement.addEventListener('touchstart', (e) => startDominoDrag(e, { dominoData }, 'hand'), { passive: false });
+                // Only allow dragging from hand if it's my turn and I haven't played yet
+                if (gameState.playerOrder[gameState.currentPlayerIndex] === currentPlayerId && gameState.turnState === 'WAITING') {
+                    dominoElement.addEventListener('mousedown', (e) => startDominoDrag(e, { dominoData }, 'hand'));
+                    dominoElement.addEventListener('touchstart', (e) => startDominoDrag(e, { dominoData }, 'hand'), { passive: false });
+                } else {
+                    dominoElement.style.cursor = 'not-allowed';
+                }
                 myHandDiv.appendChild(dominoElement);
             });
             dom.myHandContainer.appendChild(myHandDiv);
@@ -1221,26 +1241,25 @@
     }
 
     function renderBoneyard(boneyard, isMyTurn, turnState) {
-        dom.boneyardPileElement.innerHTML = '';
+        dom.boneyardStack.innerHTML = ''; // Clear previous state
         
+        if (boneyard.length > 0) {
+            const dominoDisplay = document.createElement('div');
+            dominoDisplay.className = 'boneyard-domino-display';
+            dom.boneyardStack.appendChild(dominoDisplay);
+        }
+
         if (isMyTurn && turnState === 'WAITING' && boneyard.length > 0) {
             const message = document.createElement('div');
             message.id = 'boneyard-message';
             message.textContent = 'Click to Draw';
             dom.boneyardPileElement.appendChild(message);
-        }
-
-        const stackSize = Math.min(boneyard.length, 5);
-        for (let i = 0; i < stackSize; i++) {
-            const domino = document.createElement('div');
-            domino.className = 'domino domino-back boneyard-domino';
-            domino.style.transform = `translateX(${i * 2}px) translateY(-${i * 2}px)`;
-            domino.style.zIndex = `${10 + i}`;
-            dom.boneyardPileElement.appendChild(domino);
+        } else {
+            const existingMessage = document.getElementById('boneyard-message');
+            if (existingMessage) existingMessage.remove();
         }
 
         dom.boneyardCountElement.textContent = boneyard.length;
-        dom.boneyardPileElement.appendChild(dom.boneyardCountElement);
     }
     
     function displayRoundEndScreen(gameState) {
@@ -1258,12 +1277,13 @@
 
         const { winnerId, points } = gameState.roundEndInfo;
         dom.roundEndTitle.textContent = `Round ${gameState.roundNumber} Over!`;
-        dom.roundWinnerMessage.textContent = `${gameState.players[winnerId].name} wins this round!`;
+        dom.roundWinnerMessage.textContent = `${gameState.players[winnerId].name} wins the round with 0 points!`;
 
         dom.roundResultsList.innerHTML = '';
         gameState.playerOrder.forEach(pid => {
             const p = document.createElement('p');
-            p.textContent = `${gameState.players[pid].name}: +${points[pid] || 0} points (Total: ${gameState.players[pid].score})`;
+            const oldScore = gameState.players[pid].score - (points[pid] || 0);
+            p.textContent = `${gameState.players[pid].name}: ${oldScore} + ${points[pid] || 0} points = ${gameState.players[pid].score} Total`;
             if (pid === winnerId) p.classList.add('winner');
             dom.roundResultsList.appendChild(p);
         });
@@ -1281,7 +1301,7 @@
         const finalScores = gameState.playerOrder.map(pid => ({
             name: gameState.players[pid].name,
             score: gameState.players[pid].score
-        })).sort((a, b) => a.score - b.score);
+        })).sort((a, b) => a.score - b.score); // Sort by lowest score
 
         const winnerScore = finalScores[0].score;
         const winners = finalScores.filter(p => p.score === winnerScore);
@@ -1324,7 +1344,6 @@
         if (count === SPINNER_VALUE) {
             const iconContainer = document.createElement('div');
             iconContainer.className = 'spinner-icon';
-            iconContainer.style.transform = 'rotate(-90deg)';
             const theme = localGameState.currentTheme || 'classic';
             switch (theme) {
                 case 'classic':
@@ -1372,6 +1391,11 @@
         const currentTurnPlayerId = localGameState.playerOrder[localGameState.currentPlayerIndex];
         if (currentPlayerId !== currentTurnPlayerId) return;
         
+        // Prevent starting a new drag if a domino has already been placed this turn
+        if (origin === 'hand' && localGameState.turnState === 'PLACED') {
+            showMessage("You have already played or drawn a tile. Please end your turn.");
+            return;
+        }
         // Prevent dragging board dominoes unless turn state is 'PLACED'
         if (origin === 'board' && localGameState.turnState !== 'PLACED') return;
         
@@ -1480,18 +1504,16 @@
                                     // Player has won the round, calculate scores and end round/game
                                     const winnerPlayerId = currentPlayerId;
                                     let roundPoints = {};
-                                    let totalPointsForWinner = 0;
-
+                                    
                                     Object.keys(updatedPlayers).forEach(pid => {
                                         if (pid !== winnerPlayerId) {
                                             const handValue = calculateHandValue(updatedPlayers[pid].hand);
-                                            totalPointsForWinner += handValue;
+                                            updatedPlayers[pid].score += handValue;
                                             roundPoints[pid] = handValue;
                                         } else {
                                             roundPoints[pid] = 0;
                                         }
                                     });
-                                    updatedPlayers[winnerPlayerId].score += totalPointsForWinner;
                                     
                                     const isGameOver = gameState.roundNumber >= 10;
 
