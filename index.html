@@ -316,13 +316,18 @@
         }
         #game-layout {
             display: grid;
-            grid-template-columns: 250px 1fr; /* Left column for hands, right for board */
-            grid-template-rows: auto 1fr; /* Top for info, bottom for main content */
-            height: 100vh;
+            grid-template-columns: 250px 1fr;
+            grid-template-rows: auto 1fr;
+            height: 100%; /* Changed from 100vh */
             width: 100%;
-            padding: 1rem;
+            /* Updated padding to respect safe areas on all sides */
+            padding-left: calc(1rem + env(safe-area-inset-left));
+            padding-right: calc(1rem + env(safe-area-inset-right));
+            padding-top: calc(1rem + env(safe-area-inset-top));
+            padding-bottom: calc(1rem + env(safe-area-inset-bottom));
             gap: 1rem;
             box-sizing: border-box;
+        }
         }
         #game-info { 
             grid-column: 1 / -1; /* Span both columns */
