@@ -862,7 +862,6 @@
             if (wasWaiting && gameState.gameStatus === 'in-progress') {
                 centerBoardOnStart();
             }
-            dom.gameIdHeader.textContent = currentGameId;
             dom.reDealButton.classList.toggle('hidden', !isHost);
             renderGameUI(gameState);
         }
