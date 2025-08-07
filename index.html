@@ -1028,7 +1028,6 @@
                     players: updatedPlayers,
                     boneyard: boneyard,
                     turnState: 'PLACED', // Player has now taken an action
-                    lastPlayedDominoId: drawnDomino.id,
                     log: newLog
                 });
             });
@@ -1372,8 +1371,8 @@
         if (currentPlayerId !== currentTurnPlayerId) return;
         
         // Prevent starting a new drag if a domino has already been placed this turn
-        if (origin === 'hand' && localGameState.turnState === 'PLACED') {
-            showMessage("You have already played or drawn a tile. Please end your turn.");
+        if (origin === 'hand' && localGameState.lastPlayedDominoId) {
+            showMessage("You have already played a tile. Please end your turn.");
             return;
         }
         // Prevent dragging board dominoes unless turn state is 'PLACED'
