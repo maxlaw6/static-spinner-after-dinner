@@ -135,6 +135,9 @@
             border-radius: 50%;
             border: 1px solid rgba(0,0,0,0.1);
             box-shadow: inset 0 1px 2px rgba(0,0,0,0.3);
+            /* Fix for scaling artifacts during zoom */
+            backface-visibility: hidden;
+            transform: translateZ(0);
         }
         .pip-color-0 { background-color: #cbd5e0; }
         .pip-color-1 { background-color: #EADCA6; }
@@ -1030,7 +1033,7 @@
                     players: updatedPlayers,
                     boneyard: boneyard,
                     turnState: 'PLACED', // Player has now taken an action
-                    lastDrawnDominoId: drawnDomino.id,
+                    lastPlayedDominoId: drawnDomino.id,
                     log: newLog
                 });
             });
