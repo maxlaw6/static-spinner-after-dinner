@@ -711,6 +711,7 @@
             turnState: 'WAITING', // 'WAITING', 'PLACED'
             mustDrawToStart: false,
             lastPlayedDominoId: null,
+            passCount: 0,
             moveHistory: [],
             log: [], // NEW: For game log
             currentTheme: 'classic',
@@ -950,6 +951,7 @@
                 mustDrawToStart: newMustDraw,
                 turnState: 'WAITING',
                 lastPlayedDominoId: null,
+                passCount: 0,
                 moveHistory: [],
                 log: [`Round ${newRoundNumber} started. Waiting for ${updatedPlayers[playerIds[newPlayerIndex]].name}.`],
                 roundEndInfo: null
@@ -1149,8 +1151,12 @@
     function renderPlayerHands(gameState) {
         const playerOrder = gameState.playerOrder;
         const currentTurnPlayerId = playerOrder[gameState.currentPlayerIndex];
+        
+        // Create a new display order with the current player first
+        const myIndex = playerOrder.indexOf(currentPlayerId);
+        const displayOrder = [...playerOrder.slice(myIndex), ...playerOrder.slice(0, myIndex)];
 
-        playerOrder.forEach(playerId => {
+        displayOrder.forEach(playerId => {
             const playerData = gameState.players[playerId];
             const isCurrentPlayer = playerId === currentPlayerId;
             const isTurn = playerId === currentTurnPlayerId;
