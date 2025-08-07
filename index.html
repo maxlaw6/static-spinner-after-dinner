@@ -71,7 +71,8 @@
             box-shadow: 0 2px 5px rgba(0,0,0,0.2), inset 0 0 2px rgba(0,0,0,0.2);
             transform-origin: center center;
             color: #1a1a1a;
-            transition: box-shadow 0.2s ease, transform 0.3s ease, top 0.3s ease, left 0.3s ease;
+            /* UPDATED: Smooth transition for transform property */
+            transition: box-shadow 0.2s ease, transform 0.25s ease, top 0.3s ease, left 0.3s ease;
             -webkit-tap-highlight-color: transparent; /* Remove tap highlight on iOS */
         }
         .domino.domino-back {
@@ -95,8 +96,11 @@
             transition: none !important;
             z-index: 3000 !important;
             position: fixed !important;
-            opacity: 0.9;
+            top: 0; /* Position is now handled by transform */
+            left: 0; /* Position is now handled by transform */
+            opacity: 0.95;
             pointer-events: none;
+            transform-origin: top left; /* Match transform logic */
         }
         
         /* Mini Domino Styles for Opponent Hands */
@@ -490,7 +494,6 @@
 <!-- Main Game Container -->
 <div class="hidden" id="game-container">
     <div id="game-layout">
-        <!-- **** HTML FIX START **** -->
         <!-- The main div is now a flex container with a gap. The game log is a direct child. -->
         <div class="bg-gray-900 bg-opacity-70 p-2 rounded-lg shadow-lg flex justify-between items-center flex-wrap gap-4" id="game-info">
             <!-- Group 1: Left Controls -->
@@ -502,8 +505,15 @@
                 </div>
             </div>
             
-            <!-- Group 2: Game Log (will grow to fill space) -->
-            <div id="game-log" class="flex-grow"></div>
+            <!-- Group 2: Game Log & Pip Tally -->
+            <div class="flex items-center gap-4 flex-grow justify-center">
+                 <div id="game-log" class="flex-grow"></div>
+                 <!-- NEW: Hand Value Tally -->
+                <div class="text-center px-4">
+                    <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Your Hand Pips</h3>
+                    <p id="hand-value-display" class="text-2xl font-bold text-yellow-300">0</p>
+                </div>
+            </div>
 
             <!-- Group 3: Right Controls -->
             <div class="flex items-center gap-4">
@@ -519,7 +529,6 @@
                 <div class="text-right flex gap-4" id="scoreboard"></div>
             </div>
         </div>
-        <!-- **** HTML FIX END **** -->
         
         <div id="left-panel">
             <div id="player-hands-container">
@@ -610,6 +619,7 @@
         messageText: document.getElementById('message-text'),
         messageOkButton: document.getElementById('message-ok-button'),
         gameLog: document.getElementById('game-log'),
+        handValueDisplay: document.getElementById('hand-value-display'), // ADDED: Tally display
     };
     
     // --- Firebase & Game State ---
@@ -1134,6 +1144,13 @@
             renderScoreboardEntry(gameState.players[pid], pid);
         });
         
+        // ADDED: Update hand value tally
+        const myPlayerData = gameState.players[currentPlayerId];
+        if (myPlayerData) {
+            const handValue = calculateHandValue(myPlayerData.hand);
+            dom.handValueDisplay.textContent = handValue;
+        }
+
         renderBoneyard(gameState.boneyard, isMyTurn, gameState.turnState);
         dom.currentPlayerElement.textContent = gameState.players[currentTurnPlayerId].name;
         
@@ -1416,8 +1433,10 @@
         dominoOffsetX = coords.clientX - rect.left;
         dominoOffsetY = coords.clientY - rect.top;
         
-        activeDominoElement.style.left = `${coords.clientX - dominoOffsetX}px`;
-        activeDominoElement.style.top = `${coords.clientY - dominoOffsetY}px`;
+        // ZOOM FIX: Position and scale using transform for better performance and visual consistency
+        const initialLeft = coords.clientX - dominoOffsetX;
+        const initialTop = coords.clientY - dominoOffsetY;
+        activeDominoElement.style.transform = `translate(${initialLeft}px, ${initialTop}px) scale(${zoomLevel})`;
 
         updateActionStatus(`${localGameState.players[currentPlayerId].name} is moving a tile...`);
         
@@ -1438,8 +1457,11 @@
         if (Math.abs(coords.clientX - dragStartPos.x) > 5 || Math.abs(coords.clientY - dragStartPos.y) > 5) {
             wasDragged = true;
         }
-        activeDominoElement.style.left = `${coords.clientX - dominoOffsetX}px`;
-        activeDominoElement.style.top = `${coords.clientY - dominoOffsetY}px`;
+        
+        // ZOOM FIX: Update position and scale using transform
+        const newLeft = coords.clientX - dominoOffsetX;
+        const newTop = coords.clientY - dominoOffsetY;
+        activeDominoElement.style.transform = `translate(${newLeft}px, ${newTop}px) scale(${zoomLevel})`;
     }
 
     async function endDominoDrag(e, origin, moveHandler, endHandler) {
@@ -1458,6 +1480,13 @@
             // This is a tap/click on a board domino, so rotate it.
             const currentRotation = parseInt(draggedDominoData.rotation || 0);
             const newRotation = (currentRotation + 45) % 360;
+
+            // --- ROTATION FIX: Animate on client immediately ---
+            if (originalDominoElement) {
+                originalDominoElement.style.transform = `rotate(${newRotation}deg)`;
+                originalDominoElement.dataset.rotation = newRotation;
+            }
+
             await runTransaction(db, async (transaction) => {
                 const gameSnap = await transaction.get(gameRef);
                 if (!gameSnap.exists()) throw "Game does not exist!";
@@ -1490,7 +1519,7 @@
                 const mouseYOnBoard = (coords.clientY - worldRect.top) / zoomLevel + boardPosition.y;
                 
                 // The final position is the mouse position on the board minus the initial click offset within the domino.
-                // The offset is NOT scaled by zoom because the domino itself isn't scaled, its parent is.
+                // The offset is scaled by zoom because we are converting from screen space to board space.
                 const finalXOnBoard = mouseXOnBoard - (dominoOffsetX / zoomLevel);
                 const finalYOnBoard = mouseYOnBoard - (dominoOffsetY / zoomLevel);
                 
@@ -1782,6 +1811,18 @@
 
     dom.rotateLastTileButton.addEventListener('click', async () => {
         const gameRef = doc(db, "games", currentGameId);
+        const lastPlayedId = localGameState.lastPlayedDominoId;
+        if (!lastPlayedId) return;
+
+        // --- ROTATION FIX: Animate on client immediately ---
+        const dominoEl = dom.gameBoardElement.querySelector(`.domino[data-id="${lastPlayedId}"]`);
+        if (dominoEl) {
+            const currentRotation = parseInt(dominoEl.dataset.rotation || 0);
+            const newRotation = (currentRotation + 45) % 360;
+            dominoEl.style.transform = `rotate(${newRotation}deg)`;
+            dominoEl.dataset.rotation = newRotation;
+        }
+
         await runTransaction(db, async (transaction) => {
             const gameSnap = await transaction.get(gameRef);
             if (!gameSnap.exists()) return;
