@@ -74,50 +74,42 @@
             transition: box-shadow 0.2s ease, transform 0.3s ease, top 0.3s ease, left 0.3s ease;
             -webkit-tap-highlight-color: transparent; /* Remove tap highlight on iOS */
         }
+        .domino.domino-back {
+            background-color: #f7f7f7;
+            border: 1px solid #a0aec0;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            position: relative;
+        }
+        .domino.domino-back::after {
+            content: '';
+            position: absolute;
+            left: 50%;
+            top: 10%;
+            height: 80%;
+            width: 2px;
+            background-color: rgba(0,0,0,0.1);
+            transform: translateX(-50%);
+        }
         .domino.dragging {
             cursor: grabbing;
-            transition: none !important; /* Disable transitions while dragging for immediate feedback */
-            z-index: 3000 !important; /* Ensure dragged domino is on top */
-            position: fixed !important; /* Use fixed positioning for dragging relative to viewport */
+            transition: none !important;
+            z-index: 3000 !important;
+            position: fixed !important;
             opacity: 0.9;
-            pointer-events: none; /* So the clone doesn't interfere with mouseup/touchend events on the container */
+            pointer-events: none;
         }
         
         /* Mini Domino Styles for Opponent Hands */
         .mini-domino {
-            width: 24px;
-            height: 48px;
-            flex-direction: column;
+            width: 40px;
+            height: 20px;
             border-radius: 3px;
-            padding: 1px;
             box-shadow: 0 1px 2px rgba(0,0,0,0.2);
             cursor: default !important;
         }
         .mini-domino.domino-back::after {
             width: 1px;
         }
-        .mini-domino .pip-container {
-            width: 100%;
-            height: 50%;
-            padding: 1px;
-        }
-        .mini-domino .pip {
-            width: 3px;
-            height: 3px;
-        }
-        .mini-domino .divider {
-            width: 80%;
-            height: 1px;
-        }
-        .mini-domino .spinner-icon {
-            width: 10px;
-            height: 10px;
-        }
-        .mini-domino .spinner-icon svg {
-            width: 100%;
-            height: 100%;
-        }
-
 
         /* Pip and Spinner Styles */
         .pip-container {
@@ -161,8 +153,11 @@
             grid-column: 1 / -1;
             grid-row: 1 / -1;
             display: flex;
+            flex-direction: column; /* Reverted for vertical stacking */
             align-items: center;
             justify-content: center;
+            font-size: 11px;
+            line-height: 1.1;
         }
         .spinner-icon svg {
             width: 100%;
@@ -177,8 +172,8 @@
         }
         #boneyard-pile {
             border: 2px dashed #a0aec0;
-            height: 60px; /* Give it a fixed height */
-            width: 100px; /* Give it a fixed width */
+            height: 60px;
+            width: 100px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -275,7 +270,7 @@
             display: flex;
             flex-wrap: wrap;
             gap: 4px;
-            justify-content: center;
+            justify-content: flex-start;
         }
         #setup-screen, #round-end-screen, #loading-screen, #game-over-screen, #message-modal {
             position: fixed;
@@ -330,14 +325,23 @@
             grid-column: 1 / -1; /* Span both columns */
             grid-row: 1 / 2; 
         }
-        #player-hands-area {
+        #left-panel {
             grid-column: 1 / 2;
             grid-row: 2 / 3;
             display: flex;
             flex-direction: column;
             gap: 1rem;
+            min-height: 0;
+        }
+        #player-hands-container {
+            flex-grow: 1;
             overflow-y: auto;
-            padding-right: 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        #boneyard-container {
+            flex-shrink: 0;
         }
         #main-game-area {
             grid-column: 2 / 3;
@@ -345,7 +349,7 @@
             position: relative;
             display: grid;
             place-items: center;
-            min-height: 0; /* IPAD FIX for grid/flex overflow */
+            min-height: 0;
         }
         #main-game-area > * {
             grid-column: 1 / -1;
@@ -358,9 +362,6 @@
             z-index: 1;
         }
         
-        #boneyard-container {
-            flex-shrink: 0; /* Prevent boneyard from shrinking */
-        }
         #boneyard-buttons {
             flex-direction: row; /* Align buttons horizontally */
         }
@@ -378,30 +379,30 @@
         @media (max-width: 1024px) { /* Adjust breakpoint for vertical layout */
             #game-layout {
                 grid-template-columns: 1fr; /* Single column */
-                grid-template-rows: auto auto 1fr auto; /* Info, Hands, Board, Boneyard */
+                grid-template-rows: auto auto 1fr; /* Info, Player Area, Board */
             }
             #game-info { grid-row: 1 / 2; }
-            #player-hands-area {
+            #left-panel {
                 grid-column: 1 / -1;
                 grid-row: 2 / 3;
-                flex-direction: row; /* Horizontal for smaller screens */
+                flex-direction: row;
                 overflow-x: auto;
-                padding-right: 0;
                 padding-bottom: 1rem;
-                height: 120px; /* Fixed height for horizontal scroll */
+            }
+            #player-hands-container {
+                flex-direction: row;
+                flex-grow: 0;
             }
             .player-hand-section {
                 flex-shrink: 0;
-                width: 150px;
+                width: 180px;
+            }
+            #boneyard-container {
+                flex-shrink: 0;
             }
             #main-game-area {
                 grid-column: 1 / -1;
                 grid-row: 3 / 4;
-            }
-            #my-hand-container {
-                grid-column: 1 / -1;
-                grid-row: 4 / 5;
-                max-height: 150px;
             }
         }
     </style>
@@ -508,8 +509,10 @@
             </div>
         </div>
         
-        <div id="player-hands-area">
-            <!-- Player hands will be rendered here by JS -->
+        <div id="left-panel">
+            <div id="player-hands-container">
+                <!-- Player hands will be rendered here by JS -->
+            </div>
             <div id="boneyard-container">
                 <h2 class="text-xl font-semibold mb-3 text-center">Boneyard</h2>
                 <div id="boneyard-pile" title="Click to draw a domino">
@@ -569,13 +572,14 @@
         gameBoardElement: document.getElementById('game-board'),
         boneyardPileElement: document.getElementById('boneyard-pile'),
         boneyardStack: document.getElementById('boneyard-stack'),
+        boneyardContainer: document.getElementById('boneyard-container'),
         boneyardCountElement: document.getElementById('boneyard-count'),
         currentPlayerElement: document.getElementById('current-player'),
         endTurnButton: document.getElementById('end-turn-button'),
         undoButton: document.getElementById('undo-button'),
         rotateLastTileButton: document.getElementById('rotate-last-tile-button'),
         gameStatusElement: document.getElementById('game-status'),
-        playerHandsArea: document.getElementById('player-hands-area'),
+        playerHandsContainer: document.getElementById('player-hands-container'),
         scoreboard: document.getElementById('scoreboard'),
         themeSwitcher: document.getElementById('theme-switcher'),
         roundEndScreen: document.getElementById('round-end-screen'),
@@ -1102,7 +1106,7 @@
         });
         updateMinimap(gameState.boardDominos);
 
-        dom.playerHandsArea.innerHTML = ''; // Clear the entire left column
+        dom.playerHandsContainer.innerHTML = ''; // Clear the entire left column
         dom.scoreboard.innerHTML = '';
         
         renderPlayerHands(gameState);
@@ -1187,7 +1191,7 @@
             
             section.appendChild(title);
             section.appendChild(handDiv);
-            dom.playerHandsArea.insertBefore(section, dom.boneyardContainer);
+            dom.playerHandsContainer.appendChild(section);
         });
     }
 
