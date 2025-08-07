@@ -35,6 +35,7 @@
             background-image: radial-gradient(rgba(255, 255, 255, 0.05) 10%, transparent 0);
             background-size: 5px 5px;
             border-radius: 20px; /* Rounded corners for the table */
+            touch-action: none; /* Critical for smooth touch controls on iPad */
         }
         #world.panning {
             cursor: grabbing;
@@ -74,33 +75,6 @@
             transition: box-shadow 0.2s ease, transform 0.3s ease, top 0.3s ease, left 0.3s ease;
             -webkit-tap-highlight-color: transparent; /* Remove tap highlight on iOS */
         }
-        .domino.domino-back {
-            background-color: #f7f7f7; /* Ivory color for opponent hands */
-            border: 1px solid #a0aec0;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-            position: relative;
-        }
-        .domino.domino-back::after {
-            content: '';
-            position: absolute;
-            left: 50%;
-            top: 10%;
-            height: 80%;
-            width: 2px;
-            background-color: rgba(0,0,0,0.1);
-            transform: translateX(-50%);
-        }
-        .player-hand .domino {
-            position: relative;
-        }
-        #game-board .domino {
-            position: absolute;
-        }
-        .domino.selected {
-            box-shadow: 0 0 15px rgba(255, 215, 0, 0.9), 0 0 5px rgba(255, 215, 0, 0.7);
-            border-color: #FFD700;
-            z-index: 1000;
-        }
         .domino.dragging {
             cursor: grabbing;
             transition: none !important; /* Disable transitions while dragging for immediate feedback */
@@ -109,6 +83,39 @@
             opacity: 0.9;
             pointer-events: none; /* So the clone doesn't interfere with mouseup/touchend events on the container */
         }
+        
+        /* Mini Domino Styles for Opponent Hands */
+        .mini-domino {
+            width: 24px;
+            height: 48px;
+            flex-direction: column;
+            border-radius: 3px;
+            padding: 1px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+            cursor: default !important;
+        }
+        .mini-domino .pip-container {
+            width: 100%;
+            height: 50%;
+            padding: 1px;
+        }
+        .mini-domino .pip {
+            width: 3px;
+            height: 3px;
+        }
+        .mini-domino .divider {
+            width: 80%;
+            height: 1px;
+        }
+        .mini-domino .spinner-icon {
+            width: 10px;
+            height: 10px;
+        }
+        .mini-domino .spinner-icon svg {
+            width: 100%;
+            height: 100%;
+        }
+
 
         /* Pip and Spinner Styles */
         .pip-container {
@@ -146,10 +153,6 @@
         .pip-color-8 { background-color: #9370DB; }
         .pip-color-9 { background-color: #808080; }
         
-        @keyframes spin {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
-        }
         .spinner-icon {
             width: 24px;
             height: 24px;
@@ -162,7 +165,6 @@
         .spinner-icon svg {
             width: 100%;
             height: 100%;
-            animation: spin 2s linear infinite;
         }
 
 
@@ -265,6 +267,13 @@
             background-color: rgba(0,0,0,0.3);
             display: flex;
             flex-direction: column;
+            align-items: center; /* Center content */
+        }
+        .opponent-hand-content {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            justify-content: center;
         }
         .opponent-hand-section.current-player {
             border-color: #FFD700;
@@ -367,24 +376,6 @@
             transform: translateY(-50%);
             height: 80%;
             max-height: 500px;
-        }
-        .side-hand-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 0.5rem;
-            align-content: start;
-            overflow-y: auto;
-            flex-grow: 1;
-        }
-        .top-hand {
-            display: flex;
-            gap: 0.5rem;
-            justify-content: center;
-            overflow-x: auto;
-            flex-grow: 1;
-        }
-        .side-hand-grid .domino {
-            transform: rotate(90deg);
         }
 
         #bottom-hand-area {
@@ -1207,24 +1198,21 @@
     }
 
     function renderOpponentHand(playerData, playerId, container) {
-        if(container !== dom.topHandArea) {
-            container.innerHTML = '';
-        }
+        container.innerHTML = ''; // Clear previous content
         
-        const isSide = container === dom.leftHandArea || container === dom.rightHandArea;
         const section = document.createElement('div');
         section.className = 'opponent-hand-section';
         section.classList.toggle('current-player', playerId === localGameState.playerOrder[localGameState.currentPlayerIndex]);
 
         const title = document.createElement('h3');
         title.className = 'font-bold text-center mb-2 text-sm';
-        title.textContent = `${playerData.name}`;
+        title.textContent = `${playerData.name} (${playerData.hand.length})`;
 
         const handDiv = document.createElement('div');
-        handDiv.className = isSide ? 'side-hand-grid' : 'top-hand';
+        handDiv.className = 'opponent-hand-content';
         
-        playerData.hand.forEach(() => {
-            const dominoElement = createDomino(null, true); // Render as back
+        playerData.hand.forEach(dominoData => {
+            const dominoElement = createDomino(dominoData, false, 'mini');
             handDiv.appendChild(dominoElement);
         });
 
@@ -1323,22 +1311,25 @@
         });
     }
 
-    function createDomino(dominoData, isBack = false) {
+    function createDomino(dominoData, isBack = false, size = 'normal') {
         const dominoElement = document.createElement('div');
         dominoElement.className = 'domino';
+        if (size === 'mini') {
+            dominoElement.classList.add('mini-domino');
+        }
 
         if (isBack) {
             dominoElement.classList.add('domino-back');
             return dominoElement;
         }
         
-        dominoElement.appendChild(createPipContainer(dominoData.top));
+        dominoElement.appendChild(createPipContainer(dominoData.top, size));
         dominoElement.appendChild(document.createElement('div')).className = 'divider';
-        dominoElement.appendChild(createPipContainer(dominoData.bottom));
+        dominoElement.appendChild(createPipContainer(dominoData.bottom, size));
         return dominoElement;
     }
     
-    function createPipContainer(count) {
+    function createPipContainer(count, size = 'normal') {
         const container = document.createElement('div');
         container.className = 'pip-container';
         if (count === SPINNER_VALUE) {
@@ -1457,96 +1448,106 @@
             const coords = getEventCoords(e);
             const worldRect = dom.worldElement.getBoundingClientRect();
             
-            const finalXOnBoard = boardPosition.x + (coords.clientX - worldRect.left) / zoomLevel - (dominoOffsetX / zoomLevel);
-            const finalYOnBoard = boardPosition.y + (coords.clientY - worldRect.top) / zoomLevel - (dominoOffsetY / zoomLevel);
-            
-            let newX = finalXOnBoard;
-            let newY = finalYOnBoard;
-            let newRotation = parseInt(originalDominoElement.dataset.rotation || 0);
-            
-            let isValidPlacement = true;
-            // Special check for the very first domino placed on the board
-            if (localGameState.boardDominos.length === 0) {
-                const d = draggedDominoData.dominoData;
-                const required = localGameState.currentStartingDouble;
-                const isCorrectDouble = d.top === required && d.bottom === required;
-                const isDoubleSpinner = d.top === SPINNER_VALUE && d.bottom === SPINNER_VALUE;
-                if (!isCorrectDouble && !isDoubleSpinner) {
-                    isValidPlacement = false;
-                    showMessage(`Must start with Double ${required} or Double Spinner!`);
-                } else {
-                    // Snap the first piece to the center for consistency
-                    newX = (BOARD_SIZE / 2) - (DOMINO_HEIGHT / 2);
-                    newY = (BOARD_SIZE / 2) - (DOMINO_WIDTH / 2);
-                    newRotation = 90;
+            // Check if the drop was outside the world element
+            if (origin === 'hand' && (
+                coords.clientX < worldRect.left ||
+                coords.clientX > worldRect.right ||
+                coords.clientY < worldRect.top ||
+                coords.clientY > worldRect.bottom
+            )) {
+                // If dropped outside, don't place it, just clean up. The tile will reappear in the hand.
+            } else {
+                const finalXOnBoard = boardPosition.x + (coords.clientX - worldRect.left) / zoomLevel - (dominoOffsetX / zoomLevel);
+                const finalYOnBoard = boardPosition.y + (coords.clientY - worldRect.top) / zoomLevel - (dominoOffsetY / zoomLevel);
+                
+                let newX = finalXOnBoard;
+                let newY = finalYOnBoard;
+                let newRotation = parseInt(originalDominoElement.dataset.rotation || 0);
+                
+                let isValidPlacement = true;
+                // Special check for the very first domino placed on the board
+                if (localGameState.boardDominos.length === 0) {
+                    const d = draggedDominoData.dominoData;
+                    const required = localGameState.currentStartingDouble;
+                    const isCorrectDouble = d.top === required && d.bottom === required;
+                    const isDoubleSpinner = d.top === SPINNER_VALUE && d.bottom === SPINNER_VALUE;
+                    if (!isCorrectDouble && !isDoubleSpinner) {
+                        isValidPlacement = false;
+                        showMessage(`Must start with Double ${required} or Double Spinner!`);
+                    } else {
+                        // Snap the first piece to the center for consistency
+                        newX = (BOARD_SIZE / 2) - (DOMINO_HEIGHT / 2);
+                        newY = (BOARD_SIZE / 2) - (DOMINO_WIDTH / 2);
+                        newRotation = 90;
+                    }
                 }
-            }
 
-             if (isValidPlacement) {
-                try {
-                    await runTransaction(db, async (transaction) => {
-                        const gameSnap = await transaction.get(gameRef);
-                        if (!gameSnap.exists()) throw "Game does not exist!";
-                        const gameState = gameSnap.data();
-                        
-                        let newBoardDominos = [...gameState.boardDominos];
-                        let updatedPlayers = { ...gameState.players };
-                        let newMoveHistory = [...(gameState.moveHistory || [])];
+                 if (isValidPlacement) {
+                    try {
+                        await runTransaction(db, async (transaction) => {
+                            const gameSnap = await transaction.get(gameRef);
+                            if (!gameSnap.exists()) throw "Game does not exist!";
+                            const gameState = gameSnap.data();
+                            
+                            let newBoardDominos = [...gameState.boardDominos];
+                            let updatedPlayers = { ...gameState.players };
+                            let newMoveHistory = [...(gameState.moveHistory || [])];
 
-                        if (origin === 'hand') {
-                            const playerHand = updatedPlayers[currentPlayerId].hand;
-                            const handIndex = playerHand.findIndex(d => d.id === draggedDominoData.dominoData.id);
-                            if (handIndex > -1) {
-                                const playedDomino = playerHand.splice(handIndex, 1)[0];
-                                newBoardDominos.push({ dominoData: playedDomino, x: newX, y: newY, rotation: newRotation });
-                                
-                                 if (playerHand.length === 0) {
-                                    // Player has won the round, calculate scores and end round/game
-                                    const winnerPlayerId = currentPlayerId;
-                                    let roundPoints = {};
+                            if (origin === 'hand') {
+                                const playerHand = updatedPlayers[currentPlayerId].hand;
+                                const handIndex = playerHand.findIndex(d => d.id === draggedDominoData.dominoData.id);
+                                if (handIndex > -1) {
+                                    const playedDomino = playerHand.splice(handIndex, 1)[0];
+                                    newBoardDominos.push({ dominoData: playedDomino, x: newX, y: newY, rotation: newRotation });
                                     
-                                    Object.keys(updatedPlayers).forEach(pid => {
-                                        if (pid !== winnerPlayerId) {
-                                            const handValue = calculateHandValue(updatedPlayers[pid].hand);
-                                            updatedPlayers[pid].score += handValue;
-                                            roundPoints[pid] = handValue;
-                                        } else {
-                                            roundPoints[pid] = 0;
-                                        }
-                                    });
-                                    
-                                    const isGameOver = gameState.roundNumber >= 10;
+                                     if (playerHand.length === 0) {
+                                        // Player has won the round, calculate scores and end round/game
+                                        const winnerPlayerId = currentPlayerId;
+                                        let roundPoints = {};
+                                        
+                                        Object.keys(updatedPlayers).forEach(pid => {
+                                            if (pid !== winnerPlayerId) {
+                                                const handValue = calculateHandValue(updatedPlayers[pid].hand);
+                                                updatedPlayers[pid].score += handValue;
+                                                roundPoints[pid] = handValue;
+                                            } else {
+                                                roundPoints[pid] = 0;
+                                            }
+                                        });
+                                        
+                                        const isGameOver = gameState.roundNumber >= 10;
 
-                                    transaction.update(gameRef, {
-                                        boardDominos: newBoardDominos,
-                                        players: updatedPlayers,
-                                        gameStatus: isGameOver ? 'finished' : 'round-over',
-                                        roundEndInfo: { winnerId: winnerPlayerId, points: roundPoints },
-                                        turnState: 'WAITING'
-                                    });
-                                } else {
-                                    // Continue turn
-                                    transaction.update(gameRef, {
-                                        boardDominos: newBoardDominos,
-                                        players: updatedPlayers,
-                                        turnState: 'PLACED',
-                                        moveHistory: [] // Clear history after a successful play
-                                    });
+                                        transaction.update(gameRef, {
+                                            boardDominos: newBoardDominos,
+                                            players: updatedPlayers,
+                                            gameStatus: isGameOver ? 'finished' : 'round-over',
+                                            roundEndInfo: { winnerId: winnerPlayerId, points: roundPoints },
+                                            turnState: 'WAITING'
+                                        });
+                                    } else {
+                                        // Continue turn
+                                        transaction.update(gameRef, {
+                                            boardDominos: newBoardDominos,
+                                            players: updatedPlayers,
+                                            turnState: 'PLACED',
+                                            moveHistory: [] // Clear history after a successful play
+                                        });
+                                    }
+                                }
+                            } else { // origin === 'board'
+                                const boardIndex = newBoardDominos.findIndex(d => d.dominoData.id === draggedDominoData.dominoData.id);
+                                if (boardIndex > -1) {
+                                    newMoveHistory.push({ type: 'reposition', dominoId: draggedDominoData.dominoData.id, from: { x: newBoardDominos[boardIndex].x, y: newBoardDominos[boardIndex].y } });
+                                    newBoardDominos[boardIndex].x = newX;
+                                    newBoardDominos[boardIndex].y = newY;
+                                    transaction.update(gameRef, { boardDominos: newBoardDominos, moveHistory: newMoveHistory });
                                 }
                             }
-                        } else { // origin === 'board'
-                            const boardIndex = newBoardDominos.findIndex(d => d.dominoData.id === draggedDominoData.dominoData.id);
-                            if (boardIndex > -1) {
-                                newMoveHistory.push({ type: 'reposition', dominoId: draggedDominoData.dominoData.id, from: { x: newBoardDominos[boardIndex].x, y: newBoardDominos[boardIndex].y } });
-                                newBoardDominos[boardIndex].x = newX;
-                                newBoardDominos[boardIndex].y = newY;
-                                transaction.update(gameRef, { boardDominos: newBoardDominos, moveHistory: newMoveHistory });
-                            }
-                        }
-                    });
-                } catch (error) {
-                    console.error("Error during domino placement transaction:", error);
-                    showMessage("There was an error placing the domino. The game state may be out of sync. Please refresh.");
+                        });
+                    } catch (error) {
+                        console.error("Error during domino placement transaction:", error);
+                        showMessage("There was an error placing the domino. The game state may be out of sync. Please refresh.");
+                    }
                 }
             }
         } else { // Click, not a drag (for rotation)
