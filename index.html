@@ -1028,7 +1028,7 @@
                 
                 const newLog = [...(gameState.log || [])];
                 newLog.push(`${updatedPlayers[currentPlayerId].name} drew from the boneyard.`);
-                if (newLog.length > 5) newLog.shift();
+                if (newLog.length > 5) newLog.shift(); // Keep log size manageable
 
                 transaction.update(gameRef, {
                     players: updatedPlayers,
