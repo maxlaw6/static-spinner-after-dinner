@@ -821,6 +821,13 @@
         const wasWaiting = localGameState.gameStatus === 'waiting';
 
         localGameState = gameState;
+        
+        // Guard against incomplete data during initial load
+        if (!gameState.players || !gameState.playerOrder || gameState.playerOrder.length === 0) {
+            console.log("Waiting for complete game state...");
+            return;
+        }
+
         const playerIds = gameState.playerOrder;
         const playerCount = playerIds.length;
         const isHost = gameState.players[currentPlayerId]?.isHost;
@@ -1010,7 +1017,6 @@
 
                 const currentTurnPlayerId = gameState.playerOrder[gameState.currentPlayerIndex];
                 if (currentPlayerId !== currentTurnPlayerId || gameState.turnState === 'PLACED' || gameState.boneyard.length === 0) {
-                    // This check prevents drawing out of turn or when not allowed.
                     return;
                 }
 
@@ -1022,12 +1028,12 @@
                 
                 const newLog = [...(gameState.log || [])];
                 newLog.push(`${updatedPlayers[currentPlayerId].name} drew from the boneyard.`);
-                if (newLog.length > 5) newLog.shift(); // Keep log size manageable
+                if (newLog.length > 5) newLog.shift();
 
                 transaction.update(gameRef, {
                     players: updatedPlayers,
                     boneyard: boneyard,
-                    turnState: 'PLACED', // Player has now taken an action
+                    turnState: 'PLACED',
                     log: newLog
                 });
             });
@@ -1176,7 +1182,7 @@
                 playerData.hand.forEach(dominoData => {
                     const dominoElement = createDomino(dominoData);
                     dominoElement.dataset.id = dominoData.id;
-                    if (isTurn && gameState.turnState === 'WAITING') {
+                    if (isTurn && !gameState.lastPlayedDominoId) {
                         dominoElement.addEventListener('mousedown', (e) => startDominoDrag(e, { dominoData }, 'hand'));
                         dominoElement.addEventListener('touchstart', (e) => startDominoDrag(e, { dominoData }, 'hand'), { passive: false });
                     } else {
