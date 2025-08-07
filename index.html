@@ -94,6 +94,9 @@
             box-shadow: 0 1px 2px rgba(0,0,0,0.2);
             cursor: default !important;
         }
+        .mini-domino.domino-back::after {
+            width: 1px;
+        }
         .mini-domino .pip-container {
             width: 100%;
             height: 50%;
@@ -406,6 +409,16 @@
         #boneyard-buttons {
             flex-direction: row; /* Align buttons horizontally */
         }
+        
+        #game-log {
+            background-color: rgba(0,0,0,0.5);
+            border-radius: 8px;
+            padding: 8px;
+            max-height: 100px;
+            overflow-y: auto;
+            font-size: 0.8rem;
+            color: #d1d5db; /* gray-300 */
+        }
 
         @media (max-width: 768px) {
             #game-layout {
@@ -507,6 +520,7 @@
                     <h2 class="font-bold text-lg">Current Turn: <span id="current-player"></span></h2>
                     <p class="text-sm text-yellow-300" id="game-status">Loading...</p>
                 </div>
+                 <div id="game-log" class="flex-grow ml-4"></div>
             </div>
             <div class="flex items-center gap-4">
                 <button class="bg-yellow-600 hover:bg-yellow-700 text-black font-bold py-2 px-4 rounded transition-colors" id="re-deal-button">Re-Deal</button>
@@ -615,6 +629,7 @@
         messageModal: document.getElementById('message-modal'),
         messageText: document.getElementById('message-text'),
         messageOkButton: document.getElementById('message-ok-button'),
+        gameLog: document.getElementById('game-log'),
     };
     
     // --- Firebase & Game State ---
@@ -633,6 +648,7 @@
     let isDraggingDomino = false;
     let wasDragged = false;
     let dragStartPos = { x: 0, y: 0 };
+    let dragStartTime = 0;
     let isPanning = false;
     let panStart = { x: 0, y: 0 };
     let boardPosition = { x: 0, y: 0 };
@@ -728,6 +744,7 @@
             mustDrawToStart: false,
             lastDrawnDominoId: null,
             moveHistory: [],
+            log: [], // NEW: For game log
             currentTheme: 'classic',
             actionStatus: null, // To show what other players are doing
             createdAt: serverTimestamp()
@@ -966,6 +983,7 @@
                 turnState: 'WAITING',
                 lastDrawnDominoId: null,
                 moveHistory: [],
+                log: [`Round ${newRoundNumber} started. Waiting for ${updatedPlayers[playerIds[newPlayerIndex]].name}.`],
                 roundEndInfo: null
             });
         });
@@ -1033,12 +1051,17 @@
                 
                 const updatedPlayers = { ...gameState.players };
                 updatedPlayers[currentPlayerId].hand.push(drawnDomino);
+                
+                const newLog = [...(gameState.log || [])];
+                newLog.push(`${updatedPlayers[currentPlayerId].name} drew from the boneyard.`);
+                if (newLog.length > 5) newLog.shift(); // Keep log size manageable
 
                 transaction.update(gameRef, {
                     players: updatedPlayers,
                     boneyard: boneyard,
                     turnState: 'PLACED', // Player has now taken an action
                     lastDrawnDominoId: drawnDomino.id,
+                    log: newLog
                 });
             });
         } catch (error) {
@@ -1055,11 +1078,23 @@
 
     async function confirmTurn() {
         const gameRef = doc(db, "games", currentGameId);
-        const nextPlayerIndex = (localGameState.currentPlayerIndex + 1) % localGameState.playerOrder.length;
-        await updateDoc(gameRef, {
-            currentPlayerIndex: nextPlayerIndex,
-            turnState: 'WAITING',
-            moveHistory: [] // Clear history for the next player
+        await runTransaction(db, async (transaction) => {
+            const gameSnap = await transaction.get(gameRef);
+            if (!gameSnap.exists()) throw "Game does not exist!";
+            const gameState = gameSnap.data();
+
+            const nextPlayerIndex = (gameState.currentPlayerIndex + 1) % gameState.playerOrder.length;
+            const nextPlayerName = gameState.players[gameState.playerOrder[nextPlayerIndex]].name;
+            const newLog = [...(gameState.log || [])];
+            newLog.push(`It's now ${nextPlayerName}'s turn.`);
+            if (newLog.length > 5) newLog.shift();
+
+            transaction.update(gameRef, {
+                currentPlayerIndex: nextPlayerIndex,
+                turnState: 'WAITING',
+                moveHistory: [], // Clear history for the next player
+                log: newLog
+            });
         });
     }
     dom.endTurnButton.addEventListener('click', confirmTurn);
@@ -1094,7 +1129,7 @@
             el.dataset.id = domino.dominoData.id;
             
             // Only the current player can move dominoes on the board
-            if (isMyTurn && gameState.turnState === 'PLACED') {
+            if (isMyTurn) {
                 el.addEventListener('mousedown', (e) => startDominoDrag(e, domino, 'board'));
                 el.addEventListener('touchstart', (e) => startDominoDrag(e, domino, 'board'), { passive: false });
             }
@@ -1109,6 +1144,7 @@
         dom.rightHandArea.innerHTML = '';
 
         renderPlayerHands(gameState);
+        renderGameLog(gameState.log);
 
         gameState.playerOrder.forEach(pid => {
             renderScoreboardEntry(gameState.players[pid], pid);
@@ -1211,8 +1247,8 @@
         const handDiv = document.createElement('div');
         handDiv.className = 'opponent-hand-content';
         
-        playerData.hand.forEach(dominoData => {
-            const dominoElement = createDomino(dominoData, false, 'mini');
+        playerData.hand.forEach(() => {
+            const dominoElement = createDomino(null, true, 'mini');
             handDiv.appendChild(dominoElement);
         });
 
@@ -1227,6 +1263,17 @@
         scoreEntry.textContent = `${playerData.name}: ${playerData.score}`;
         dom.scoreboard.appendChild(scoreEntry);
     }
+    
+    function renderGameLog(log) {
+        if (!log) return;
+        dom.gameLog.innerHTML = '';
+        log.forEach(entry => {
+            const p = document.createElement('p');
+            p.textContent = entry;
+            dom.gameLog.appendChild(p);
+        });
+        dom.gameLog.scrollTop = dom.gameLog.scrollHeight; // Auto-scroll to the bottom
+    }
 
     function renderBoneyard(boneyard, isMyTurn, turnState) {
         dom.boneyardStack.innerHTML = ''; // Clear previous state
@@ -1237,14 +1284,14 @@
             dom.boneyardStack.appendChild(dominoDisplay);
         }
 
+        const existingMessage = document.getElementById('boneyard-message');
+        if (existingMessage) existingMessage.remove();
+
         if (isMyTurn && turnState === 'WAITING' && boneyard.length > 0) {
             const message = document.createElement('div');
             message.id = 'boneyard-message';
             message.textContent = 'Click to Draw';
             dom.boneyardPileElement.appendChild(message);
-        } else {
-            const existingMessage = document.getElementById('boneyard-message');
-            if (existingMessage) existingMessage.remove();
         }
 
         dom.boneyardCountElement.textContent = boneyard.length;
@@ -1394,6 +1441,7 @@
         draggedDominoData = dominoObject;
         isDraggingDomino = true;
         wasDragged = false;
+        dragStartTime = Date.now();
         
         const coords = getEventCoords(e);
         dragStartPos = { x: coords.clientX, y: coords.clientY };
@@ -1443,8 +1491,28 @@
         if (!isDraggingDomino) return;
         
         const gameRef = doc(db, "games", currentGameId);
+        const dragDuration = Date.now() - dragStartTime;
+        const isTap = !wasDragged && dragDuration < 200;
 
-        if (wasDragged) {
+        if (isTap && origin === 'board') {
+            // This is a tap/click on a board domino, so rotate it.
+            const currentRotation = parseInt(draggedDominoData.rotation || 0);
+            const newRotation = (currentRotation + 45) % 360;
+            await runTransaction(db, async (transaction) => {
+                const gameSnap = await transaction.get(gameRef);
+                if (!gameSnap.exists()) throw "Game does not exist!";
+                const gameState = gameSnap.data();
+                const newBoardDominos = [...gameState.boardDominos];
+                let newMoveHistory = [...(gameState.moveHistory || [])];
+                const boardIndex = newBoardDominos.findIndex(d => d.dominoData.id === draggedDominoData.dominoData.id);
+                if (boardIndex > -1) {
+                    newMoveHistory.push({ type: 'rotate', dominoId: draggedDominoData.dominoData.id, from: newBoardDominos[boardIndex].rotation });
+                    newBoardDominos[boardIndex].rotation = newRotation;
+                    transaction.update(gameRef, { boardDominos: newBoardDominos, moveHistory: newMoveHistory });
+                }
+            });
+        } else if (wasDragged) {
+            // This was a drag, so place the domino.
             const coords = getEventCoords(e);
             const worldRect = dom.worldElement.getBoundingClientRect();
             
@@ -1492,6 +1560,7 @@
                             let newBoardDominos = [...gameState.boardDominos];
                             let updatedPlayers = { ...gameState.players };
                             let newMoveHistory = [...(gameState.moveHistory || [])];
+                            let newLog = [...(gameState.log || [])];
 
                             if (origin === 'hand') {
                                 const playerHand = updatedPlayers[currentPlayerId].hand;
@@ -1500,6 +1569,9 @@
                                     const playedDomino = playerHand.splice(handIndex, 1)[0];
                                     newBoardDominos.push({ dominoData: playedDomino, x: newX, y: newY, rotation: newRotation });
                                     
+                                    newLog.push(`${updatedPlayers[currentPlayerId].name} played a tile.`);
+                                    if (newLog.length > 5) newLog.shift();
+
                                      if (playerHand.length === 0) {
                                         // Player has won the round, calculate scores and end round/game
                                         const winnerPlayerId = currentPlayerId;
@@ -1522,7 +1594,8 @@
                                             players: updatedPlayers,
                                             gameStatus: isGameOver ? 'finished' : 'round-over',
                                             roundEndInfo: { winnerId: winnerPlayerId, points: roundPoints },
-                                            turnState: 'WAITING'
+                                            turnState: 'WAITING',
+                                            log: newLog
                                         });
                                     } else {
                                         // Continue turn
@@ -1530,7 +1603,8 @@
                                             boardDominos: newBoardDominos,
                                             players: updatedPlayers,
                                             turnState: 'PLACED',
-                                            moveHistory: [] // Clear history after a successful play
+                                            moveHistory: [], // Clear history after a successful play
+                                            log: newLog
                                         });
                                     }
                                 }
@@ -1549,24 +1623,6 @@
                         showMessage("There was an error placing the domino. The game state may be out of sync. Please refresh.");
                     }
                 }
-            }
-        } else { // Click, not a drag (for rotation)
-            if (origin === 'board') {
-                const currentRotation = parseInt(draggedDominoData.rotation || 0);
-                const newRotation = (currentRotation + 45) % 360;
-                await runTransaction(db, async (transaction) => {
-                    const gameSnap = await transaction.get(gameRef);
-                    if (!gameSnap.exists()) throw "Game does not exist!";
-                    const gameState = gameSnap.data();
-                    const newBoardDominos = [...gameState.boardDominos];
-                    let newMoveHistory = [...(gameState.moveHistory || [])];
-                    const boardIndex = newBoardDominos.findIndex(d => d.dominoData.id === draggedDominoData.dominoData.id);
-                    if (boardIndex > -1) {
-                        newMoveHistory.push({ type: 'rotate', dominoId: draggedDominoData.dominoData.id, from: newBoardDominos[boardIndex].rotation });
-                        newBoardDominos[boardIndex].rotation = newRotation;
-                        transaction.update(gameRef, { boardDominos: newBoardDominos, moveHistory: newMoveHistory });
-                    }
-                });
             }
         }
         
