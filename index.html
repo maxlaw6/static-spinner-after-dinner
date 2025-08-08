@@ -1109,7 +1109,6 @@
     dom.boneyardPileElement.addEventListener('click', drawFromBoneyard);
     dom.boneyardPileElement.addEventListener('touchstart', (e) => { e.preventDefault(); drawFromBoneyard(); });
 
-    // FIX: This function now submits the turn for validation
     async function submitTurnForValidation() {
         const gameRef = doc(db, "games", currentGameId);
         await runTransaction(db, async (transaction) => {
@@ -1227,7 +1226,6 @@
         } else { // Not my turn
             statusText = `Waiting for ${gameState.players[currentTurnPlayerId].name}...`;
             if (gameState.turnState === 'PENDING_VALIDATION') {
-                // FIX: No longer need to check individual status, just show the button if pending
                 statusText = `Validate ${gameState.players[currentTurnPlayerId].name}'s move.`;
                 dom.validateMoveButton.classList.remove('hidden');
                 dom.challengeMoveButton.classList.remove('hidden');
@@ -1897,7 +1895,7 @@
         }
     });
 
-    // NEW: Validation Logic
+    // --- Validation & Challenge Logic ---
     dom.validateMoveButton.addEventListener('click', async () => {
         const gameRef = doc(db, "games", currentGameId);
         await runTransaction(db, async (transaction) => {
@@ -1905,17 +1903,14 @@
             if (!gameSnap.exists()) return;
             const gameState = gameSnap.data();
             
-            // FIX: Only the first person to validate will trigger the state change.
             if (gameState.turnState !== 'PENDING_VALIDATION') {
-                return; // Another player already validated. Do nothing.
+                return; 
             }
 
-            // This player is the first to validate. Proceed with the turn.
             const currentTurnPlayerId = gameState.playerOrder[gameState.currentPlayerIndex];
             const playerHand = gameState.players[currentTurnPlayerId].hand;
 
             if (playerHand.length === 0) {
-                // Player went out, end the round
                 let roundPoints = {};
                 let scoreHistoryEntry = { round: gameState.roundNumber, scores: {} };
                 const updatedPlayers = { ...gameState.players };
@@ -1939,7 +1934,6 @@
                     scoreHistory: newScoreHistory
                 });
             } else {
-                // Move to next player
                 const nextPlayerIndex = (gameState.currentPlayerIndex + 1) % gameState.playerOrder.length;
                 const nextPlayerName = gameState.players[gameState.playerOrder[nextPlayerIndex]].name;
                 const validatorName = gameState.players[currentPlayerId].name;
@@ -1958,11 +1952,46 @@
         });
     });
 
-    dom.challengeMoveButton.addEventListener('click', () => {
-        showMessage("Challenge functionality will be added in a future update!");
+    dom.challengeMoveButton.addEventListener('click', async () => {
+        const gameRef = doc(db, "games", currentGameId);
+        await runTransaction(db, async (transaction) => {
+            const gameSnap = await transaction.get(gameRef);
+            if (!gameSnap.exists()) return;
+            const gameState = gameSnap.data();
+
+            if (gameState.turnState !== 'PENDING_VALIDATION') {
+                return; // Move already validated or challenged
+            }
+
+            const challengerName = gameState.players[currentPlayerId].name;
+            const challengedPlayerId = gameState.playerOrder[gameState.currentPlayerIndex];
+            const challengedPlayerName = gameState.players[challengedPlayerId].name;
+
+            const newBoardDominos = [...gameState.boardDominos];
+            const challengedDominoIndex = newBoardDominos.findIndex(d => d.dominoData.id === gameState.lastPlayedDominoId);
+
+            if (challengedDominoIndex > -1) {
+                const challengedDomino = newBoardDominos.splice(challengedDominoIndex, 1)[0];
+                const updatedPlayers = { ...gameState.players };
+                updatedPlayers[challengedPlayerId].hand.push(challengedDomino.dominoData);
+
+                const newLog = [...(gameState.log || []), `${challengerName} challenged ${challengedPlayerName}'s move! Tile returned.`];
+                if (newLog.length > 5) newLog.shift();
+
+                transaction.update(gameRef, {
+                    boardDominos: newBoardDominos,
+                    players: updatedPlayers,
+                    turnState: 'WAITING',
+                    lastPlayedDominoId: null,
+                    moveHistory: [],
+                    validations: {},
+                    log: newLog
+                });
+            }
+        });
     });
     
-    // NEW: Detailed Scoreboard Rendering
+    // --- Detailed Scoreboard Rendering ---
     function renderDetailedScoreboard(gameState) {
         const { scoreHistory, players, playerOrder } = gameState;
         if (!scoreHistory || !dom.detailedScoreboardContent) return;
