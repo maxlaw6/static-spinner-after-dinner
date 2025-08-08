@@ -665,18 +665,13 @@
         }
     }
 
-    function initializeAudio() {
+    async function initializeAudio() {
         if (userInteracted) return;
-        Tone.start();
+        await Tone.start();
         userInteracted = true;
         setupSounds();
-        playSound('click');
-        document.body.removeEventListener('click', initializeAudio);
-        document.body.removeEventListener('touchstart', initializeAudio);
+        console.log("Audio context started.");
     }
-    document.body.addEventListener('click', initializeAudio);
-    document.body.addEventListener('touchstart', initializeAudio);
-
 
     // --- Interaction State ---
     let isDraggingDomino = false;
@@ -748,7 +743,8 @@
     }
 
     // --- Lobby and Game Setup ---
-    dom.createGameButton.addEventListener('click', async () => {
+    const handleCreateGame = async () => {
+        await initializeAudio();
         playSound('click');
         if (!currentPlayerId) return;
         const playerName = dom.playerNameInput.value.trim() || `Player ${currentPlayerId.substring(0, 4)}`;
@@ -780,9 +776,10 @@
 
         await setDoc(gameRef, initialGameState);
         await joinGame(gameId);
-    });
+    };
 
-    dom.joinGameButton.addEventListener('click', async () => {
+    const handleJoinGame = async () => {
+        await initializeAudio();
         playSound('click');
         if (!currentPlayerId) return;
         const gameId = dom.joinGameIdInput.value.trim().toUpperCase();
@@ -817,7 +814,13 @@
         });
         
         await joinGame(gameId);
-    });
+    };
+
+    dom.createGameButton.addEventListener('click', handleCreateGame);
+    dom.createGameButton.addEventListener('touchstart', (e) => { e.preventDefault(); handleCreateGame(); });
+    dom.joinGameButton.addEventListener('click', handleJoinGame);
+    dom.joinGameButton.addEventListener('touchstart', (e) => { e.preventDefault(); handleJoinGame(); });
+
 
     async function joinGame(gameId) {
         currentGameId = gameId;
@@ -1103,10 +1106,7 @@
         }
     }
     dom.boneyardPileElement.addEventListener('click', drawFromBoneyard);
-    dom.boneyardPileElement.addEventListener('touchstart', (e) => {
-        e.preventDefault();
-        drawFromBoneyard();
-    }, { passive: false });
+    dom.boneyardPileElement.addEventListener('touchstart', (e) => { e.preventDefault(); drawFromBoneyard(); });
 
 
     async function confirmTurn() {
