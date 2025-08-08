@@ -730,7 +730,6 @@
             moveHistory: [],
             log: [],
             currentTheme: 'classic',
-            // actionStatus is removed from the database state
             createdAt: serverTimestamp()
         };
 
@@ -1102,7 +1101,6 @@
         const currentTurnPlayerId = gameState.playerOrder[gameState.currentPlayerIndex];
         const isMyTurn = currentPlayerId === currentTurnPlayerId;
         
-        // Do not re-render board if a drag is in progress on another client
         if (!isDraggingDomino) {
             dom.gameBoardElement.querySelectorAll('.domino').forEach(d => d.remove());
             gameState.boardDominos.forEach(domino => {
@@ -1142,7 +1140,6 @@
         renderBoneyard(gameState.boneyard, isMyTurn, gameState.turnState);
         dom.currentPlayerElement.textContent = gameState.players[currentTurnPlayerId].name;
         
-        // Do not update status if a drag is in progress by the current player
         if (!isDraggingDomino) {
             let statusText = '';
             if (isMyTurn) {
@@ -1400,7 +1397,8 @@
         const coords = getEventCoords(e);
         dragStartPos = { x: coords.clientX, y: coords.clientY };
         
-        activeDominoElement = originalDominoElement.cloneNode(true);
+        // FIX: Create a fresh domino element instead of cloning to avoid style conflicts.
+        activeDominoElement = createDomino(draggedDominoData.dominoData);
         activeDominoElement.classList.add('dragging');
         document.body.appendChild(activeDominoElement);
 
@@ -1413,7 +1411,7 @@
         activeDominoElement.style.transform = `translate3d(${initialLeft}px, ${initialTop}px, 0) rotate(${currentRotation}deg)`;
 
         // FIX: Update status locally to prevent re-render during drag
-        dom.gameStatusElement.textContent = `${localGameState.players[currentPlayerId].name} is moving a tile...`;
+        dom.gameStatusElement.textContent = `Moving a tile...`;
         
         const moveHandler = (ev) => dragDomino(ev);
         const endHandler = (ev) => endDominoDrag(ev, origin, moveHandler, endHandler);
