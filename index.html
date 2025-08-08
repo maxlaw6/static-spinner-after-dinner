@@ -644,8 +644,6 @@
     let zoomLevel = 1.0;
     const MIN_ZOOM = 0.3;
     const MAX_ZOOM = 3.0;
-    let dominoOffsetX = 0;
-    let dominoOffsetY = 0;
     let initialPinchDistance = null;
     let activeDominoElement = null; // The visual element being dragged
     let draggedDominoData = null; // The data object for the domino being dragged
@@ -654,9 +652,6 @@
     // --- Firebase Initialization ---
     async function initializeFirebase() {
         try {
-            // WARNING: These keys are publicly exposed. For a production app,
-            // you should use a more secure method like environment variables
-            // and server-side functions to protect your Firebase project.
             const firebaseConfig = {
                 apiKey: "AIzaSyCTmUo5UpQW77xhOkI_3XELSISo6WHyqLs",
                 authDomain: "spinner-live.firebaseapp.com",
@@ -676,11 +671,9 @@
             
             onAuthStateChanged(auth, async (user) => {
                 if (user) {
-                    // User is signed in.
                     currentPlayerId = user.uid;
                     enableLobby();
                 } else {
-                    // User is signed out. Attempt to sign in anonymously.
                     await signInAnonymously(auth);
                 }
             });
@@ -713,7 +706,6 @@
         if (!currentPlayerId) return;
         const playerName = dom.playerNameInput.value.trim() || `Player ${currentPlayerId.substring(0, 4)}`;
         
-        // Generate a random, more unique game ID
         const tempGameRef = doc(collection(db, 'games'));
         const gameId = tempGameRef.id.substring(0, 6).toUpperCase();
         const gameRef = doc(db, "games", gameId);
@@ -723,20 +715,20 @@
                 [currentPlayerId]: { name: playerName, score: 0, hand: [], isHost: true }
             },
             playerOrder: [currentPlayerId],
-            gameStatus: 'waiting', // 'waiting', 'in-progress', 'round-over', 'finished'
+            gameStatus: 'waiting',
             boardDominos: [],
             boneyard: [],
             currentPlayerIndex: 0,
             roundNumber: 0,
             currentStartingDouble: 9,
-            turnState: 'WAITING', // 'WAITING', 'PLACED'
+            turnState: 'WAITING',
             mustDrawToStart: false,
             lastPlayedDominoId: null,
             passCount: 0,
             moveHistory: [],
-            log: [], // NEW: For game log
+            log: [],
             currentTheme: 'classic',
-            actionStatus: null, // To show what other players are doing
+            actionStatus: null,
             createdAt: serverTimestamp()
         };
 
@@ -809,7 +801,6 @@
             setTimeout(() => { dom.copyGameIdButton.textContent = 'Copy'; }, 2000);
         }).catch(err => {
             console.error('Failed to copy text: ', err);
-             // Fallback for older browsers / insecure contexts
             const textArea = document.createElement("textarea");
             textArea.value = currentGameId;
             document.body.appendChild(textArea);
@@ -844,7 +835,6 @@
 
         localGameState = gameState;
         
-        // Guard against incomplete data during initial load
         if (!gameState.players || !gameState.playerOrder || gameState.playerOrder.length === 0) {
             console.log("Waiting for complete game state...");
             return;
@@ -953,7 +943,6 @@
             let newPlayerIndex;
             let newMustDraw = false;
 
-            // Determine starter based on previous winner, or find the player with the required double.
             if (currentData.roundNumber > 0 && currentData.roundEndInfo?.winnerId) {
                 newPlayerIndex = playerIds.indexOf(currentData.roundEndInfo.winnerId);
                 if (newPlayerIndex === -1) { // Fallback if winner left
@@ -993,7 +982,6 @@
         const hasSpecificDouble = (hand, val) => hand.some(d => d.top === val && d.bottom === val);
         const hasDoubleSpinner = (hand) => hand.some(d => d.top === SPINNER_VALUE && d.bottom === SPINNER_VALUE);
 
-        // Find player with the required double for the round
         for (let i = 0; i < playerOrder.length; i++) {
             const pid = playerOrder[i];
             if (hasSpecificDouble(players[pid].hand, requiredDoubleValue)) {
@@ -1001,7 +989,6 @@
                 break;
             }
         }
-        // If no one has it, find player with the double spinner
         if (starterIndex === -1) {
             for (let i = 0; i < playerOrder.length; i++) {
                 const pid = playerOrder[i];
@@ -1011,7 +998,6 @@
                 }
             }
         }
-        // If no one has either, find player with the highest hand value
         if (starterIndex === -1) {
             let highestScore = -1;
             for (let i = 0; i < playerOrder.length; i++) {
@@ -1050,7 +1036,7 @@
                 
                 const newLog = [...(gameState.log || [])];
                 newLog.push(`${updatedPlayers[currentPlayerId].name} drew from the boneyard.`);
-                if (newLog.length > 5) newLog.shift(); // Keep log size manageable
+                if (newLog.length > 5) newLog.shift();
 
                 transaction.update(gameRef, {
                     players: updatedPlayers,
@@ -1087,8 +1073,8 @@
             transaction.update(gameRef, {
                 currentPlayerIndex: nextPlayerIndex,
                 turnState: 'WAITING',
-                moveHistory: [], // Clear history for the next player
-                lastPlayedDominoId: null, // Clear the last played domino
+                moveHistory: [],
+                lastPlayedDominoId: null,
                 log: newLog
             });
         });
@@ -1124,7 +1110,6 @@
             el.dataset.rotation = domino.rotation;
             el.dataset.id = domino.dominoData.id;
             
-            // Only the current player can move dominoes on the board
             if (isMyTurn) {
                 el.addEventListener('mousedown', (e) => startDominoDrag(e, domino, 'board'));
                 el.addEventListener('touchstart', (e) => startDominoDrag(e, domino, 'board'), { passive: false });
@@ -1133,7 +1118,7 @@
         });
         updateMinimap(gameState.boardDominos);
 
-        dom.playerHandsContainer.innerHTML = ''; // Clear the entire left column
+        dom.playerHandsContainer.innerHTML = '';
         dom.scoreboard.innerHTML = '';
         
         renderPlayerHands(gameState);
@@ -1143,7 +1128,6 @@
             renderScoreboardEntry(gameState.players[pid], pid);
         });
         
-        // ADDED: Update hand value tally
         const myPlayerData = gameState.players[currentPlayerId];
         if (myPlayerData) {
             const handValue = calculateHandValue(myPlayerData.hand);
@@ -1153,7 +1137,6 @@
         renderBoneyard(gameState.boneyard, isMyTurn, gameState.turnState);
         dom.currentPlayerElement.textContent = gameState.players[currentTurnPlayerId].name;
         
-        // Update status text
         let statusText = '';
         if (gameState.actionStatus) {
             statusText = gameState.actionStatus;
@@ -1172,7 +1155,6 @@
         }
         dom.gameStatusElement.textContent = statusText;
 
-        // Update UI controls based on state
         dom.endTurnButton.disabled = !(isMyTurn && gameState.turnState === 'PLACED');
         dom.undoButton.disabled = !(isMyTurn && (gameState.moveHistory || []).length > 0);
         dom.rotateLastTileButton.classList.toggle('hidden', !(isMyTurn && gameState.turnState === 'PLACED' && gameState.lastPlayedDominoId));
@@ -1184,7 +1166,6 @@
         const playerOrder = gameState.playerOrder;
         const currentTurnPlayerId = playerOrder[gameState.currentPlayerIndex];
         
-        // Create a new display order with the current player first
         const myIndex = playerOrder.indexOf(currentPlayerId);
         const displayOrder = [...playerOrder.slice(myIndex), ...playerOrder.slice(0, myIndex)];
 
@@ -1207,7 +1188,6 @@
             handDiv.className = 'player-hand-content';
 
             if (isCurrentPlayer) {
-                // Render my hand with full dominoes
                 playerData.hand.forEach(dominoData => {
                     const dominoElement = createDomino(dominoData);
                     dominoElement.dataset.id = dominoData.id;
@@ -1220,7 +1200,6 @@
                     handDiv.appendChild(dominoElement);
                 });
             } else {
-                // Render opponent hands with blank mini dominoes
                 playerData.hand.forEach(() => {
                     const dominoElement = createDomino(null, true, 'mini');
                     handDiv.appendChild(dominoElement);
@@ -1248,11 +1227,11 @@
             p.textContent = entry;
             dom.gameLog.appendChild(p);
         });
-        dom.gameLog.scrollTop = dom.gameLog.scrollHeight; // Auto-scroll to the bottom
+        dom.gameLog.scrollTop = dom.gameLog.scrollHeight;
     }
 
     function renderBoneyard(boneyard, isMyTurn, turnState) {
-        dom.boneyardStack.innerHTML = ''; // Clear previous state
+        dom.boneyardStack.innerHTML = '';
         
         if (boneyard.length > 0) {
             const dominoDisplay = document.createElement('div');
@@ -1312,7 +1291,7 @@
         const finalScores = gameState.playerOrder.map(pid => ({
             name: gameState.players[pid].name,
             score: gameState.players[pid].score
-        })).sort((a, b) => a.score - b.score); // Sort by lowest score
+        })).sort((a, b) => a.score - b.score);
 
         const winnerScore = finalScores[0].score;
         const winners = finalScores.filter(p => p.score === winnerScore);
