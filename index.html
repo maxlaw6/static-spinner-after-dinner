@@ -1109,30 +1109,24 @@
     dom.boneyardPileElement.addEventListener('click', drawFromBoneyard);
     dom.boneyardPileElement.addEventListener('touchstart', (e) => { e.preventDefault(); drawFromBoneyard(); });
 
-
-    async function confirmTurn() {
+    // FIX: This function now submits the turn for validation
+    async function submitTurnForValidation() {
         const gameRef = doc(db, "games", currentGameId);
         await runTransaction(db, async (transaction) => {
             const gameSnap = await transaction.get(gameRef);
             if (!gameSnap.exists()) throw "Game does not exist!";
             const gameState = gameSnap.data();
 
-            const nextPlayerIndex = (gameState.currentPlayerIndex + 1) % gameState.playerOrder.length;
-            const nextPlayerName = gameState.players[gameState.playerOrder[nextPlayerIndex]].name;
-            const newLog = [...(gameState.log || [])];
-            newLog.push(`It's now ${nextPlayerName}'s turn.`);
+            const newLog = [...(gameState.log || []), `${gameState.players[currentPlayerId].name} submitted their move for validation.`];
             if (newLog.length > 5) newLog.shift();
 
             transaction.update(gameRef, {
-                currentPlayerIndex: nextPlayerIndex,
-                turnState: 'WAITING',
-                moveHistory: [],
-                lastPlayedDominoId: null,
+                turnState: 'PENDING_VALIDATION',
                 log: newLog
             });
         });
     }
-    dom.endTurnButton.addEventListener('click', confirmTurn);
+    dom.endTurnButton.addEventListener('click', submitTurnForValidation);
     
     function calculateHandValue(hand) {
         return hand.reduce((total, domino) => {
@@ -1233,14 +1227,10 @@
         } else { // Not my turn
             statusText = `Waiting for ${gameState.players[currentTurnPlayerId].name}...`;
             if (gameState.turnState === 'PENDING_VALIDATION') {
-                const myValidationStatus = gameState.validations ? gameState.validations[currentPlayerId] : false;
-                if (!myValidationStatus) {
-                    statusText = `Validate ${gameState.players[currentTurnPlayerId].name}'s move.`;
-                    dom.validateMoveButton.classList.remove('hidden');
-                    dom.challengeMoveButton.classList.remove('hidden');
-                } else {
-                    statusText = "You have validated the move. Waiting for others...";
-                }
+                // FIX: No longer need to check individual status, just show the button if pending
+                statusText = `Validate ${gameState.players[currentTurnPlayerId].name}'s move.`;
+                dom.validateMoveButton.classList.remove('hidden');
+                dom.challengeMoveButton.classList.remove('hidden');
             }
         }
         if (!isDraggingDomino) {
@@ -1623,19 +1613,10 @@
                                     
                                     newMoveHistory = [{ type: 'play', dominoId: playedDomino.id }];
 
-                                    // Setup for validation
-                                    const newValidations = {};
-                                    gameState.playerOrder.forEach(pid => {
-                                        if (pid !== currentPlayerId) {
-                                            newValidations[pid] = false;
-                                        }
-                                    });
-
                                     transaction.update(gameRef, {
                                         boardDominos: newBoardDominos,
                                         players: updatedPlayers,
-                                        turnState: 'PENDING_VALIDATION',
-                                        validations: newValidations,
+                                        turnState: 'PLACED',
                                         moveHistory: newMoveHistory,
                                         lastPlayedDominoId: playedDomino.id,
                                         log: newLog
@@ -1772,7 +1753,6 @@
     }, { passive: false });
 
     dom.worldElement.addEventListener('touchmove', (e) => {
-        // FIX: Only prevent default if a pan is actively in progress.
         if (isPanning) {
             e.preventDefault();
         }
@@ -1925,57 +1905,55 @@
             if (!gameSnap.exists()) return;
             const gameState = gameSnap.data();
             
-            const newValidations = { ...gameState.validations, [currentPlayerId]: true };
-            const allValidated = Object.values(newValidations).every(v => v === true);
+            // FIX: Only the first person to validate will trigger the state change.
+            if (gameState.turnState !== 'PENDING_VALIDATION') {
+                return; // Another player already validated. Do nothing.
+            }
 
-            if (allValidated) {
-                // All players validated, proceed with the turn
-                const currentTurnPlayerId = gameState.playerOrder[gameState.currentPlayerIndex];
-                const playerHand = gameState.players[currentTurnPlayerId].hand;
+            // This player is the first to validate. Proceed with the turn.
+            const currentTurnPlayerId = gameState.playerOrder[gameState.currentPlayerIndex];
+            const playerHand = gameState.players[currentTurnPlayerId].hand;
 
-                if (playerHand.length === 0) {
-                    // Player went out, end the round
-                    let roundPoints = {};
-                    let scoreHistoryEntry = { round: gameState.roundNumber, scores: {} };
-                    const updatedPlayers = { ...gameState.players };
+            if (playerHand.length === 0) {
+                // Player went out, end the round
+                let roundPoints = {};
+                let scoreHistoryEntry = { round: gameState.roundNumber, scores: {} };
+                const updatedPlayers = { ...gameState.players };
 
-                    Object.keys(updatedPlayers).forEach(pid => {
-                        const handValue = (pid === currentTurnPlayerId) ? 0 : calculateHandValue(updatedPlayers[pid].hand);
-                        updatedPlayers[pid].score += handValue;
-                        roundPoints[pid] = handValue;
-                        scoreHistoryEntry.scores[pid] = handValue;
-                    });
-                    
-                    const newScoreHistory = [...(gameState.scoreHistory || []), scoreHistoryEntry];
-                    const isGameOver = gameState.roundNumber >= 10;
+                Object.keys(updatedPlayers).forEach(pid => {
+                    const handValue = (pid === currentTurnPlayerId) ? 0 : calculateHandValue(updatedPlayers[pid].hand);
+                    updatedPlayers[pid].score += handValue;
+                    roundPoints[pid] = handValue;
+                    scoreHistoryEntry.scores[pid] = handValue;
+                });
+                
+                const newScoreHistory = [...(gameState.scoreHistory || []), scoreHistoryEntry];
+                const isGameOver = gameState.roundNumber >= 10;
 
-                    transaction.update(gameRef, {
-                        players: updatedPlayers,
-                        gameStatus: isGameOver ? 'finished' : 'round-over',
-                        roundEndInfo: { winnerId: currentTurnPlayerId, points: roundPoints },
-                        turnState: 'WAITING',
-                        validations: {},
-                        scoreHistory: newScoreHistory
-                    });
-                } else {
-                    // Move to next player
-                    const nextPlayerIndex = (gameState.currentPlayerIndex + 1) % gameState.playerOrder.length;
-                    const nextPlayerName = gameState.players[gameState.playerOrder[nextPlayerIndex]].name;
-                    const newLog = [...(gameState.log || []), `Move validated. It's now ${nextPlayerName}'s turn.`];
-                    if (newLog.length > 5) newLog.shift();
-
-                    transaction.update(gameRef, {
-                        currentPlayerIndex: nextPlayerIndex,
-                        turnState: 'WAITING',
-                        moveHistory: [],
-                        lastPlayedDominoId: null,
-                        validations: {},
-                        log: newLog
-                    });
-                }
+                transaction.update(gameRef, {
+                    players: updatedPlayers,
+                    gameStatus: isGameOver ? 'finished' : 'round-over',
+                    roundEndInfo: { winnerId: currentTurnPlayerId, points: roundPoints },
+                    turnState: 'WAITING',
+                    validations: {},
+                    scoreHistory: newScoreHistory
+                });
             } else {
-                // Not all players have validated yet, just update the map
-                transaction.update(gameRef, { validations: newValidations });
+                // Move to next player
+                const nextPlayerIndex = (gameState.currentPlayerIndex + 1) % gameState.playerOrder.length;
+                const nextPlayerName = gameState.players[gameState.playerOrder[nextPlayerIndex]].name;
+                const validatorName = gameState.players[currentPlayerId].name;
+                const newLog = [...(gameState.log || []), `${validatorName} validated the move. It's now ${nextPlayerName}'s turn.`];
+                if (newLog.length > 5) newLog.shift();
+
+                transaction.update(gameRef, {
+                    currentPlayerIndex: nextPlayerIndex,
+                    turnState: 'WAITING',
+                    moveHistory: [],
+                    lastPlayedDominoId: null,
+                    validations: {},
+                    log: newLog
+                });
             }
         });
     });
