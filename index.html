@@ -1427,12 +1427,11 @@
 
         originalDominoElement.style.opacity = '0.3';
 
-        const rect = originalDominoElement.getBoundingClientRect();
-        dominoOffsetX = coords.clientX - rect.left;
-        dominoOffsetY = coords.clientY - rect.top;
-        
-        const initialLeft = coords.clientX - dominoOffsetX;
-        const initialTop = coords.clientY - dominoOffsetY;
+        // PLACEMENT FIX: Use a center-based positioning logic for a more direct feel.
+        const scaledWidth = DOMINO_WIDTH * zoomLevel;
+        const scaledHeight = DOMINO_HEIGHT * zoomLevel;
+        const initialLeft = coords.clientX - scaledWidth / 2;
+        const initialTop = coords.clientY - scaledHeight / 2;
         activeDominoElement.style.transform = `translate(${initialLeft}px, ${initialTop}px) scale(${zoomLevel})`;
 
         updateActionStatus(`${localGameState.players[currentPlayerId].name} is moving a tile...`);
@@ -1454,8 +1453,11 @@
             wasDragged = true;
         }
         
-        const newLeft = coords.clientX - dominoOffsetX;
-        const newTop = coords.clientY - dominoOffsetY;
+        // PLACEMENT FIX: Update position based on the center of the tile.
+        const scaledWidth = DOMINO_WIDTH * zoomLevel;
+        const scaledHeight = DOMINO_HEIGHT * zoomLevel;
+        const newLeft = coords.clientX - scaledWidth / 2;
+        const newTop = coords.clientY - scaledHeight / 2;
         activeDominoElement.style.transform = `translate(${newLeft}px, ${newTop}px) scale(${zoomLevel})`;
     }
 
@@ -1502,8 +1504,9 @@
                 const mouseXOnBoard = (coords.clientX - worldRect.left) / zoomLevel + boardPosition.x;
                 const mouseYOnBoard = (coords.clientY - worldRect.top) / zoomLevel + boardPosition.y;
                 
-                const finalXOnBoard = mouseXOnBoard - (dominoOffsetX / zoomLevel);
-                const finalYOnBoard = mouseYOnBoard - (dominoOffsetY / zoomLevel);
+                // PLACEMENT FIX: Calculate final position from the center of the tile.
+                const finalXOnBoard = mouseXOnBoard - (DOMINO_WIDTH / 2);
+                const finalYOnBoard = mouseYOnBoard - (DOMINO_HEIGHT / 2);
                 
                 let newX = finalXOnBoard;
                 let newY = finalYOnBoard;
