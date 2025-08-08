@@ -103,6 +103,22 @@
             transform-origin: top left; /* Match transform logic */
         }
         
+        /* --- NEW: Ghost Domino for Snapping Preview --- */
+        #ghost-domino {
+            position: absolute;
+            z-index: 100;
+            pointer-events: none;
+            opacity: 0.6;
+            transition: transform 0.1s ease-out, box-shadow 0.2s ease;
+            display: none; /* Initially hidden */
+        }
+        #ghost-domino.valid-snap {
+            box-shadow: 0 0 20px 5px rgba(74, 222, 128, 0.8); /* green-400 */
+        }
+        #ghost-domino.invalid-snap {
+            box-shadow: 0 0 20px 5px rgba(239, 68, 68, 0.8); /* red-500 */
+        }
+
         /* Mini Domino Styles for Opponent Hands */
         .mini-domino {
             width: 40px;
@@ -553,6 +569,8 @@
                 <div id="world">
                     <div id="game-board">
                         <div id="starting-area"></div>
+                        <!-- NEW: Ghost domino element for snapping preview -->
+                        <div id="ghost-domino" class="domino"></div>
                     </div>
                     <div id="minimap-container">
                         <div id="minimap-viewport"></div>
@@ -619,7 +637,8 @@
         messageText: document.getElementById('message-text'),
         messageOkButton: document.getElementById('message-ok-button'),
         gameLog: document.getElementById('game-log'),
-        handValueDisplay: document.getElementById('hand-value-display'), // ADDED: Tally display
+        handValueDisplay: document.getElementById('hand-value-display'),
+        ghostDomino: document.getElementById('ghost-domino'), // NEW: Ghost domino element
     };
     
     // --- Firebase & Game State ---
@@ -633,6 +652,7 @@
     const BOARD_SIZE = 2500;
     const DOMINO_WIDTH = 80;
     const DOMINO_HEIGHT = 40;
+    const SNAP_DISTANCE = 60; // NEW: How close to snap (in board pixels)
     
     // --- Interaction State ---
     let isDraggingDomino = false;
@@ -651,6 +671,7 @@
     let activeDominoElement = null; // The visual element being dragged
     let draggedDominoData = null; // The data object for the domino being dragged
     let originalDominoElement = null; // The original domino element in the hand or on the board
+    let currentSnapTarget = null; // NEW: To store the current valid snap location
 
     // --- Firebase Initialization ---
     async function initializeFirebase() {
@@ -1115,7 +1136,7 @@
         const currentTurnPlayerId = gameState.playerOrder[gameState.currentPlayerIndex];
         const isMyTurn = currentPlayerId === currentTurnPlayerId;
         
-        dom.gameBoardElement.innerHTML = '<div id="starting-area"></div>';
+        dom.gameBoardElement.querySelectorAll('.domino').forEach(d => d.remove());
         gameState.boardDominos.forEach(domino => {
             const el = createDomino(domino.dominoData);
             el.style.position = 'absolute';
@@ -1406,12 +1427,10 @@
         const currentTurnPlayerId = localGameState.playerOrder[localGameState.currentPlayerIndex];
         if (currentPlayerId !== currentTurnPlayerId) return;
         
-        // Prevent starting a new drag if a domino has already been placed this turn
         if (origin === 'hand' && localGameState.lastPlayedDominoId) {
             showMessage("You have already played a tile. Please end your turn.");
             return;
         }
-        // Prevent dragging board dominoes unless turn state is 'PLACED'
         if (origin === 'board' && localGameState.turnState !== 'PLACED') return;
         
         originalDominoElement = e.currentTarget;
@@ -1433,14 +1452,18 @@
         dominoOffsetX = coords.clientX - rect.left;
         dominoOffsetY = coords.clientY - rect.top;
         
-        // ZOOM FIX: Position and scale using transform for better performance and visual consistency
         const initialLeft = coords.clientX - dominoOffsetX;
         const initialTop = coords.clientY - dominoOffsetY;
         activeDominoElement.style.transform = `translate(${initialLeft}px, ${initialTop}px) scale(${zoomLevel})`;
 
+        // NEW: Setup and show the ghost domino if dragging from hand
+        if (origin === 'hand') {
+            dom.ghostDomino.innerHTML = createDomino(draggedDominoData.dominoData).innerHTML;
+            dom.ghostDomino.style.display = 'flex';
+        }
+
         updateActionStatus(`${localGameState.players[currentPlayerId].name} is moving a tile...`);
         
-        // Use named functions for easy removal
         const moveHandler = (ev) => dragDomino(ev);
         const endHandler = (ev) => endDominoDrag(ev, origin, moveHandler, endHandler);
 
@@ -1452,23 +1475,30 @@
 
     function dragDomino(e) {
         if (!isDraggingDomino || !activeDominoElement) return;
-        e.preventDefault(); // Crucial for smooth touch dragging
+        e.preventDefault();
         const coords = getEventCoords(e);
         if (Math.abs(coords.clientX - dragStartPos.x) > 5 || Math.abs(coords.clientY - dragStartPos.y) > 5) {
             wasDragged = true;
         }
         
-        // ZOOM FIX: Update position and scale using transform
         const newLeft = coords.clientX - dominoOffsetX;
         const newTop = coords.clientY - dominoOffsetY;
         activeDominoElement.style.transform = `translate(${newLeft}px, ${newTop}px) scale(${zoomLevel})`;
+
+        // NEW: Update ghost position and check for snaps
+        if (draggedDominoData.dominoData) {
+            updateGhostDomino(coords.clientX, coords.clientY);
+        }
     }
 
     async function endDominoDrag(e, origin, moveHandler, endHandler) {
-        // Clean up event listeners immediately
         document.removeEventListener('mousemove', moveHandler);
         document.removeEventListener('touchmove', moveHandler);
         updateActionStatus(null);
+
+        // NEW: Hide ghost domino on drag end
+        dom.ghostDomino.style.display = 'none';
+        dom.ghostDomino.className = 'domino'; // Reset classes
 
         if (!isDraggingDomino) return;
         
@@ -1477,11 +1507,9 @@
         const isTap = !wasDragged && dragDuration < 200;
 
         if (isTap && origin === 'board') {
-            // This is a tap/click on a board domino, so rotate it.
             const currentRotation = parseInt(draggedDominoData.rotation || 0);
             const newRotation = (currentRotation + 45) % 360;
 
-            // --- ROTATION FIX: Animate on client immediately ---
             if (originalDominoElement) {
                 originalDominoElement.style.transform = `rotate(${newRotation}deg)`;
                 originalDominoElement.dataset.rotation = newRotation;
@@ -1501,125 +1529,74 @@
                 }
             });
         } else if (wasDragged) {
-            // This was a drag, so place the domino.
-            const coords = getEventCoords(e);
-            const worldRect = dom.worldElement.getBoundingClientRect();
-            
-            // Check if the drop was outside the world element
-            if (origin === 'hand' && (
-                coords.clientX < worldRect.left ||
-                coords.clientX > worldRect.right ||
-                coords.clientY < worldRect.top ||
-                coords.clientY > worldRect.bottom
-            )) {
-                // If dropped outside, don't place it, just clean up. The tile will reappear in the hand.
-            } else {
-                // CORRECTED COORDINATE CALCULATION
-                const mouseXOnBoard = (coords.clientX - worldRect.left) / zoomLevel + boardPosition.x;
-                const mouseYOnBoard = (coords.clientY - worldRect.top) / zoomLevel + boardPosition.y;
-                
-                // The final position is the mouse position on the board minus the initial click offset within the domino.
-                // The offset is scaled by zoom because we are converting from screen space to board space.
-                const finalXOnBoard = mouseXOnBoard - (dominoOffsetX / zoomLevel);
-                const finalYOnBoard = mouseYOnBoard - (dominoOffsetY / zoomLevel);
-                
-                let newX = finalXOnBoard;
-                let newY = finalYOnBoard;
-                let newRotation = parseInt(originalDominoElement.dataset.rotation || 0);
-                
-                let isValidPlacement = true;
-                // Special check for the very first domino placed on the board
-                if (localGameState.boardDominos.length === 0) {
-                    const d = draggedDominoData.dominoData;
-                    const required = localGameState.currentStartingDouble;
-                    const isCorrectDouble = d.top === required && d.bottom === required;
-                    const isDoubleSpinner = d.top === SPINNER_VALUE && d.bottom === SPINNER_VALUE;
-                    if (!isCorrectDouble && !isDoubleSpinner) {
-                        isValidPlacement = false;
-                        showMessage(`Must start with Double ${required} or Double Spinner!`);
-                    } else {
-                        // Snap the first piece to the center for consistency
-                        newX = (BOARD_SIZE / 2) - (DOMINO_HEIGHT / 2);
-                        newY = (BOARD_SIZE / 2) - (DOMINO_WIDTH / 2);
-                        newRotation = 90;
-                    }
-                }
+            // NEW: Use the snap target if one exists, otherwise it's an invalid move
+            if (currentSnapTarget && origin === 'hand') {
+                try {
+                    await runTransaction(db, async (transaction) => {
+                        const gameSnap = await transaction.get(gameRef);
+                        if (!gameSnap.exists()) throw "Game does not exist!";
+                        const gameState = gameSnap.data();
+                        
+                        let newBoardDominos = [...gameState.boardDominos];
+                        let updatedPlayers = { ...gameState.players };
+                        let newLog = [...(gameState.log || [])];
 
-                 if (isValidPlacement) {
-                    try {
-                        await runTransaction(db, async (transaction) => {
-                            const gameSnap = await transaction.get(gameRef);
-                            if (!gameSnap.exists()) throw "Game does not exist!";
-                            const gameState = gameSnap.data();
+                        const playerHand = updatedPlayers[currentPlayerId].hand;
+                        const handIndex = playerHand.findIndex(d => d.id === draggedDominoData.dominoData.id);
+
+                        if (handIndex > -1) {
+                            const playedDomino = playerHand.splice(handIndex, 1)[0];
+                            newBoardDominos.push({
+                                dominoData: playedDomino,
+                                x: currentSnapTarget.x,
+                                y: currentSnapTarget.y,
+                                rotation: currentSnapTarget.rotation
+                            });
                             
-                            let newBoardDominos = [...gameState.boardDominos];
-                            let updatedPlayers = { ...gameState.players };
-                            let newMoveHistory = [...(gameState.moveHistory || [])];
-                            let newLog = [...(gameState.log || [])];
+                            newLog.push(`${updatedPlayers[currentPlayerId].name} played a tile.`);
+                            if (newLog.length > 5) newLog.shift();
 
-                            if (origin === 'hand') {
-                                const playerHand = updatedPlayers[currentPlayerId].hand;
-                                const handIndex = playerHand.findIndex(d => d.id === draggedDominoData.dominoData.id);
-                                if (handIndex > -1) {
-                                    const playedDomino = playerHand.splice(handIndex, 1)[0];
-                                    newBoardDominos.push({ dominoData: playedDomino, x: newX, y: newY, rotation: newRotation });
-                                    
-                                    newLog.push(`${updatedPlayers[currentPlayerId].name} played a tile.`);
-                                    if (newLog.length > 5) newLog.shift();
-
-                                     if (playerHand.length === 0) {
-                                        // Player has won the round, calculate scores and end round/game
-                                        const winnerPlayerId = currentPlayerId;
-                                        let roundPoints = {};
-                                        
-                                        Object.keys(updatedPlayers).forEach(pid => {
-                                            if (pid !== winnerPlayerId) {
-                                                const handValue = calculateHandValue(updatedPlayers[pid].hand);
-                                                updatedPlayers[pid].score += handValue;
-                                                roundPoints[pid] = handValue;
-                                            } else {
-                                                roundPoints[pid] = 0;
-                                            }
-                                        });
-                                        
-                                        const isGameOver = gameState.roundNumber >= 10;
-
-                                        transaction.update(gameRef, {
-                                            boardDominos: newBoardDominos,
-                                            players: updatedPlayers,
-                                            gameStatus: isGameOver ? 'finished' : 'round-over',
-                                            roundEndInfo: { winnerId: winnerPlayerId, points: roundPoints },
-                                            turnState: 'WAITING',
-                                            log: newLog
-                                        });
+                            if (playerHand.length === 0) {
+                                // Player has won the round
+                                const winnerPlayerId = currentPlayerId;
+                                let roundPoints = {};
+                                Object.keys(updatedPlayers).forEach(pid => {
+                                    if (pid !== winnerPlayerId) {
+                                        const handValue = calculateHandValue(updatedPlayers[pid].hand);
+                                        updatedPlayers[pid].score += handValue;
+                                        roundPoints[pid] = handValue;
                                     } else {
-                                        // Continue turn
-                                        transaction.update(gameRef, {
-                                            boardDominos: newBoardDominos,
-                                            players: updatedPlayers,
-                                            turnState: 'PLACED',
-                                            moveHistory: [], // Clear history after a successful play
-                                            lastPlayedDominoId: playedDomino.id,
-                                            log: newLog
-                                        });
+                                        roundPoints[pid] = 0;
                                     }
-                                }
-                            } else { // origin === 'board'
-                                const boardIndex = newBoardDominos.findIndex(d => d.dominoData.id === draggedDominoData.dominoData.id);
-                                if (boardIndex > -1) {
-                                    newMoveHistory.push({ type: 'reposition', dominoId: draggedDominoData.dominoData.id, from: { x: newBoardDominos[boardIndex].x, y: newBoardDominos[boardIndex].y } });
-                                    newBoardDominos[boardIndex].x = newX;
-                                    newBoardDominos[boardIndex].y = newY;
-                                    transaction.update(gameRef, { boardDominos: newBoardDominos, moveHistory: newMoveHistory });
-                                }
+                                });
+                                const isGameOver = gameState.roundNumber >= 10;
+                                transaction.update(gameRef, {
+                                    boardDominos: newBoardDominos,
+                                    players: updatedPlayers,
+                                    gameStatus: isGameOver ? 'finished' : 'round-over',
+                                    roundEndInfo: { winnerId: winnerPlayerId, points: roundPoints },
+                                    turnState: 'WAITING',
+                                    log: newLog
+                                });
+                            } else {
+                                // Continue turn
+                                transaction.update(gameRef, {
+                                    boardDominos: newBoardDominos,
+                                    players: updatedPlayers,
+                                    turnState: 'PLACED',
+                                    moveHistory: [],
+                                    lastPlayedDominoId: playedDomino.id,
+                                    log: newLog
+                                });
                             }
-                        });
-                    } catch (error) {
-                        console.error("Error during domino placement transaction:", error);
-                        showMessage("There was an error placing the domino. The game state may be out of sync. Please refresh.");
-                    }
+                        }
+                    });
+                } catch (error) {
+                    console.error("Error during snap placement:", error);
+                    showMessage("Error placing the domino. Please refresh.");
                 }
             }
+            // If it's not a snap, the tile just returns to the hand (by doing nothing)
         }
         
         // Cleanup drag elements
@@ -1629,7 +1606,9 @@
         originalDominoElement = null;
         draggedDominoData = null;
         isDraggingDomino = false;
+        currentSnapTarget = null;
     }
+
     // --- Pan and Zoom Logic ---
     function centerBoardOnStart() {
         zoomLevel = 1.0;
@@ -1814,7 +1793,6 @@
         const lastPlayedId = localGameState.lastPlayedDominoId;
         if (!lastPlayedId) return;
 
-        // --- ROTATION FIX: Animate on client immediately ---
         const dominoEl = dom.gameBoardElement.querySelector(`.domino[data-id="${lastPlayedId}"]`);
         if (dominoEl) {
             const currentRotation = parseInt(dominoEl.dataset.rotation || 0);
@@ -1847,6 +1825,33 @@
             await updateDoc(gameRef, { currentTheme: e.target.value });
         }
     });
+    
+    // --- NEW: Snap Logic Functions ---
+
+    function updateGhostDomino(clientX, clientY) {
+        const worldRect = dom.worldElement.getBoundingClientRect();
+        const mouseXOnBoard = (clientX - worldRect.left) / zoomLevel + boardPosition.x;
+        const mouseYOnBoard = (clientY - worldRect.top) / zoomLevel + boardPosition.y;
+
+        const snapResult = findBestSnap(mouseXOnBoard, mouseYOnBoard, draggedDominoData.dominoData);
+        
+        if (snapResult) {
+            dom.ghostDomino.style.transform = `translate(${snapResult.x}px, ${snapResult.y}px) rotate(${snapResult.rotation}deg)`;
+            dom.ghostDomino.classList.add(snapResult.isValid ? 'valid-snap' : 'invalid-snap');
+            dom.ghostDomino.classList.remove(snapResult.isValid ? 'invalid-snap' : 'valid-snap');
+            currentSnapTarget = snapResult.isValid ? snapResult : null;
+        } else {
+            // If no snap target, hide the ghost
+            dom.ghostDomino.className = 'domino';
+            currentSnapTarget = null;
+        }
+    }
+
+    function findBestSnap(mouseX, mouseY, draggedDomino) {
+        // ... implementation of snap logic will go here
+        return null; // Placeholder
+    }
+
 
     // --- Initial Load ---
     window.onload = initializeFirebase;
