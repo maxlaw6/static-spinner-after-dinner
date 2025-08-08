@@ -1427,16 +1427,19 @@
 
         originalDominoElement.style.opacity = '0.3';
 
-        // PLACEMENT FIX: Use a center-based positioning logic for a more direct feel.
-        const scaledWidth = DOMINO_WIDTH * zoomLevel;
-        const scaledHeight = DOMINO_HEIGHT * zoomLevel;
+        // FIX: Determine the correct scale for the dragged element
+        const dragScale = origin === 'hand' ? 1.0 : zoomLevel;
+
+        const scaledWidth = DOMINO_WIDTH * dragScale;
+        const scaledHeight = DOMINO_HEIGHT * dragScale;
         const initialLeft = coords.clientX - scaledWidth / 2;
         const initialTop = coords.clientY - scaledHeight / 2;
-        activeDominoElement.style.transform = `translate(${initialLeft}px, ${initialTop}px) scale(${zoomLevel})`;
+        activeDominoElement.style.transform = `translate(${initialLeft}px, ${initialTop}px) scale(${dragScale})`;
 
         updateActionStatus(`${localGameState.players[currentPlayerId].name} is moving a tile...`);
         
-        const moveHandler = (ev) => dragDomino(ev);
+        // Use named functions for easy removal and pass the dragScale
+        const moveHandler = (ev) => dragDomino(ev, dragScale);
         const endHandler = (ev) => endDominoDrag(ev, origin, moveHandler, endHandler);
 
         document.addEventListener('mousemove', moveHandler);
@@ -1445,7 +1448,7 @@
         document.addEventListener('touchend', endHandler, { once: true });
     }
 
-    function dragDomino(e) {
+    function dragDomino(e, dragScale) { // Added dragScale parameter
         if (!isDraggingDomino || !activeDominoElement) return;
         e.preventDefault();
         const coords = getEventCoords(e);
@@ -1453,12 +1456,12 @@
             wasDragged = true;
         }
         
-        // PLACEMENT FIX: Update position based on the center of the tile.
-        const scaledWidth = DOMINO_WIDTH * zoomLevel;
-        const scaledHeight = DOMINO_HEIGHT * zoomLevel;
+        // Use the passed dragScale
+        const scaledWidth = DOMINO_WIDTH * dragScale;
+        const scaledHeight = DOMINO_HEIGHT * dragScale;
         const newLeft = coords.clientX - scaledWidth / 2;
         const newTop = coords.clientY - scaledHeight / 2;
-        activeDominoElement.style.transform = `translate(${newLeft}px, ${newTop}px) scale(${zoomLevel})`;
+        activeDominoElement.style.transform = `translate(${newLeft}px, ${newTop}px) scale(${dragScale})`;
     }
 
     async function endDominoDrag(e, origin, moveHandler, endHandler) {
