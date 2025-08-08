@@ -1476,17 +1476,18 @@
             if (origin === 'hand' && (coords.clientX < worldRect.left || coords.clientX > worldRect.right || coords.clientY < worldRect.top || coords.clientY > worldRect.bottom)) {
                 // Dragged outside, do nothing
             } else {
-                // FIX: Calculate final board position based on the cursor's final coordinates
-                const finalCursorScreenX = coords.clientX;
-                const finalCursorScreenY = coords.clientY;
+                // FIX: This is the new, robust placement logic.
+                // 1. Get cursor position relative to the visible world area.
+                const cursorX_relative = coords.clientX - worldRect.left;
+                const cursorY_relative = coords.clientY - worldRect.top;
 
-                // Calculate the top-left of the domino based on the cursor position (since it's centered)
-                const finalDominoScreenX = finalCursorScreenX - (DOMINO_WIDTH / 2);
-                const finalDominoScreenY = finalCursorScreenY - (DOMINO_HEIGHT / 2);
+                // 2. Convert cursor's screen position to its position on the scaled and panned game board.
+                const cursorX_onBoard = (cursorX_relative / zoomLevel) + boardPosition.x;
+                const cursorY_onBoard = (cursorY_relative / zoomLevel) + boardPosition.y;
 
-                // Convert the domino's screen coordinates to board coordinates
-                const finalXOnBoard = (finalDominoScreenX - worldRect.left) / zoomLevel + boardPosition.x;
-                const finalYOnBoard = (finalDominoScreenY - worldRect.top) / zoomLevel + boardPosition.y;
+                // 3. Calculate the top-left corner of the domino to center it on the cursor's board position.
+                const finalXOnBoard = cursorX_onBoard - (DOMINO_WIDTH / 2);
+                const finalYOnBoard = cursorY_onBoard - (DOMINO_HEIGHT / 2);
                 
                 let newX = finalXOnBoard;
                 let newY = finalYOnBoard;
