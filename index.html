@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover"/>
     <title>Spinner after Dinner</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com"/>
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet"/>
@@ -258,14 +259,15 @@
         }
         .minimap-dot {
             position: absolute;
-            width: 6px;
-            height: 6px;
+            width: 8px; /* Rectangular shape */
+            height: 4px; /* Rectangular shape */
             background-color: white;
-            border-radius: 50%;
+            border-radius: 1px; /* Slightly rounded corners */
             pointer-events: auto;
             cursor: pointer;
             border: 1px solid white;
             box-shadow: 0 0 5px rgba(255,255,255,0.6);
+            transform: translate(-50%, -50%); /* Center the dot */
         }
         .player-hand-section {
             border: 1px solid rgba(255,255,255,0.2);
@@ -635,6 +637,47 @@
     const DOMINO_WIDTH = 80;
     const DOMINO_HEIGHT = 40;
     
+    // --- Sound Effects ---
+    let sounds;
+    let userInteracted = false;
+
+    function setupSounds() {
+        sounds = {
+            place: new Tone.Synth({ oscillator: { type: 'sine' }, envelope: { attack: 0.005, decay: 0.1, sustain: 0.3, release: 0.1 } }).toDestination(),
+            draw: new Tone.Synth({ oscillator: { type: 'triangle' }, envelope: { attack: 0.01, decay: 0.1, sustain: 0.2, release: 0.2 } }).toDestination(),
+            click: new Tone.MembraneSynth().toDestination(),
+            win: new Tone.PluckSynth().toDestination(),
+        };
+    }
+
+    function playSound(soundName) {
+        if (!userInteracted || !sounds) return;
+        if (sounds[soundName]) {
+            if (soundName === 'place') sounds.place.triggerAttackRelease("C4", "8n");
+            else if (soundName === 'draw') sounds.draw.triggerAttackRelease("A3", "8n");
+            else if (soundName === 'click') sounds.click.triggerAttackRelease("C2", "8n", Tone.now());
+            else if (soundName === 'win') {
+                 const now = Tone.now();
+                 sounds.win.triggerAttackRelease("C5", "8n", now);
+                 sounds.win.triggerAttackRelease("G5", "8n", now + 0.2);
+                 sounds.win.triggerAttackRelease("C6", "8n", now + 0.4);
+            }
+        }
+    }
+
+    function initializeAudio() {
+        if (userInteracted) return;
+        Tone.start();
+        userInteracted = true;
+        setupSounds();
+        playSound('click');
+        document.body.removeEventListener('click', initializeAudio);
+        document.body.removeEventListener('touchstart', initializeAudio);
+    }
+    document.body.addEventListener('click', initializeAudio);
+    document.body.addEventListener('touchstart', initializeAudio);
+
+
     // --- Interaction State ---
     let isDraggingDomino = false;
     let wasDragged = false;
@@ -693,6 +736,7 @@
 
     dom.messageOkButton.addEventListener('click', () => {
         dom.messageModal.classList.add('hidden');
+        playSound('click');
     });
     
     function enableLobby() {
@@ -705,6 +749,7 @@
 
     // --- Lobby and Game Setup ---
     dom.createGameButton.addEventListener('click', async () => {
+        playSound('click');
         if (!currentPlayerId) return;
         const playerName = dom.playerNameInput.value.trim() || `Player ${currentPlayerId.substring(0, 4)}`;
         
@@ -738,6 +783,7 @@
     });
 
     dom.joinGameButton.addEventListener('click', async () => {
+        playSound('click');
         if (!currentPlayerId) return;
         const gameId = dom.joinGameIdInput.value.trim().toUpperCase();
         const playerName = dom.playerNameInput.value.trim() || `Player ${currentPlayerId.substring(0, 4)}`;
@@ -797,6 +843,7 @@
     dom.mainMenuButtonFinal.addEventListener('click', leaveGame);
 
     dom.copyGameIdButton.addEventListener('click', () => {
+        playSound('click');
         navigator.clipboard.writeText(currentGameId).then(() => {
             dom.copyGameIdButton.textContent = 'Copied!';
             setTimeout(() => { dom.copyGameIdButton.textContent = 'Copy'; }, 2000);
@@ -819,11 +866,13 @@
     });
 
     dom.startGameButton.addEventListener('click', () => {
+        playSound('win');
         if (localGameState.players[currentPlayerId]?.isHost) {
             startRound();
         }
     });
     dom.reDealButton.addEventListener('click', () => {
+        playSound('click');
         if (localGameState.players[currentPlayerId]?.isHost) {
             startRound();
         }
@@ -887,6 +936,7 @@
         }
         
         if (gameState.gameStatus === 'round-over') {
+            playSound('win');
             displayRoundEndScreen(gameState);
         } else {
             dom.roundEndScreen.classList.add('hidden');
@@ -1016,6 +1066,7 @@
     }
     
     async function drawFromBoneyard() {
+        playSound('draw');
         const gameRef = doc(db, "games", currentGameId);
         
         try {
@@ -1059,6 +1110,7 @@
 
 
     async function confirmTurn() {
+        playSound('click');
         const gameRef = doc(db, "games", currentGameId);
         await runTransaction(db, async (transaction) => {
             const gameSnap = await transaction.get(gameRef);
@@ -1091,6 +1143,7 @@
     }
 
     dom.continueRoundButton.addEventListener('click', () => {
+        playSound('click');
         if (localGameState.players[currentPlayerId]?.isHost) {
             startRound();
         }
@@ -1397,7 +1450,6 @@
         const coords = getEventCoords(e);
         dragStartPos = { x: coords.clientX, y: coords.clientY };
         
-        // FIX: Create a fresh domino element instead of cloning to avoid style conflicts.
         activeDominoElement = createDomino(draggedDominoData.dominoData);
         activeDominoElement.classList.add('dragging');
         document.body.appendChild(activeDominoElement);
@@ -1410,7 +1462,6 @@
         const currentRotation = draggedDominoData.rotation || 0;
         activeDominoElement.style.transform = `translate3d(${initialLeft}px, ${initialTop}px, 0) rotate(${currentRotation}deg)`;
 
-        // FIX: Update status locally to prevent re-render during drag
         dom.gameStatusElement.textContent = `Moving a tile...`;
         
         const moveHandler = (ev) => dragDomino(ev);
@@ -1476,11 +1527,13 @@
             if (origin === 'hand' && (coords.clientX < worldRect.left || coords.clientX > worldRect.right || coords.clientY < worldRect.top || coords.clientY > worldRect.bottom)) {
                 // Dragged outside, do nothing
             } else {
-                const mouseXOnBoard = (coords.clientX - worldRect.left) / zoomLevel + boardPosition.x;
-                const mouseYOnBoard = (coords.clientY - worldRect.top) / zoomLevel + boardPosition.y;
-                
-                const finalXOnBoard = mouseXOnBoard - (DOMINO_WIDTH / 2);
-                const finalYOnBoard = mouseYOnBoard - (DOMINO_HEIGHT / 2);
+                // FIX: Correctly calculate final position based on the ghost tile's transform, accounting for zoom.
+                const transformMatrix = new DOMMatrix(window.getComputedStyle(activeDominoElement).transform);
+                const finalScreenX = transformMatrix.e; // This is the translateX value
+                const finalScreenY = transformMatrix.f; // This is the translateY value
+
+                const finalXOnBoard = (finalScreenX - worldRect.left) / zoomLevel + boardPosition.x;
+                const finalYOnBoard = (finalScreenY - worldRect.top) / zoomLevel + boardPosition.y;
                 
                 let newX = finalXOnBoard;
                 let newY = finalYOnBoard;
@@ -1518,6 +1571,7 @@
                                 const playerHand = updatedPlayers[currentPlayerId].hand;
                                 const handIndex = playerHand.findIndex(d => d.id === draggedDominoData.dominoData.id);
                                 if (handIndex > -1) {
+                                    playSound('place');
                                     const playedDomino = playerHand.splice(handIndex, 1)[0];
                                     newBoardDominos.push({ dominoData: playedDomino, x: newX, y: newY, rotation: newRotation });
                                     
@@ -1559,6 +1613,7 @@
                             } else { // origin === 'board'
                                 const boardIndex = newBoardDominos.findIndex(d => d.dominoData.id === draggedDominoData.dominoData.id);
                                 if (boardIndex > -1) {
+                                    playSound('place');
                                     newMoveHistory.push({ type: 'reposition', dominoId: draggedDominoData.dominoData.id, from: { x: newBoardDominos[boardIndex].x, y: newBoardDominos[boardIndex].y } });
                                     newBoardDominos[boardIndex].x = newX;
                                     newBoardDominos[boardIndex].y = newY;
@@ -1581,8 +1636,6 @@
         originalDominoElement = null;
         draggedDominoData = null;
         isDraggingDomino = false;
-        
-        // The onSnapshot listener will handle re-rendering the correct game status
     }
 
     // --- Pan and Zoom Logic ---
@@ -1594,6 +1647,12 @@
     }
 
     function updateBoardTransform() {
+        // FIX: Clamp board position to prevent panning too far off-screen, which can cause issues.
+        const viewWidth = dom.worldElement.clientWidth / zoomLevel;
+        const viewHeight = dom.worldElement.clientHeight / zoomLevel;
+        boardPosition.x = Math.max(0, Math.min(boardPosition.x, BOARD_SIZE - viewWidth));
+        boardPosition.y = Math.max(0, Math.min(boardPosition.y, BOARD_SIZE - viewHeight));
+
         dom.gameBoardElement.style.transform = `translate(${-boardPosition.x}px, ${-boardPosition.y}px) scale(${zoomLevel})`;
         updateMinimap(localGameState.boardDominos || []);
     }
@@ -1613,9 +1672,11 @@
         boardDominos.forEach(domino => {
             const dot = document.createElement('div');
             dot.className = 'minimap-dot';
-            dot.style.left = `${domino.x * scale}px`;
-            dot.style.top = `${domino.y * scale}px`;
+            // Center the dot on the domino's center
+            dot.style.left = `${(domino.x + DOMINO_WIDTH / 2) * scale}px`;
+            dot.style.top = `${(domino.y + DOMINO_HEIGHT / 2) * scale}px`;
             dot.addEventListener('click', () => {
+                playSound('click');
                 boardPosition.x = domino.x - (viewWidth / 2) + (DOMINO_WIDTH / 2);
                 boardPosition.y = domino.y - (viewHeight / 2) + (DOMINO_HEIGHT / 2);
                 updateBoardTransform();
@@ -1740,6 +1801,7 @@
 
     // --- Undo and Theme Logic ---
     dom.undoButton.addEventListener('click', async () => {
+        playSound('click');
         const gameRef = doc(db, "games", currentGameId);
         await runTransaction(db, async (transaction) => {
             const gameSnap = await transaction.get(gameRef);
@@ -1765,6 +1827,7 @@
     });
 
     dom.rotateLastTileButton.addEventListener('click', async () => {
+        playSound('click');
         const gameRef = doc(db, "games", currentGameId);
         const lastPlayedId = localGameState.lastPlayedDominoId;
         if (!lastPlayedId) return;
@@ -1796,6 +1859,7 @@
     });
 
     dom.themeSwitcher.addEventListener('change', async (e) => {
+        playSound('click');
         if (currentGameId) {
             const gameRef = doc(db, "games", currentGameId);
             await updateDoc(gameRef, { currentTheme: e.target.value });
