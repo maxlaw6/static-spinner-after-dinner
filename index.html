@@ -100,8 +100,9 @@
             left: 0; /* Position is now handled by transform */
             opacity: 0.95;
             pointer-events: none;
-            transform-origin: center center; /* FIX: Changed to center to match JS logic */
+            transform-origin: center center; 
             will-change: transform;
+            backface-visibility: hidden; /* Prevent flickering */
         }
         
         /* Mini Domino Styles for Opponent Hands */
@@ -729,7 +730,7 @@
             moveHistory: [],
             log: [],
             currentTheme: 'classic',
-            actionStatus: null,
+            // actionStatus is removed from the database state
             createdAt: serverTimestamp()
         };
 
@@ -1101,22 +1102,25 @@
         const currentTurnPlayerId = gameState.playerOrder[gameState.currentPlayerIndex];
         const isMyTurn = currentPlayerId === currentTurnPlayerId;
         
-        dom.gameBoardElement.querySelectorAll('.domino').forEach(d => d.remove());
-        gameState.boardDominos.forEach(domino => {
-            const el = createDomino(domino.dominoData);
-            el.style.position = 'absolute';
-            el.style.left = `${domino.x}px`;
-            el.style.top = `${domino.y}px`;
-            el.style.transform = `rotate(${domino.rotation}deg)`;
-            el.dataset.rotation = domino.rotation;
-            el.dataset.id = domino.dominoData.id;
-            
-            if (isMyTurn) {
-                el.addEventListener('mousedown', (e) => startDominoDrag(e, domino, 'board'));
-                el.addEventListener('touchstart', (e) => startDominoDrag(e, domino, 'board'), { passive: false });
-            }
-            dom.gameBoardElement.appendChild(el);
-        });
+        // Do not re-render board if a drag is in progress on another client
+        if (!isDraggingDomino) {
+            dom.gameBoardElement.querySelectorAll('.domino').forEach(d => d.remove());
+            gameState.boardDominos.forEach(domino => {
+                const el = createDomino(domino.dominoData);
+                el.style.position = 'absolute';
+                el.style.left = `${domino.x}px`;
+                el.style.top = `${domino.y}px`;
+                el.style.transform = `rotate(${domino.rotation}deg)`;
+                el.dataset.rotation = domino.rotation;
+                el.dataset.id = domino.dominoData.id;
+                
+                if (isMyTurn) {
+                    el.addEventListener('mousedown', (e) => startDominoDrag(e, domino, 'board'));
+                    el.addEventListener('touchstart', (e) => startDominoDrag(e, domino, 'board'), { passive: false });
+                }
+                dom.gameBoardElement.appendChild(el);
+            });
+        }
         updateMinimap(gameState.boardDominos);
 
         dom.playerHandsContainer.innerHTML = '';
@@ -1138,23 +1142,24 @@
         renderBoneyard(gameState.boneyard, isMyTurn, gameState.turnState);
         dom.currentPlayerElement.textContent = gameState.players[currentTurnPlayerId].name;
         
-        let statusText = '';
-        if (gameState.actionStatus) {
-            statusText = gameState.actionStatus;
-        } else if (isMyTurn) {
-            if(gameState.mustDrawToStart) {
-                statusText = "You have the highest hand. Draw to find the starting double.";
-            } else if (gameState.boardDominos.length === 0) {
-                statusText = `You must play the Double ${gameState.currentStartingDouble} or Double Spinner.`;
-            } else if (gameState.turnState === 'WAITING') {
-                statusText = "Your turn. Play a domino or draw from the boneyard.";
-            } else if (gameState.turnState === 'PLACED') {
-                statusText = "You've played or drawn. You can adjust tiles or end your turn.";
+        // Do not update status if a drag is in progress by the current player
+        if (!isDraggingDomino) {
+            let statusText = '';
+            if (isMyTurn) {
+                if(gameState.mustDrawToStart) {
+                    statusText = "You have the highest hand. Draw to find the starting double.";
+                } else if (gameState.boardDominos.length === 0) {
+                    statusText = `You must play the Double ${gameState.currentStartingDouble} or Double Spinner.`;
+                } else if (gameState.turnState === 'WAITING') {
+                    statusText = "Your turn. Play a domino or draw from the boneyard.";
+                } else if (gameState.turnState === 'PLACED') {
+                    statusText = "You've played or drawn. You can adjust tiles or end your turn.";
+                }
+            } else {
+                statusText = `Waiting for ${gameState.players[currentTurnPlayerId].name} to play...`;
             }
-        } else {
-            statusText = `Waiting for ${gameState.players[currentTurnPlayerId].name} to play...`;
+            dom.gameStatusElement.textContent = statusText;
         }
-        dom.gameStatusElement.textContent = statusText;
 
         dom.endTurnButton.disabled = !(isMyTurn && gameState.turnState === 'PLACED');
         dom.undoButton.disabled = !(isMyTurn && (gameState.moveHistory || []).length > 0);
@@ -1371,13 +1376,6 @@
         return e.touches?.[0] || e.changedTouches?.[0] || e;
     }
 
-    async function updateActionStatus(text) {
-        if (currentGameId) {
-            const gameRef = doc(db, "games", currentGameId);
-            await updateDoc(gameRef, { actionStatus: text });
-        }
-    }
-
     function startDominoDrag(e, dominoObject, origin) {
         e.stopPropagation();
         if (isDraggingDomino) return;
@@ -1408,17 +1406,14 @@
 
         originalDominoElement.style.opacity = '0.3';
 
-        const dragScale = 1.0; 
-        const scaledWidth = DOMINO_WIDTH * dragScale;
-        const scaledHeight = DOMINO_HEIGHT * dragScale;
-        const initialLeft = coords.clientX - scaledWidth / 2;
-        const initialTop = coords.clientY - scaledHeight / 2;
+        const initialLeft = coords.clientX - (DOMINO_WIDTH / 2);
+        const initialTop = coords.clientY - (DOMINO_HEIGHT / 2);
         
-        // FIX: Preserve rotation and use translate3d to prevent rendering glitches
         const currentRotation = draggedDominoData.rotation || 0;
-        activeDominoElement.style.transform = `translate3d(${initialLeft}px, ${initialTop}px, 0) scale(${dragScale}) rotate(${currentRotation}deg)`;
+        activeDominoElement.style.transform = `translate3d(${initialLeft}px, ${initialTop}px, 0) rotate(${currentRotation}deg)`;
 
-        updateActionStatus(`${localGameState.players[currentPlayerId].name} is moving a tile...`);
+        // FIX: Update status locally to prevent re-render during drag
+        dom.gameStatusElement.textContent = `${localGameState.players[currentPlayerId].name} is moving a tile...`;
         
         const moveHandler = (ev) => dragDomino(ev);
         const endHandler = (ev) => endDominoDrag(ev, origin, moveHandler, endHandler);
@@ -1437,15 +1432,11 @@
             wasDragged = true;
         }
         
-        const dragScale = 1.0;
-        const scaledWidth = DOMINO_WIDTH * dragScale;
-        const scaledHeight = DOMINO_HEIGHT * dragScale;
-        const newLeft = coords.clientX - scaledWidth / 2;
-        const newTop = coords.clientY - scaledHeight / 2;
+        const newLeft = coords.clientX - (DOMINO_WIDTH / 2);
+        const newTop = coords.clientY - (DOMINO_HEIGHT / 2);
 
-        // FIX: Preserve rotation and use translate3d
         const currentRotation = draggedDominoData.rotation || 0;
-        activeDominoElement.style.transform = `translate3d(${newLeft}px, ${newTop}px, 0) scale(${dragScale}) rotate(${currentRotation}deg)`;
+        activeDominoElement.style.transform = `translate3d(${newLeft}px, ${newTop}px, 0) rotate(${currentRotation}deg)`;
     }
 
     async function endDominoDrag(e, origin, moveHandler, endHandler) {
@@ -1459,7 +1450,6 @@
         const isTap = !wasDragged && dragDuration < 200;
 
         if (isTap && origin === 'board') {
-            await updateActionStatus(null); // Clear status immediately for a tap
             const currentRotation = parseInt(draggedDominoData.rotation || 0);
             const newRotation = (currentRotation + 45) % 360;
 
@@ -1486,7 +1476,7 @@
             const worldRect = dom.worldElement.getBoundingClientRect();
 
             if (origin === 'hand' && (coords.clientX < worldRect.left || coords.clientX > worldRect.right || coords.clientY < worldRect.top || coords.clientY > worldRect.bottom)) {
-                await updateActionStatus(null);
+                // Dragged outside, do nothing
             } else {
                 const mouseXOnBoard = (coords.clientX - worldRect.left) / zoomLevel + boardPosition.x;
                 const mouseYOnBoard = (coords.clientY - worldRect.top) / zoomLevel + boardPosition.y;
@@ -1507,7 +1497,6 @@
                     if (!isCorrectDouble && !isDoubleSpinner) {
                         isValidPlacement = false;
                         showMessage(`Must start with Double ${required} or Double Spinner!`);
-                        await updateActionStatus(null);
                     } else {
                         newX = (BOARD_SIZE / 2) - (DOMINO_WIDTH / 2);
                         newY = (BOARD_SIZE / 2) - (DOMINO_HEIGHT / 2);
@@ -1556,8 +1545,7 @@
                                             gameStatus: isGameOver ? 'finished' : 'round-over',
                                             roundEndInfo: { winnerId: winnerPlayerId, points: roundPoints },
                                             turnState: 'WAITING',
-                                            log: newLog,
-                                            actionStatus: null
+                                            log: newLog
                                         });
                                     } else {
                                         transaction.update(gameRef, {
@@ -1566,8 +1554,7 @@
                                             turnState: 'PLACED',
                                             moveHistory: [],
                                             lastPlayedDominoId: playedDomino.id,
-                                            log: newLog,
-                                            actionStatus: null
+                                            log: newLog
                                         });
                                     }
                                 }
@@ -1577,22 +1564,16 @@
                                     newMoveHistory.push({ type: 'reposition', dominoId: draggedDominoData.dominoData.id, from: { x: newBoardDominos[boardIndex].x, y: newBoardDominos[boardIndex].y } });
                                     newBoardDominos[boardIndex].x = newX;
                                     newBoardDominos[boardIndex].y = newY;
-                                    transaction.update(gameRef, { boardDominos: newBoardDominos, moveHistory: newMoveHistory, actionStatus: null });
+                                    transaction.update(gameRef, { boardDominos: newBoardDominos, moveHistory: newMoveHistory });
                                 }
                             }
                         });
-                        // OPTIMISTIC UPDATE
-                        if (origin === 'hand') {
-                            localGameState.turnState = 'PLACED';
-                        }
                     } catch (error) {
                         console.error("Error during placement transaction:", error);
                         showMessage("Error placing the domino. Please refresh.");
                     }
                 }
             }
-        } else {
-             await updateActionStatus(null);
         }
         
         // Cleanup drag elements
@@ -1602,6 +1583,8 @@
         originalDominoElement = null;
         draggedDominoData = null;
         isDraggingDomino = false;
+        
+        // The onSnapshot listener will handle re-rendering the correct game status
     }
 
     // --- Pan and Zoom Logic ---
