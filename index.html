@@ -19,7 +19,7 @@
             font-family: 'Inter', sans-serif;
             user-select: none;
             -webkit-user-select: none; /* Safari */
-            touch-action: none;
+            /* FIX: Removed 'touch-action: none;' which was breaking buttons on touch devices */
             background-color: #1f2937; /* bg-gray-800 */
         }
 
@@ -1493,8 +1493,8 @@
 
                 // 2. Convert cursor's screen position to its position on the scaled and panned game board.
                 //    This must match the CSS transform order: scale() then translate().
-                const cursorX_onBoard = (cursorX_relative / zoomLevel) + boardPosition.x; // FIX: Was minus, is now plus
-                const cursorY_onBoard = (cursorY_relative / zoomLevel) + boardPosition.y; // FIX: Was minus, is now plus
+                const cursorX_onBoard = (cursorX_relative / zoomLevel) + boardPosition.x;
+                const cursorY_onBoard = (cursorY_relative / zoomLevel) + boardPosition.y;
 
                 // 3. Calculate the top-left corner of the domino to center it on the cursor's board position.
                 const finalXOnBoard = cursorX_onBoard - (DOMINO_WIDTH / 2);
@@ -1542,7 +1542,6 @@
                                     newLog.push(`${updatedPlayers[currentPlayerId].name} played a tile.`);
                                     if (newLog.length > 5) newLog.shift();
                                     
-                                    // FIX: The initial play should be the first item in the move history for the turn.
                                     newMoveHistory = [{ type: 'play', dominoId: playedDomino.id }];
 
                                     if (playerHand.length === 0) {
@@ -1571,7 +1570,7 @@
                                             boardDominos: newBoardDominos,
                                             players: updatedPlayers,
                                             turnState: 'PLACED',
-                                            moveHistory: newMoveHistory, // FIX: Use the new history
+                                            moveHistory: newMoveHistory,
                                             lastPlayedDominoId: playedDomino.id,
                                             log: newLog
                                         });
