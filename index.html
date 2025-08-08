@@ -772,7 +772,7 @@
             roundNumber: 0,
             currentStartingDouble: 9,
             turnState: 'WAITING', // WAITING, PLACED, PENDING_VALIDATION
-            validations: {},
+            hasDrawn: false, // NEW: Track if player has drawn this turn
             scoreHistory: [],
             mustDrawToStart: false,
             lastPlayedDominoId: null,
@@ -1021,7 +1021,7 @@
                 currentPlayerIndex: newPlayerIndex,
                 mustDrawToStart: newMustDraw,
                 turnState: 'WAITING',
-                validations: {},
+                hasDrawn: false,
                 lastPlayedDominoId: null,
                 passCount: 0,
                 moveHistory: [],
@@ -1080,7 +1080,7 @@
                 const gameState = gameSnap.data();
 
                 const currentTurnPlayerId = gameState.playerOrder[gameState.currentPlayerIndex];
-                if (currentPlayerId !== currentTurnPlayerId || gameState.turnState === 'PLACED' || gameState.boneyard.length === 0) {
+                if (currentPlayerId !== currentTurnPlayerId || gameState.hasDrawn || gameState.turnState !== 'WAITING' || gameState.boneyard.length === 0) {
                     return;
                 }
 
@@ -1094,10 +1094,11 @@
                 newLog.push(`${updatedPlayers[currentPlayerId].name} drew from the boneyard.`);
                 if (newLog.length > 5) newLog.shift();
 
+                // FIX: Set hasDrawn to true, but keep turnState as WAITING
                 transaction.update(gameRef, {
                     players: updatedPlayers,
                     boneyard: boneyard,
-                    turnState: 'PLACED',
+                    hasDrawn: true,
                     log: newLog
                 });
             });
@@ -1116,7 +1117,12 @@
             if (!gameSnap.exists()) throw "Game does not exist!";
             const gameState = gameSnap.data();
 
-            const newLog = [...(gameState.log || []), `${gameState.players[currentPlayerId].name} submitted their move for validation.`];
+            const newLog = [...(gameState.log || [])];
+            if(gameState.hasDrawn && gameState.turnState === 'WAITING'){
+                newLog.push(`${gameState.players[currentPlayerId].name} passed their turn.`);
+            } else {
+                 newLog.push(`${gameState.players[currentPlayerId].name} submitted their move for validation.`);
+            }
             if (newLog.length > 5) newLog.shift();
 
             transaction.update(gameRef, {
@@ -1163,7 +1169,6 @@
                     el.addEventListener('touchstart', (e) => startDominoDrag(e, domino, 'board'), { passive: false });
                 }
 
-                // Add glow for pending validation
                 if (gameState.turnState === 'PENDING_VALIDATION' && domino.dominoData.id === gameState.lastPlayedDominoId) {
                     el.classList.add('pending-validation-glow');
                 }
@@ -1190,7 +1195,7 @@
         }
 
         // --- Update UI State (Buttons, Status Text) ---
-        renderBoneyard(gameState.boneyard, isMyTurn, gameState.turnState);
+        renderBoneyard(gameState, isMyTurn);
         dom.currentPlayerElement.textContent = gameState.players[currentTurnPlayerId].name;
         
         updateStatusAndButtons(gameState, isMyTurn, currentTurnPlayerId);
@@ -1208,13 +1213,17 @@
                     statusText = "Waiting for other players to validate your move...";
                     break;
                 case 'PLACED':
-                    statusText = "You've played or drawn. You can adjust tiles or end your turn.";
+                    statusText = "You've played. You can adjust your tile or end your turn.";
                     dom.endTurnButton.classList.remove('hidden');
                     dom.endTurnButton.disabled = false;
                     break;
                 case 'WAITING':
                 default:
-                    if(gameState.mustDrawToStart) {
+                    if(gameState.hasDrawn){
+                        statusText = "You have drawn a tile. Play it or end your turn.";
+                        dom.endTurnButton.classList.remove('hidden');
+                        dom.endTurnButton.disabled = false;
+                    } else if(gameState.mustDrawToStart) {
                         statusText = "You have the highest hand. Draw to find the starting double.";
                     } else if (gameState.boardDominos.length === 0) {
                         statusText = `You must play the Double ${gameState.currentStartingDouble} or Double Spinner.`;
@@ -1237,8 +1246,8 @@
 
         dom.undoButton.disabled = !(isMyTurn && (gameState.moveHistory || []).length > 0);
         dom.rotateLastTileButton.classList.toggle('hidden', !(isMyTurn && gameState.turnState === 'PLACED' && gameState.lastPlayedDominoId));
-        dom.boneyardPileElement.style.cursor = (isMyTurn && gameState.turnState === 'WAITING' && gameState.boneyard.length > 0) ? 'pointer' : 'not-allowed';
-        dom.boneyardPileElement.classList.toggle('can-draw', isMyTurn && gameState.turnState === 'WAITING' && gameState.boneyard.length > 0);
+        dom.boneyardPileElement.style.cursor = (isMyTurn && gameState.turnState === 'WAITING' && !gameState.hasDrawn && gameState.boneyard.length > 0) ? 'pointer' : 'not-allowed';
+        dom.boneyardPileElement.classList.toggle('can-draw', isMyTurn && gameState.turnState === 'WAITING' && !gameState.hasDrawn && gameState.boneyard.length > 0);
     }
 
     function renderPlayerHands(gameState) {
@@ -1309,10 +1318,10 @@
         dom.gameLog.scrollTop = dom.gameLog.scrollHeight;
     }
 
-    function renderBoneyard(boneyard, isMyTurn, turnState) {
+    function renderBoneyard(gameState, isMyTurn) {
         dom.boneyardStack.innerHTML = '';
         
-        if (boneyard.length > 0) {
+        if (gameState.boneyard.length > 0) {
             const dominoDisplay = document.createElement('div');
             dominoDisplay.className = 'boneyard-domino-display';
             dom.boneyardStack.appendChild(dominoDisplay);
@@ -1321,14 +1330,14 @@
         const existingMessage = document.getElementById('boneyard-message');
         if (existingMessage) existingMessage.remove();
 
-        if (isMyTurn && turnState === 'WAITING' && boneyard.length > 0) {
+        if (isMyTurn && gameState.turnState === 'WAITING' && !gameState.hasDrawn && gameState.boneyard.length > 0) {
             const message = document.createElement('div');
             message.id = 'boneyard-message';
             message.textContent = 'Click to Draw';
             dom.boneyardPileElement.appendChild(message);
         }
 
-        dom.boneyardCountElement.textContent = boneyard.length;
+        dom.boneyardCountElement.textContent = gameState.boneyard.length;
     }
     
     function displayRoundEndScreen(gameState) {
@@ -1930,7 +1939,7 @@
                     gameStatus: isGameOver ? 'finished' : 'round-over',
                     roundEndInfo: { winnerId: currentTurnPlayerId, points: roundPoints },
                     turnState: 'WAITING',
-                    validations: {},
+                    hasDrawn: false,
                     scoreHistory: newScoreHistory
                 });
             } else {
@@ -1943,9 +1952,9 @@
                 transaction.update(gameRef, {
                     currentPlayerIndex: nextPlayerIndex,
                     turnState: 'WAITING',
+                    hasDrawn: false,
                     moveHistory: [],
                     lastPlayedDominoId: null,
-                    validations: {},
                     log: newLog
                 });
             }
@@ -1982,9 +1991,9 @@
                     boardDominos: newBoardDominos,
                     players: updatedPlayers,
                     turnState: 'WAITING',
+                    hasDrawn: false,
                     lastPlayedDominoId: null,
                     moveHistory: [],
-                    validations: {},
                     log: newLog
                 });
             }
