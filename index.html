@@ -1387,8 +1387,18 @@
             showMessage("You have already played a tile. Please end your turn.");
             return;
         }
-        if (origin === 'board' && localGameState.turnState !== 'PLACED') {
-            return;
+        
+        // FIX: Add check to ensure only tiles played this turn can be moved
+        if (origin === 'board') {
+            if (localGameState.turnState !== 'PLACED') {
+                return; // Can't move anything before playing.
+            }
+            // Check if the domino being dragged was played or moved this turn.
+            const playedThisTurn = (localGameState.moveHistory || []).some(move => move.dominoId === dominoObject.dominoData.id);
+            if (!playedThisTurn) {
+                showMessage("You can only reposition tiles played this turn.");
+                return;
+            }
         }
         
         originalDominoElement = e.currentTarget;
@@ -1477,14 +1487,14 @@
             if (origin === 'hand' && (coords.clientX < worldRect.left || coords.clientX > worldRect.right || coords.clientY < worldRect.top || coords.clientY > worldRect.bottom)) {
                 // Dragged outside, do nothing
             } else {
-                // FIX: This is the new, robust placement logic.
                 // 1. Get cursor position relative to the visible world area.
                 const cursorX_relative = coords.clientX - worldRect.left;
                 const cursorY_relative = coords.clientY - worldRect.top;
 
                 // 2. Convert cursor's screen position to its position on the scaled and panned game board.
-                const cursorX_onBoard = (cursorX_relative / zoomLevel) - boardPosition.x;
-                const cursorY_onBoard = (cursorY_relative / zoomLevel) - boardPosition.y;
+                //    This must match the CSS transform order: scale() then translate().
+                const cursorX_onBoard = (cursorX_relative / zoomLevel) + boardPosition.x; // FIX: Was minus, is now plus
+                const cursorY_onBoard = (cursorY_relative / zoomLevel) + boardPosition.y; // FIX: Was minus, is now plus
 
                 // 3. Calculate the top-left corner of the domino to center it on the cursor's board position.
                 const finalXOnBoard = cursorX_onBoard - (DOMINO_WIDTH / 2);
@@ -1531,6 +1541,9 @@
                                     
                                     newLog.push(`${updatedPlayers[currentPlayerId].name} played a tile.`);
                                     if (newLog.length > 5) newLog.shift();
+                                    
+                                    // FIX: The initial play should be the first item in the move history for the turn.
+                                    newMoveHistory = [{ type: 'play', dominoId: playedDomino.id }];
 
                                     if (playerHand.length === 0) {
                                         const winnerPlayerId = currentPlayerId;
@@ -1558,7 +1571,7 @@
                                             boardDominos: newBoardDominos,
                                             players: updatedPlayers,
                                             turnState: 'PLACED',
-                                            moveHistory: [],
+                                            moveHistory: newMoveHistory, // FIX: Use the new history
                                             lastPlayedDominoId: playedDomino.id,
                                             log: newLog
                                         });
@@ -1605,7 +1618,6 @@
         boardPosition.x = Math.max(0, Math.min(boardPosition.x, BOARD_SIZE - viewWidth));
         boardPosition.y = Math.max(0, Math.min(boardPosition.y, BOARD_SIZE - viewHeight));
 
-        // FIX: The order of CSS transforms matters. Scale should come first.
         dom.gameBoardElement.style.transform = `scale(${zoomLevel}) translate(${-boardPosition.x}px, ${-boardPosition.y}px)`;
         updateMinimap(localGameState.boardDominos || []);
     }
@@ -1628,7 +1640,6 @@
             dot.style.left = `${(domino.x + DOMINO_WIDTH / 2) * scale}px`;
             dot.style.top = `${(domino.y + DOMINO_HEIGHT / 2) * scale}px`;
             
-            // FIX: Apply rotation to the minimap dot
             dot.style.transform = `translate(-50%, -50%) rotate(${domino.rotation}deg)`;
 
             dot.addEventListener('click', (e) => {
