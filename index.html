@@ -1409,7 +1409,9 @@
             showMessage("You have already played a tile. Please end your turn.");
             return;
         }
-        if (origin === 'board' && localGameState.turnState !== 'PLACED') return;
+        if (origin === 'board' && localGameState.turnState !== 'PLACED') {
+            return;
+        }
         
         originalDominoElement = e.currentTarget;
         draggedDominoData = dominoObject;
@@ -1467,9 +1469,6 @@
         document.removeEventListener('mousemove', moveHandler);
         document.removeEventListener('touchmove', moveHandler);
         
-        // BUG FIX: The action status should only be cleared inside the transaction
-        // updateActionStatus(null); 
-
         if (!isDraggingDomino) return;
         
         const gameRef = doc(db, "games", currentGameId);
@@ -1495,7 +1494,6 @@
                 if (boardIndex > -1) {
                     newMoveHistory.push({ type: 'rotate', dominoId: draggedDominoData.dominoData.id, from: newBoardDominos[boardIndex].rotation });
                     newBoardDominos[boardIndex].rotation = newRotation;
-                    // Also clear action status here
                     transaction.update(gameRef, { boardDominos: newBoardDominos, moveHistory: newMoveHistory, actionStatus: null });
                 }
             });
@@ -1504,7 +1502,6 @@
             const worldRect = dom.worldElement.getBoundingClientRect();
 
             if (origin === 'hand' && (coords.clientX < worldRect.left || coords.clientX > worldRect.right || coords.clientY < worldRect.top || coords.clientY > worldRect.bottom)) {
-                // Dropped outside, clear action status without making a move
                 await updateActionStatus(null);
             } else {
                 const mouseXOnBoard = (coords.clientX - worldRect.left) / zoomLevel + boardPosition.x;
@@ -1526,10 +1523,10 @@
                     if (!isCorrectDouble && !isDoubleSpinner) {
                         isValidPlacement = false;
                         showMessage(`Must start with Double ${required} or Double Spinner!`);
-                        await updateActionStatus(null); // Clear status on invalid move
+                        await updateActionStatus(null);
                     } else {
                         newX = (BOARD_SIZE / 2) - (DOMINO_WIDTH / 2);
-                        newY = (BOARD_SIZE / 2) - (DOMINO_HEIGHT / 2) + 20; // Adjusted for visual centering
+                        newY = (BOARD_SIZE / 2) - (DOMINO_HEIGHT / 2);
                         newRotation = 90;
                     }
                 }
@@ -1600,6 +1597,10 @@
                                 }
                             }
                         });
+                        // OPTIMISTIC UPDATE
+                        if (origin === 'hand') {
+                            localGameState.turnState = 'PLACED';
+                        }
                     } catch (error) {
                         console.error("Error during placement transaction:", error);
                         showMessage("Error placing the domino. Please refresh.");
@@ -1607,7 +1608,6 @@
                 }
             }
         } else {
-            // It was not a drag, just a click, so clear the status
              await updateActionStatus(null);
         }
         
