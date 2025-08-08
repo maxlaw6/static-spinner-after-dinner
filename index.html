@@ -1485,7 +1485,6 @@
                 const gameSnap = await transaction.get(gameRef);
                 if (!gameSnap.exists()) throw "Game does not exist!";
                 const gameState = gameSnap.data();
-                // BUG FIX: Declare newMoveHistory in the correct scope
                 let newMoveHistory = [...(gameState.moveHistory || [])];
                 const newBoardDominos = [...gameState.boardDominos];
                 const boardIndex = newBoardDominos.findIndex(d => d.dominoData.id === draggedDominoData.dominoData.id);
@@ -1505,7 +1504,6 @@
                 const mouseXOnBoard = (coords.clientX - worldRect.left) / zoomLevel + boardPosition.x;
                 const mouseYOnBoard = (coords.clientY - worldRect.top) / zoomLevel + boardPosition.y;
                 
-                // PLACEMENT FIX: Calculate final position from the center of the tile.
                 const finalXOnBoard = mouseXOnBoard - (DOMINO_WIDTH / 2);
                 const finalYOnBoard = mouseYOnBoard - (DOMINO_HEIGHT / 2);
                 
@@ -1536,7 +1534,6 @@
                             if (!gameSnap.exists()) throw "Game does not exist!";
                             const gameState = gameSnap.data();
                             
-                            // BUG FIX: Declare all variables at the top of the transaction scope
                             let newBoardDominos = [...gameState.boardDominos];
                             let updatedPlayers = { ...gameState.players };
                             let newLog = [...(gameState.log || [])];
