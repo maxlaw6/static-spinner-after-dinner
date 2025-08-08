@@ -1477,6 +1477,7 @@
         const isTap = !wasDragged && dragDuration < 200;
 
         if (isTap && origin === 'board') {
+            await updateActionStatus(null); // Clear status immediately for a tap
             const currentRotation = parseInt(draggedDominoData.rotation || 0);
             const newRotation = (currentRotation + 45) % 360;
 
@@ -1495,7 +1496,7 @@
                 if (boardIndex > -1) {
                     newMoveHistory.push({ type: 'rotate', dominoId: draggedDominoData.dominoData.id, from: newBoardDominos[boardIndex].rotation });
                     newBoardDominos[boardIndex].rotation = newRotation;
-                    transaction.update(gameRef, { boardDominos: newBoardDominos, moveHistory: newMoveHistory, actionStatus: null });
+                    transaction.update(gameRef, { boardDominos: newBoardDominos, moveHistory: newMoveHistory });
                 }
             });
         } else if (wasDragged) {
