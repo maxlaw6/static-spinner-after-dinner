@@ -1428,8 +1428,8 @@
 
         originalDominoElement.style.opacity = '0.3';
 
-        // FIX: Determine the correct scale for the dragged element
-        const dragScale = origin === 'hand' ? 1.0 : zoomLevel;
+        // FIX: Always use a scale of 1 for the dragged element for visibility.
+        const dragScale = 1.0; 
 
         const scaledWidth = DOMINO_WIDTH * dragScale;
         const scaledHeight = DOMINO_HEIGHT * dragScale;
@@ -1439,8 +1439,8 @@
 
         updateActionStatus(`${localGameState.players[currentPlayerId].name} is moving a tile...`);
         
-        // Use named functions for easy removal and pass the dragScale
-        const moveHandler = (ev) => dragDomino(ev, dragScale);
+        // Use named functions for easy removal
+        const moveHandler = (ev) => dragDomino(ev);
         const endHandler = (ev) => endDominoDrag(ev, origin, moveHandler, endHandler);
 
         document.addEventListener('mousemove', moveHandler);
@@ -1449,7 +1449,7 @@
         document.addEventListener('touchend', endHandler, { once: true });
     }
 
-    function dragDomino(e, dragScale) { // Added dragScale parameter
+    function dragDomino(e) {
         if (!isDraggingDomino || !activeDominoElement) return;
         e.preventDefault();
         const coords = getEventCoords(e);
@@ -1457,7 +1457,8 @@
             wasDragged = true;
         }
         
-        // Use the passed dragScale
+        // FIX: Always use a scale of 1 for the dragged element.
+        const dragScale = 1.0;
         const scaledWidth = DOMINO_WIDTH * dragScale;
         const scaledHeight = DOMINO_HEIGHT * dragScale;
         const newLeft = coords.clientX - scaledWidth / 2;
