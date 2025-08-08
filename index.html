@@ -1841,15 +1841,125 @@
             dom.ghostDomino.classList.remove(snapResult.isValid ? 'invalid-snap' : 'valid-snap');
             currentSnapTarget = snapResult.isValid ? snapResult : null;
         } else {
-            // If no snap target, hide the ghost
             dom.ghostDomino.className = 'domino';
+            dom.ghostDomino.classList.add('invalid-snap');
             currentSnapTarget = null;
         }
     }
 
     function findBestSnap(mouseX, mouseY, draggedDomino) {
-        // ... implementation of snap logic will go here
-        return null; // Placeholder
+        const boardDominos = localGameState.boardDominos;
+        if (boardDominos.length === 0) {
+            const required = localGameState.currentStartingDouble;
+            const isCorrectDouble = draggedDomino.top === required && draggedDomino.bottom === required;
+            const isDoubleSpinner = draggedDomino.top === SPINNER_VALUE && draggedDomino.bottom === SPINNER_VALUE;
+            
+            return {
+                x: (BOARD_SIZE / 2) - (DOMINO_HEIGHT / 2),
+                y: (BOARD_SIZE / 2) - (DOMINO_WIDTH / 2),
+                rotation: 90,
+                isValid: isCorrectDouble || isDoubleSpinner
+            };
+        }
+
+        const openEnds = getOpenEnds(boardDominos);
+        let bestSnap = null;
+        let minDistance = SNAP_DISTANCE;
+
+        for (const end of openEnds) {
+            const isSpinner = end.value === SPINNER_VALUE;
+            const canConnectTop = isSpinner || draggedDomino.top === end.value || draggedDomino.top === SPINNER_VALUE;
+            const canConnectBottom = isSpinner || draggedDomino.bottom === end.value || draggedDomino.bottom === SPINNER_VALUE;
+            
+            if (canConnectTop) {
+                const snap = calculateSnap(end, draggedDomino, 'top');
+                const dist = Math.hypot(snap.center.x - mouseX, snap.center.y - mouseY);
+                if (dist < minDistance) {
+                    minDistance = dist;
+                    bestSnap = { ...snap, isValid: true };
+                }
+            }
+            if (canConnectBottom && draggedDomino.top !== draggedDomino.bottom) {
+                 const snap = calculateSnap(end, draggedDomino, 'bottom');
+                 const dist = Math.hypot(snap.center.x - mouseX, snap.center.y - mouseY);
+                 if (dist < minDistance) {
+                    minDistance = dist;
+                    bestSnap = { ...snap, isValid: true };
+                }
+            }
+        }
+        return bestSnap;
+    }
+
+    function getOpenEnds(boardDominos) {
+        const allEnds = [];
+        const centerPoints = new Set();
+
+        boardDominos.forEach(domino => {
+            const { x, y, rotation, dominoData } = domino;
+            const cx = x + DOMINO_WIDTH / 2;
+            const cy = y + DOMINO_HEIGHT / 2;
+            centerPoints.add(`${cx},${cy}`);
+
+            const rad = rotation * Math.PI / 180;
+            const cos = Math.cos(rad);
+            const sin = Math.sin(rad);
+            
+            const isDouble = dominoData.top === dominoData.bottom;
+            const isVertical = rotation % 180 !== 0;
+            const w = isVertical ? DOMINO_HEIGHT : DOMINO_WIDTH;
+            const h = isVertical ? DOMINO_WIDTH : DOMINO_HEIGHT;
+
+            const halfW = w / 2;
+            const halfH = h / 2;
+
+            if (isDouble) {
+                // Doubles have 4 connection points
+                allEnds.push({ x: cx - halfW * cos, y: cy - halfW * sin, value: dominoData.top, dominoId: dominoData.id, dir: 'left' });
+                allEnds.push({ x: cx + halfW * cos, y: cy + halfW * sin, value: dominoData.top, dominoId: dominoData.id, dir: 'right' });
+                allEnds.push({ x: cx + halfH * sin, y: cy - halfH * cos, value: dominoData.top, dominoId: dominoData.id, dir: 'top' });
+                allEnds.push({ x: cx - halfH * sin, y: cy + halfH * cos, value: dominoData.top, dominoId: dominoData.id, dir: 'bottom' });
+            } else {
+                // Regular dominoes have 2
+                allEnds.push({ x: cx - (halfW/2) * cos, y: cy - (halfW/2) * sin, value: dominoData.top, dominoId: dominoData.id, dir: 'left' });
+                allEnds.push({ x: cx + (halfW/2) * cos, y: cy + (halfW/2) * sin, value: dominoData.bottom, dominoId: dominoData.id, dir: 'right' });
+            }
+        });
+
+        return allEnds.filter(end => {
+            for (const otherEnd of allEnds) {
+                if (end.dominoId !== otherEnd.dominoId && Math.hypot(end.x - otherEnd.x, end.y - otherEnd.y) < 10) {
+                    return false; // This end is connected
+                }
+            }
+            return true;
+        });
+    }
+
+    function calculateSnap(end, draggedDomino, connectingEnd) {
+        const endValue = end.value;
+        const draggedValue = draggedDomino[connectingEnd];
+        const otherValue = connectingEnd === 'top' ? draggedDomino.bottom : draggedDomino.top;
+
+        let rotation = 0;
+        let offsetX = 0, offsetY = 0;
+
+        switch(end.dir) {
+            case 'left': rotation = 180; offsetX = -DOMINO_WIDTH; break;
+            case 'right': rotation = 0; offsetX = DOMINO_WIDTH; break;
+            case 'top': rotation = 270; offsetY = -DOMINO_WIDTH; break;
+            case 'bottom': rotation = 90; offsetY = DOMINO_WIDTH; break;
+        }
+
+        if (draggedValue !== endValue && endValue !== SPINNER_VALUE) {
+            // This means we are connecting a spinner to a number, flip the domino
+            rotation = (rotation + 180) % 360;
+        }
+        
+        let x = end.x - DOMINO_WIDTH / 2;
+        let y = end.y - DOMINO_HEIGHT / 2;
+
+        return { x, y, rotation, center: { x: x + DOMINO_WIDTH/2, y: y + DOMINO_HEIGHT/2 } };
     }
 
 
