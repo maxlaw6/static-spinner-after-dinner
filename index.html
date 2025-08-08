@@ -1418,7 +1418,6 @@
 
         updateActionStatus(`${localGameState.players[currentPlayerId].name} is moving a tile...`);
         
-        // Use named functions for easy removal
         const moveHandler = (ev) => dragDomino(ev);
         const endHandler = (ev) => endDominoDrag(ev, origin, moveHandler, endHandler);
 
