@@ -1485,8 +1485,9 @@
                 const gameSnap = await transaction.get(gameRef);
                 if (!gameSnap.exists()) throw "Game does not exist!";
                 const gameState = gameSnap.data();
-                const newBoardDominos = [...gameState.boardDominos];
+                // BUG FIX: Declare newMoveHistory in the correct scope
                 let newMoveHistory = [...(gameState.moveHistory || [])];
+                const newBoardDominos = [...gameState.boardDominos];
                 const boardIndex = newBoardDominos.findIndex(d => d.dominoData.id === draggedDominoData.dominoData.id);
                 if (boardIndex > -1) {
                     newMoveHistory.push({ type: 'rotate', dominoId: draggedDominoData.dominoData.id, from: newBoardDominos[boardIndex].rotation });
@@ -1535,9 +1536,11 @@
                             if (!gameSnap.exists()) throw "Game does not exist!";
                             const gameState = gameSnap.data();
                             
+                            // BUG FIX: Declare all variables at the top of the transaction scope
                             let newBoardDominos = [...gameState.boardDominos];
                             let updatedPlayers = { ...gameState.players };
                             let newLog = [...(gameState.log || [])];
+                            let newMoveHistory = [...(gameState.moveHistory || [])];
 
                             if (origin === 'hand') {
                                 const playerHand = updatedPlayers[currentPlayerId].hand;
