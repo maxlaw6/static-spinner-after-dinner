@@ -249,6 +249,7 @@
             border: 2px solid rgba(255, 255, 255, 0.3);
             border-radius: 4px;
             z-index: 2000;
+            cursor: pointer; /* NEW: Add pointer cursor for clickable map */
         }
         #minimap-viewport {
             position: absolute;
@@ -266,7 +267,7 @@
             cursor: pointer;
             border: 1px solid white;
             box-shadow: 0 0 5px rgba(255,255,255,0.6);
-            transform: translate(-50%, -50%); /* Center the dot */
+            transform-origin: center; /* NEW: Ensure rotation is centered */
         }
         .player-hand-section {
             border: 1px solid rgba(255,255,255,0.2);
@@ -1482,8 +1483,8 @@
                 const cursorY_relative = coords.clientY - worldRect.top;
 
                 // 2. Convert cursor's screen position to its position on the scaled and panned game board.
-                const cursorX_onBoard = (cursorX_relative / zoomLevel) + boardPosition.x;
-                const cursorY_onBoard = (cursorY_relative / zoomLevel) + boardPosition.y;
+                const cursorX_onBoard = (cursorX_relative / zoomLevel) - boardPosition.x;
+                const cursorY_onBoard = (cursorY_relative / zoomLevel) - boardPosition.y;
 
                 // 3. Calculate the top-left corner of the domino to center it on the cursor's board position.
                 const finalXOnBoard = cursorX_onBoard - (DOMINO_WIDTH / 2);
@@ -1604,7 +1605,8 @@
         boardPosition.x = Math.max(0, Math.min(boardPosition.x, BOARD_SIZE - viewWidth));
         boardPosition.y = Math.max(0, Math.min(boardPosition.y, BOARD_SIZE - viewHeight));
 
-        dom.gameBoardElement.style.transform = `translate(${-boardPosition.x}px, ${-boardPosition.y}px) scale(${zoomLevel})`;
+        // FIX: The order of CSS transforms matters. Scale should come first.
+        dom.gameBoardElement.style.transform = `scale(${zoomLevel}) translate(${-boardPosition.x}px, ${-boardPosition.y}px)`;
         updateMinimap(localGameState.boardDominos || []);
     }
     
@@ -1625,7 +1627,12 @@
             dot.className = 'minimap-dot';
             dot.style.left = `${(domino.x + DOMINO_WIDTH / 2) * scale}px`;
             dot.style.top = `${(domino.y + DOMINO_HEIGHT / 2) * scale}px`;
-            dot.addEventListener('click', () => {
+            
+            // FIX: Apply rotation to the minimap dot
+            dot.style.transform = `translate(-50%, -50%) rotate(${domino.rotation}deg)`;
+
+            dot.addEventListener('click', (e) => {
+                e.stopPropagation(); // Prevent minimap container click
                 boardPosition.x = domino.x - (viewWidth / 2) + (DOMINO_WIDTH / 2);
                 boardPosition.y = domino.y - (viewHeight / 2) + (DOMINO_HEIGHT / 2);
                 updateBoardTransform();
@@ -1743,6 +1750,31 @@
         zoomLevel = newZoom;
         updateBoardTransform();
     }
+
+    // NEW: Add click listener for minimap navigation
+    dom.minimapContainer.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (e.target.classList.contains('minimap-dot') || e.target.id === 'minimap-viewport') {
+            return;
+        }
+
+        const mapSize = dom.minimapContainer.clientWidth;
+        const scale = mapSize / BOARD_SIZE;
+
+        const clickXOnMap = e.offsetX;
+        const clickYOnMap = e.offsetY;
+
+        const targetBoardX = clickXOnMap / scale;
+        const targetBoardY = clickYOnMap / scale;
+
+        const viewWidth = dom.worldElement.clientWidth / zoomLevel;
+        const viewHeight = dom.worldElement.clientHeight / zoomLevel;
+        
+        boardPosition.x = targetBoardX - (viewWidth / 2);
+        boardPosition.y = targetBoardY - (viewHeight / 2);
+
+        updateBoardTransform();
+    });
 
     // --- Undo and Theme Logic ---
     dom.undoButton.addEventListener('click', async () => {
