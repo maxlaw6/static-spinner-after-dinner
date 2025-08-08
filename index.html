@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover"/>
     <title>Spinner after Dinner</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com"/>
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet"/>
@@ -637,42 +636,6 @@
     const DOMINO_WIDTH = 80;
     const DOMINO_HEIGHT = 40;
     
-    // --- Sound Effects ---
-    let sounds;
-    let userInteracted = false;
-
-    function setupSounds() {
-        sounds = {
-            place: new Tone.Synth({ oscillator: { type: 'sine' }, envelope: { attack: 0.005, decay: 0.1, sustain: 0.3, release: 0.1 } }).toDestination(),
-            draw: new Tone.Synth({ oscillator: { type: 'triangle' }, envelope: { attack: 0.01, decay: 0.1, sustain: 0.2, release: 0.2 } }).toDestination(),
-            click: new Tone.MembraneSynth().toDestination(),
-            win: new Tone.PluckSynth().toDestination(),
-        };
-    }
-
-    function playSound(soundName) {
-        if (!userInteracted || !sounds) return;
-        if (sounds[soundName]) {
-            if (soundName === 'place') sounds.place.triggerAttackRelease("C4", "8n");
-            else if (soundName === 'draw') sounds.draw.triggerAttackRelease("A3", "8n");
-            else if (soundName === 'click') sounds.click.triggerAttackRelease("C2", "8n", Tone.now());
-            else if (soundName === 'win') {
-                 const now = Tone.now();
-                 sounds.win.triggerAttackRelease("C5", "8n", now);
-                 sounds.win.triggerAttackRelease("G5", "8n", now + 0.2);
-                 sounds.win.triggerAttackRelease("C6", "8n", now + 0.4);
-            }
-        }
-    }
-
-    async function initializeAudio() {
-        if (userInteracted) return;
-        await Tone.start();
-        userInteracted = true;
-        setupSounds();
-        console.log("Audio context started.");
-    }
-
     // --- Interaction State ---
     let isDraggingDomino = false;
     let wasDragged = false;
@@ -731,7 +694,6 @@
 
     dom.messageOkButton.addEventListener('click', () => {
         dom.messageModal.classList.add('hidden');
-        playSound('click');
     });
     
     function enableLobby() {
@@ -744,8 +706,6 @@
 
     // --- Lobby and Game Setup ---
     const handleCreateGame = async () => {
-        await initializeAudio();
-        playSound('click');
         if (!currentPlayerId) return;
         const playerName = dom.playerNameInput.value.trim() || `Player ${currentPlayerId.substring(0, 4)}`;
         
@@ -779,8 +739,6 @@
     };
 
     const handleJoinGame = async () => {
-        await initializeAudio();
-        playSound('click');
         if (!currentPlayerId) return;
         const gameId = dom.joinGameIdInput.value.trim().toUpperCase();
         const playerName = dom.playerNameInput.value.trim() || `Player ${currentPlayerId.substring(0, 4)}`;
@@ -817,9 +775,7 @@
     };
 
     dom.createGameButton.addEventListener('click', handleCreateGame);
-    dom.createGameButton.addEventListener('touchstart', (e) => { e.preventDefault(); handleCreateGame(); });
     dom.joinGameButton.addEventListener('click', handleJoinGame);
-    dom.joinGameButton.addEventListener('touchstart', (e) => { e.preventDefault(); handleJoinGame(); });
 
 
     async function joinGame(gameId) {
@@ -846,7 +802,6 @@
     dom.mainMenuButtonFinal.addEventListener('click', leaveGame);
 
     dom.copyGameIdButton.addEventListener('click', () => {
-        playSound('click');
         navigator.clipboard.writeText(currentGameId).then(() => {
             dom.copyGameIdButton.textContent = 'Copied!';
             setTimeout(() => { dom.copyGameIdButton.textContent = 'Copy'; }, 2000);
@@ -869,13 +824,11 @@
     });
 
     dom.startGameButton.addEventListener('click', () => {
-        playSound('win');
         if (localGameState.players[currentPlayerId]?.isHost) {
             startRound();
         }
     });
     dom.reDealButton.addEventListener('click', () => {
-        playSound('click');
         if (localGameState.players[currentPlayerId]?.isHost) {
             startRound();
         }
@@ -939,7 +892,6 @@
         }
         
         if (gameState.gameStatus === 'round-over') {
-            playSound('win');
             displayRoundEndScreen(gameState);
         } else {
             dom.roundEndScreen.classList.add('hidden');
@@ -1069,7 +1021,6 @@
     }
     
     async function drawFromBoneyard() {
-        playSound('draw');
         const gameRef = doc(db, "games", currentGameId);
         
         try {
@@ -1110,7 +1061,6 @@
 
 
     async function confirmTurn() {
-        playSound('click');
         const gameRef = doc(db, "games", currentGameId);
         await runTransaction(db, async (transaction) => {
             const gameSnap = await transaction.get(gameRef);
@@ -1143,7 +1093,6 @@
     }
 
     dom.continueRoundButton.addEventListener('click', () => {
-        playSound('click');
         if (localGameState.players[currentPlayerId]?.isHost) {
             startRound();
         }
@@ -1527,13 +1476,17 @@
             if (origin === 'hand' && (coords.clientX < worldRect.left || coords.clientX > worldRect.right || coords.clientY < worldRect.top || coords.clientY > worldRect.bottom)) {
                 // Dragged outside, do nothing
             } else {
-                // FIX: Correctly calculate final position based on the ghost tile's transform, accounting for zoom.
-                const transformMatrix = new DOMMatrix(window.getComputedStyle(activeDominoElement).transform);
-                const finalScreenX = transformMatrix.e; // This is the translateX value
-                const finalScreenY = transformMatrix.f; // This is the translateY value
+                // FIX: Calculate final board position based on the cursor's final coordinates
+                const finalCursorScreenX = coords.clientX;
+                const finalCursorScreenY = coords.clientY;
 
-                const finalXOnBoard = (finalScreenX - worldRect.left) / zoomLevel + boardPosition.x;
-                const finalYOnBoard = (finalScreenY - worldRect.top) / zoomLevel + boardPosition.y;
+                // Calculate the top-left of the domino based on the cursor position (since it's centered)
+                const finalDominoScreenX = finalCursorScreenX - (DOMINO_WIDTH / 2);
+                const finalDominoScreenY = finalCursorScreenY - (DOMINO_HEIGHT / 2);
+
+                // Convert the domino's screen coordinates to board coordinates
+                const finalXOnBoard = (finalDominoScreenX - worldRect.left) / zoomLevel + boardPosition.x;
+                const finalYOnBoard = (finalDominoScreenY - worldRect.top) / zoomLevel + boardPosition.y;
                 
                 let newX = finalXOnBoard;
                 let newY = finalYOnBoard;
@@ -1571,7 +1524,6 @@
                                 const playerHand = updatedPlayers[currentPlayerId].hand;
                                 const handIndex = playerHand.findIndex(d => d.id === draggedDominoData.dominoData.id);
                                 if (handIndex > -1) {
-                                    playSound('place');
                                     const playedDomino = playerHand.splice(handIndex, 1)[0];
                                     newBoardDominos.push({ dominoData: playedDomino, x: newX, y: newY, rotation: newRotation });
                                     
@@ -1613,7 +1565,6 @@
                             } else { // origin === 'board'
                                 const boardIndex = newBoardDominos.findIndex(d => d.dominoData.id === draggedDominoData.dominoData.id);
                                 if (boardIndex > -1) {
-                                    playSound('place');
                                     newMoveHistory.push({ type: 'reposition', dominoId: draggedDominoData.dominoData.id, from: { x: newBoardDominos[boardIndex].x, y: newBoardDominos[boardIndex].y } });
                                     newBoardDominos[boardIndex].x = newX;
                                     newBoardDominos[boardIndex].y = newY;
@@ -1647,7 +1598,6 @@
     }
 
     function updateBoardTransform() {
-        // FIX: Clamp board position to prevent panning too far off-screen, which can cause issues.
         const viewWidth = dom.worldElement.clientWidth / zoomLevel;
         const viewHeight = dom.worldElement.clientHeight / zoomLevel;
         boardPosition.x = Math.max(0, Math.min(boardPosition.x, BOARD_SIZE - viewWidth));
@@ -1672,11 +1622,9 @@
         boardDominos.forEach(domino => {
             const dot = document.createElement('div');
             dot.className = 'minimap-dot';
-            // Center the dot on the domino's center
             dot.style.left = `${(domino.x + DOMINO_WIDTH / 2) * scale}px`;
             dot.style.top = `${(domino.y + DOMINO_HEIGHT / 2) * scale}px`;
             dot.addEventListener('click', () => {
-                playSound('click');
                 boardPosition.x = domino.x - (viewWidth / 2) + (DOMINO_WIDTH / 2);
                 boardPosition.y = domino.y - (viewHeight / 2) + (DOMINO_HEIGHT / 2);
                 updateBoardTransform();
@@ -1688,7 +1636,6 @@
     dom.worldElement.addEventListener('mousedown', (e) => {
         if (e.button !== 0) return; // Only pan with left-click
         if (isDraggingDomino) return;
-        // Ensure panning only starts on the background, not on other UI elements
         if (e.target !== dom.worldElement && e.target !== dom.gameBoardElement && e.target.id !== 'world-wrapper') return;
         
         isPanning = true;
@@ -1733,7 +1680,6 @@
             initialPinchDistance = getPinchDistance(e);
             panStart = getAverageTouch(e);
         } else if (e.touches.length === 1 && !isDraggingDomino) {
-             // Handle single-touch panning
              if (e.target !== dom.worldElement && e.target !== dom.gameBoardElement && e.target.id !== 'world-wrapper') return;
              isPanning = true;
              dom.worldElement.classList.add('panning');
@@ -1745,7 +1691,6 @@
     dom.worldElement.addEventListener('touchmove', (e) => {
         e.preventDefault();
         if (e.touches.length === 2 && isPanning) {
-            // Pinch-to-zoom and pan
             const newPinchDistance = getPinchDistance(e);
             const zoomFactor = newPinchDistance / initialPinchDistance;
             handleZoom(zoomFactor - 1, panStart.x, panStart.y);
@@ -1759,7 +1704,6 @@
             panStart = newAvgTouch;
             updateBoardTransform();
         } else if (e.touches.length === 1 && isPanning) {
-            // Single-touch pan
             pan(e);
         }
     }, { passive: false });
@@ -1801,7 +1745,6 @@
 
     // --- Undo and Theme Logic ---
     dom.undoButton.addEventListener('click', async () => {
-        playSound('click');
         const gameRef = doc(db, "games", currentGameId);
         await runTransaction(db, async (transaction) => {
             const gameSnap = await transaction.get(gameRef);
@@ -1827,7 +1770,6 @@
     });
 
     dom.rotateLastTileButton.addEventListener('click', async () => {
-        playSound('click');
         const gameRef = doc(db, "games", currentGameId);
         const lastPlayedId = localGameState.lastPlayedDominoId;
         if (!lastPlayedId) return;
@@ -1859,7 +1801,6 @@
     });
 
     dom.themeSwitcher.addEventListener('change', async (e) => {
-        playSound('click');
         if (currentGameId) {
             const gameRef = doc(db, "games", currentGameId);
             await updateDoc(gameRef, { currentTheme: e.target.value });
