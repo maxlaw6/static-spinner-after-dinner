@@ -100,7 +100,8 @@
             left: 0; /* Position is now handled by transform */
             opacity: 0.95;
             pointer-events: none;
-            transform-origin: top left; /* Match transform logic */
+            transform-origin: center center; /* FIX: Changed to center to match JS logic */
+            will-change: transform;
         }
         
         /* Mini Domino Styles for Opponent Hands */
@@ -1407,14 +1408,15 @@
 
         originalDominoElement.style.opacity = '0.3';
 
-        // FIX: Always use a scale of 1 for the dragged element for visibility.
         const dragScale = 1.0; 
-
         const scaledWidth = DOMINO_WIDTH * dragScale;
         const scaledHeight = DOMINO_HEIGHT * dragScale;
         const initialLeft = coords.clientX - scaledWidth / 2;
         const initialTop = coords.clientY - scaledHeight / 2;
-        activeDominoElement.style.transform = `translate(${initialLeft}px, ${initialTop}px) scale(${dragScale})`;
+        
+        // FIX: Preserve rotation and use translate3d to prevent rendering glitches
+        const currentRotation = draggedDominoData.rotation || 0;
+        activeDominoElement.style.transform = `translate3d(${initialLeft}px, ${initialTop}px, 0) scale(${dragScale}) rotate(${currentRotation}deg)`;
 
         updateActionStatus(`${localGameState.players[currentPlayerId].name} is moving a tile...`);
         
@@ -1435,13 +1437,15 @@
             wasDragged = true;
         }
         
-        // FIX: Always use a scale of 1 for the dragged element.
         const dragScale = 1.0;
         const scaledWidth = DOMINO_WIDTH * dragScale;
         const scaledHeight = DOMINO_HEIGHT * dragScale;
         const newLeft = coords.clientX - scaledWidth / 2;
         const newTop = coords.clientY - scaledHeight / 2;
-        activeDominoElement.style.transform = `translate(${newLeft}px, ${newTop}px) scale(${dragScale})`;
+
+        // FIX: Preserve rotation and use translate3d
+        const currentRotation = draggedDominoData.rotation || 0;
+        activeDominoElement.style.transform = `translate3d(${newLeft}px, ${newTop}px, 0) scale(${dragScale}) rotate(${currentRotation}deg)`;
     }
 
     async function endDominoDrag(e, origin, moveHandler, endHandler) {
