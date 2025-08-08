@@ -51,8 +51,9 @@
             left: 50%;
             top: 50%;
             transform: translate(-50%, -50%);
-            width: 42px;
-            height: 82px;
+            /* Adjusted to perfectly frame the starting domino */
+            width: 44px;
+            height: 84px;
             border: 2px dashed rgba(255, 255, 255, 0.4);
             border-radius: 8px;
         }
@@ -71,7 +72,6 @@
             box-shadow: 0 2px 5px rgba(0,0,0,0.2), inset 0 0 2px rgba(0,0,0,0.2);
             transform-origin: center center;
             color: #1a1a1a;
-            /* UPDATED: Smooth transition for transform property */
             transition: box-shadow 0.2s ease, transform 0.25s ease, top 0.3s ease, left 0.3s ease;
             -webkit-tap-highlight-color: transparent; /* Remove tap highlight on iOS */
         }
@@ -139,7 +139,6 @@
             border-radius: 50%;
             border: 1px solid rgba(0,0,0,0.1);
             box-shadow: inset 0 1px 2px rgba(0,0,0,0.3);
-            /* Fix for scaling artifacts during zoom */
             backface-visibility: hidden;
             transform: translateZ(0);
         }
@@ -160,7 +159,7 @@
             grid-column: 1 / -1;
             grid-row: 1 / -1;
             display: flex;
-            flex-direction: column; /* Reverted for vertical stacking */
+            flex-direction: column;
             align-items: center;
             justify-content: center;
             font-size: 11px;
@@ -1467,7 +1466,9 @@
     async function endDominoDrag(e, origin, moveHandler, endHandler) {
         document.removeEventListener('mousemove', moveHandler);
         document.removeEventListener('touchmove', moveHandler);
-        updateActionStatus(null);
+        
+        // BUG FIX: The action status should only be cleared inside the transaction
+        // updateActionStatus(null); 
 
         if (!isDraggingDomino) return;
         
@@ -1494,7 +1495,8 @@
                 if (boardIndex > -1) {
                     newMoveHistory.push({ type: 'rotate', dominoId: draggedDominoData.dominoData.id, from: newBoardDominos[boardIndex].rotation });
                     newBoardDominos[boardIndex].rotation = newRotation;
-                    transaction.update(gameRef, { boardDominos: newBoardDominos, moveHistory: newMoveHistory });
+                    // Also clear action status here
+                    transaction.update(gameRef, { boardDominos: newBoardDominos, moveHistory: newMoveHistory, actionStatus: null });
                 }
             });
         } else if (wasDragged) {
@@ -1502,7 +1504,8 @@
             const worldRect = dom.worldElement.getBoundingClientRect();
 
             if (origin === 'hand' && (coords.clientX < worldRect.left || coords.clientX > worldRect.right || coords.clientY < worldRect.top || coords.clientY > worldRect.bottom)) {
-                // Dropped outside, do nothing
+                // Dropped outside, clear action status without making a move
+                await updateActionStatus(null);
             } else {
                 const mouseXOnBoard = (coords.clientX - worldRect.left) / zoomLevel + boardPosition.x;
                 const mouseYOnBoard = (coords.clientY - worldRect.top) / zoomLevel + boardPosition.y;
@@ -1523,9 +1526,10 @@
                     if (!isCorrectDouble && !isDoubleSpinner) {
                         isValidPlacement = false;
                         showMessage(`Must start with Double ${required} or Double Spinner!`);
+                        await updateActionStatus(null); // Clear status on invalid move
                     } else {
-                        newX = (BOARD_SIZE / 2) - (DOMINO_HEIGHT / 2);
-                        newY = (BOARD_SIZE / 2) - (DOMINO_WIDTH / 2);
+                        newX = (BOARD_SIZE / 2) - (DOMINO_WIDTH / 2);
+                        newY = (BOARD_SIZE / 2) - (DOMINO_HEIGHT / 2) + 20; // Adjusted for visual centering
                         newRotation = 90;
                     }
                 }
@@ -1571,7 +1575,8 @@
                                             gameStatus: isGameOver ? 'finished' : 'round-over',
                                             roundEndInfo: { winnerId: winnerPlayerId, points: roundPoints },
                                             turnState: 'WAITING',
-                                            log: newLog
+                                            log: newLog,
+                                            actionStatus: null
                                         });
                                     } else {
                                         transaction.update(gameRef, {
@@ -1580,7 +1585,8 @@
                                             turnState: 'PLACED',
                                             moveHistory: [],
                                             lastPlayedDominoId: playedDomino.id,
-                                            log: newLog
+                                            log: newLog,
+                                            actionStatus: null
                                         });
                                     }
                                 }
@@ -1590,7 +1596,7 @@
                                     newMoveHistory.push({ type: 'reposition', dominoId: draggedDominoData.dominoData.id, from: { x: newBoardDominos[boardIndex].x, y: newBoardDominos[boardIndex].y } });
                                     newBoardDominos[boardIndex].x = newX;
                                     newBoardDominos[boardIndex].y = newY;
-                                    transaction.update(gameRef, { boardDominos: newBoardDominos, moveHistory: newMoveHistory });
+                                    transaction.update(gameRef, { boardDominos: newBoardDominos, moveHistory: newMoveHistory, actionStatus: null });
                                 }
                             }
                         });
@@ -1600,6 +1606,9 @@
                     }
                 }
             }
+        } else {
+            // It was not a drag, just a click, so clear the status
+             await updateActionStatus(null);
         }
         
         // Cleanup drag elements
