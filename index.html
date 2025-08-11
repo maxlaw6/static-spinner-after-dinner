@@ -998,19 +998,43 @@
             let newPlayerIndex;
             let newMustDraw = false;
 
-            if (currentData.roundNumber > 0 && currentData.roundEndInfo?.winnerId) {
-                newPlayerIndex = playerIds.indexOf(currentData.roundEndInfo.winnerId);
-                if (newPlayerIndex === -1) { // Fallback if winner left
-                    const starterInfo = findRoundStarter(updatedPlayers, playerIds, newStartingDouble);
-                    newPlayerIndex = starterInfo.playerIndex;
-                    newMustDraw = starterInfo.mustDraw;
-                }
-            } else {
-                const starterInfo = findRoundStarter(updatedPlayers, playerIds, newStartingDouble);
-                newPlayerIndex = starterInfo.playerIndex;
-                newMustDraw = starterInfo.mustDraw;
-            }
+            // --- MODIFICATION START ---
+            // This logic now implements the user's requested turn order.
+            // 1. Check for a player with the required tile.
+            const tileStarterIndex = findRoundStarter(updatedPlayers, playerIds, newStartingDouble);
 
+            if (tileStarterIndex !== -1) {
+                // If a player has the required double or spinner, they start.
+                newPlayerIndex = tileStarterIndex;
+                newMustDraw = false;
+            } else {
+                // If no one has the required tile, the logic falls back.
+                const previousWinnerId = currentData.roundEndInfo?.winnerId;
+                const previousWinnerIndex = playerIds.indexOf(previousWinnerId);
+
+                if (newRoundNumber > 1 && previousWinnerId && previousWinnerIndex !== -1) {
+                    // If it's not the first round and there's a valid previous winner, they start by drawing.
+                    newPlayerIndex = previousWinnerIndex;
+                    newMustDraw = true;
+                } else {
+                    // Fallback for Round 1 or if the previous winner left the game.
+                    // The player with the highest hand value starts by drawing.
+                    let highestScore = -1;
+                    let highestScoreIndex = -1;
+                    for (let i = 0; i < playerIds.length; i++) {
+                        const pid = playerIds[i];
+                        const handValue = calculateHandValue(updatedPlayers[pid].hand);
+                        if (handValue > highestScore) {
+                            highestScore = handValue;
+                            highestScoreIndex = i;
+                        }
+                    }
+                    newPlayerIndex = highestScoreIndex;
+                    newMustDraw = true;
+                }
+            }
+            // --- MODIFICATION END ---
+            
             transaction.update(gameRef, {
                 gameStatus: 'in-progress',
                 players: updatedPlayers,
@@ -1032,42 +1056,32 @@
     }
     
     function findRoundStarter(players, playerOrder, requiredDoubleValue) {
-        let starterIndex = -1;
-        let mustDraw = false;
-
+        // --- MODIFICATION START ---
+        // This function is now simplified. It ONLY looks for players with the required tiles.
+        // It returns the index of the player if found, or -1 if not.
+        // The fallback logic (previous winner, highest hand) is now handled in startRound().
         const hasSpecificDouble = (hand, val) => hand.some(d => d.top === val && d.bottom === val);
         const hasDoubleSpinner = (hand) => hand.some(d => d.top === SPINNER_VALUE && d.bottom === SPINNER_VALUE);
 
+        // First, check for the required double for the round (e.g., 9-9, 8-8, etc.)
         for (let i = 0; i < playerOrder.length; i++) {
             const pid = playerOrder[i];
             if (hasSpecificDouble(players[pid].hand, requiredDoubleValue)) {
-                starterIndex = i;
-                break;
+                return i; // Found a starter
             }
-        }
-        if (starterIndex === -1) {
-            for (let i = 0; i < playerOrder.length; i++) {
-                const pid = playerOrder[i];
-                if (hasDoubleSpinner(players[pid].hand)) {
-                    starterIndex = i;
-                    break;
-                }
-            }
-        }
-        if (starterIndex === -1) {
-            let highestScore = -1;
-            for (let i = 0; i < playerOrder.length; i++) {
-                const pid = playerOrder[i];
-                const handValue = calculateHandValue(players[pid].hand);
-                if (handValue > highestScore) {
-                    highestScore = handValue;
-                    starterIndex = i;
-                }
-            }
-            mustDraw = true;
         }
         
-        return { playerIndex: starterIndex, mustDraw };
+        // If no one has it, check for the double spinner
+        for (let i = 0; i < playerOrder.length; i++) {
+            const pid = playerOrder[i];
+            if (hasDoubleSpinner(players[pid].hand)) {
+                return i; // Found a starter
+            }
+        }
+
+        // If no one has either tile, return -1 to signal a fallback is needed.
+        return -1;
+        // --- MODIFICATION END ---
     }
     
     async function drawFromBoneyard() {
@@ -1224,7 +1238,7 @@
                         dom.endTurnButton.classList.remove('hidden');
                         dom.endTurnButton.disabled = false;
                     } else if(gameState.mustDrawToStart) {
-                        statusText = "You have the highest hand. Draw to find the starting double.";
+                        statusText = "You must draw to start the round.";
                     } else if (gameState.boardDominos.length === 0) {
                         statusText = `You must play the Double ${gameState.currentStartingDouble} or Double Spinner.`;
                     } else {
