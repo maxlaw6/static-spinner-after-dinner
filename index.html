@@ -552,7 +552,7 @@
                 <button class="w-full bg-blue-600 hover:bg-blue-700 font-bold py-3 px-4 rounded transition-colors" disabled id="join-game-button">Find Game</button>
             </div>
 
-            <!-- MODIFIED: Host's Local Player Setup View -->
+            <!-- Host's Local Player Setup View -->
             <div id="local-player-setup-view" class="hidden">
                 <p class="text-center text-gray-400 mb-4">You (the host) are Player 1. Add other local players below.</p>
                 <div class="mb-4">
@@ -568,7 +568,18 @@
                  <button class="w-full bg-gray-500 hover:bg-gray-600 font-bold py-3 px-4 rounded transition-colors" id="back-to-mode-selection-button">Back</button>
             </div>
 
-            <!-- NEW: Joiner's Group Setup View -->
+            <!-- NEW: Join Type Selection View -->
+            <div id="join-type-selection-view" class="hidden">
+                <h2 class="text-2xl font-bold text-center mb-4">How are you joining?</h2>
+                <p class="text-center text-gray-400 mb-6">Joining game: <span id="join-type-game-id-display"></span></p>
+                <div class="flex flex-col gap-4">
+                    <button id="join-as-single-player-button" class="w-full bg-blue-600 hover:bg-blue-700 font-bold py-3 px-4 rounded transition-colors">Join as Single Player</button>
+                    <button id="join-as-group-button" class="w-full bg-purple-600 hover:bg-purple-700 font-bold py-3 px-4 rounded transition-colors">Join as a Local Group</button>
+                    <button id="back-to-lobby-button" class="w-full bg-gray-500 hover:bg-gray-600 font-bold py-3 px-4 rounded transition-colors mt-4">Back</button>
+                </div>
+            </div>
+
+            <!-- Joiner's Group Setup View -->
             <div id="join-group-setup-view" class="hidden">
                 <h2 class="text-2xl font-bold text-center mb-4">Joining Game: <span id="joining-game-id-display"></span></h2>
                 <p class="text-center text-gray-400 mb-4">You are Player 1 for your group. Add other local players from your device below.</p>
@@ -772,6 +783,11 @@
         backToModeSelectionButton: document.getElementById('back-to-mode-selection-button'),
 
         // NEW: Joiner Group Setup DOM Elements
+        joinTypeSelectionView: document.getElementById('join-type-selection-view'),
+        joinTypeGameIdDisplay: document.getElementById('join-type-game-id-display'),
+        joinAsSinglePlayerButton: document.getElementById('join-as-single-player-button'),
+        joinAsGroupButton: document.getElementById('join-as-group-button'),
+        backToLobbyButton: document.getElementById('back-to-lobby-button'),
         joinGroupSetupView: document.getElementById('join-group-setup-view'),
         joiningGameIdDisplay: document.getElementById('joining-game-id-display'),
         joinerLocalPlayerNameInput: document.getElementById('joiner-local-player-name-input'),
@@ -880,6 +896,7 @@
         dom.joinGameFlow.classList.remove('hidden');
         dom.localPlayerSetupView.classList.add('hidden');
         dom.joinGroupSetupView.classList.add('hidden');
+        dom.joinTypeSelectionView.classList.add('hidden');
     }
 
     function showHostHybridSetup() {
@@ -889,7 +906,6 @@
         updateLocalPlayerList();
     }
     
-    // MODIFIED: Functions to manage the HOST's local player list
     function addLocalPlayer() {
         const name = dom.localPlayerNameInput.value.trim();
         if (name && localPlayers.length < 7) {
@@ -922,7 +938,6 @@
         dom.createHybridGameButton.disabled = localPlayers.length === 0;
     }
 
-    // NEW: Functions to manage the JOINER's local player list
     function addJoinerLocalPlayer() {
         const name = dom.joinerLocalPlayerNameInput.value.trim();
         if (name && joinerLocalPlayers.length < 7) {
@@ -954,7 +969,6 @@
         }
     }
 
-    // MODIFIED: Create game is now simpler
     const handleCreateOnlineGame = async () => {
         if (!currentPlayerId) return;
         const playerName = dom.playerNameInput.value.trim() || `Player ${currentPlayerId.substring(0, 4)}`;
@@ -1002,7 +1016,6 @@
         await joinGame(gameId);
     }
 
-    // MODIFIED: `handleJoinGame` now triggers the group setup flow.
     const handleFindGame = async () => {
         const gameId = dom.joinGameIdInput.value.trim().toUpperCase();
         if (!gameId) {
@@ -1018,15 +1031,50 @@
             return;
         }
         
-        // Show the group setup view for the joiner
+        // Show the join type selection screen
         dom.createGameFlow.classList.add('hidden');
         dom.joinGameFlow.classList.add('hidden');
+        dom.joinTypeSelectionView.classList.remove('hidden');
+        dom.joinTypeGameIdDisplay.textContent = gameId;
+    };
+
+    const handleJoinAsSinglePlayer = async () => {
+        const gameId = dom.joinTypeGameIdDisplay.textContent;
+        const playerName = dom.playerNameInput.value.trim() || `Player ${currentPlayerId.substring(0, 4)}`;
+        const gameRef = doc(db, "games", gameId);
+
+        try {
+            await runTransaction(db, async (transaction) => {
+                const gameSnap = await transaction.get(gameRef);
+                if (!gameSnap.exists()) throw new Error("Game not found.");
+                const gameData = gameSnap.data();
+
+                if (Object.keys(gameData.players).length >= 8) {
+                    throw new Error("This game is full.");
+                }
+
+                const newPlayer = { id: currentPlayerId, controller: currentPlayerId, name: playerName, score: 0, hand: [], isHost: false };
+                transaction.update(gameRef, {
+                    [`players.${currentPlayerId}`]: newPlayer,
+                    playerOrder: [...gameData.playerOrder, currentPlayerId]
+                });
+            });
+            await joinGame(gameId);
+        } catch (error) {
+            console.error("Error joining as single player:", error);
+            showMessage(error.message);
+            showMainLobbyView();
+        }
+    };
+
+    const handleShowJoinAsGroup = () => {
+        const gameId = dom.joinTypeGameIdDisplay.textContent;
+        dom.joinTypeSelectionView.classList.add('hidden');
         dom.joinGroupSetupView.classList.remove('hidden');
         dom.joiningGameIdDisplay.textContent = gameId;
         updateJoinerLocalPlayerList();
     };
 
-    // NEW: Finalizes joining with a group.
     const handleConfirmJoinGroup = async () => {
         if (!currentPlayerId) return;
         const gameId = dom.joiningGameIdDisplay.textContent;
@@ -1043,11 +1091,9 @@
                 const newPlayers = {};
                 const newPlayerOrder = [];
 
-                // Add the main joining player
                 newPlayers[`players.${currentPlayerId}`] = { id: currentPlayerId, controller: currentPlayerId, name: playerName, score: 0, hand: [], isHost: false };
                 newPlayerOrder.push(currentPlayerId);
 
-                // Add the local players for the joiner
                 joinerLocalPlayers.forEach((p, i) => {
                     const localId = `local_${Date.now()}_${i}`;
                     newPlayers[`players.${localId}`] = { id: localId, controller: currentPlayerId, name: p.name, score: 0, hand: [], isHost: false };
@@ -1069,7 +1115,7 @@
         } catch (error) {
             console.error("Error joining game with group:", error);
             showMessage(error.message);
-            showMainLobbyView(); // Go back to lobby on error
+            showMainLobbyView();
         }
     };
 
@@ -1082,6 +1128,10 @@
     dom.createHybridGameButton.addEventListener('click', handleCreateHybridGame);
     
     dom.joinGameButton.addEventListener('click', handleFindGame);
+    dom.joinAsSinglePlayerButton.addEventListener('click', handleJoinAsSinglePlayer);
+    dom.joinAsGroupButton.addEventListener('click', handleShowJoinAsGroup);
+    dom.backToLobbyButton.addEventListener('click', showMainLobbyView);
+
     dom.addJoinerLocalPlayerButton.addEventListener('click', addJoinerLocalPlayer);
     dom.joinerLocalPlayerNameInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') addJoinerLocalPlayer(); });
     dom.confirmJoinGroupButton.addEventListener('click', handleConfirmJoinGroup);
