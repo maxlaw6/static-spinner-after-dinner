@@ -886,8 +886,8 @@
         dom.loadingScreen.classList.add('hidden');
         dom.setupScreen.classList.remove('hidden');
         dom.joinGameButton.disabled = false;
-        dom.modeOnlineButton.disabled = false; // BUG FIX
-        dom.modeHybridButton.disabled = false; // BUG FIX
+        dom.modeOnlineButton.disabled = false;
+        dom.modeHybridButton.disabled = false;
     }
 
     // --- Lobby and Game Setup ---
@@ -1055,14 +1055,12 @@
                 }
 
                 const newPlayer = { id: currentPlayerId, controller: currentPlayerId, name: playerName, score: 0, hand: [], isHost: false };
-                
-                // MODIFIED: Use a robust way to update the players object
-                const updatedPlayers = { ...gameData.players, [currentPlayerId]: newPlayer };
-                const updatedPlayerOrder = [...gameData.playerOrder, currentPlayerId];
+                const newPlayerOrder = [...gameData.playerOrder, currentPlayerId];
 
+                // BUG FIX: Use dot notation for updating the nested player object
                 transaction.update(gameRef, {
-                    players: updatedPlayers,
-                    playerOrder: updatedPlayerOrder
+                    [`players.${currentPlayerId}`]: newPlayer,
+                    playerOrder: newPlayerOrder
                 });
             });
             await joinGame(gameId);
@@ -1094,17 +1092,17 @@
                 if (!gameSnap.exists()) throw new Error("Game not found.");
                 
                 const gameData = gameSnap.data();
-                let updatedPlayers = { ...gameData.players };
+                const updates = {};
                 const newPlayerIds = [];
 
                 // Add the main joining player
-                updatedPlayers[currentPlayerId] = { id: currentPlayerId, controller: currentPlayerId, name: playerName, score: 0, hand: [], isHost: false };
+                updates[`players.${currentPlayerId}`] = { id: currentPlayerId, controller: currentPlayerId, name: playerName, score: 0, hand: [], isHost: false };
                 newPlayerIds.push(currentPlayerId);
 
                 // Add the local players for the joiner
                 joinerLocalPlayers.forEach((p, i) => {
                     const localId = `local_${Date.now()}_${i}`;
-                    updatedPlayers[localId] = { id: localId, controller: currentPlayerId, name: p.name, score: 0, hand: [], isHost: false };
+                    updates[`players.${localId}`] = { id: localId, controller: currentPlayerId, name: p.name, score: 0, hand: [], isHost: false };
                     newPlayerIds.push(localId);
                 });
 
@@ -1112,12 +1110,9 @@
                     throw new Error("This would exceed the maximum of 8 players.");
                 }
 
-                const updatedPlayerOrder = [...gameData.playerOrder, ...newPlayerIds];
+                updates.playerOrder = [...gameData.playerOrder, ...newPlayerIds];
 
-                transaction.update(gameRef, {
-                    players: updatedPlayers,
-                    playerOrder: updatedPlayerOrder
-                });
+                transaction.update(gameRef, updates);
             });
 
             await joinGame(gameId);
