@@ -80,7 +80,8 @@
             align-items: center;
             border-radius: 6px;
             cursor: grab;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2), inset 0 0 2px rgba(0,0,0,0.2);
+            /* FIXED: Removed inset shadow which muted the look */
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
             transform-origin: center center;
             color: #1a1a1a;
             transition: box-shadow 0.2s ease, transform 0.25s ease, top 0.3s ease, left 0.3s ease;
@@ -473,8 +474,6 @@
     </style>
 </head>
 <body class="text-white">
-
-<!-- **FIXED**: Removed the SVG definitions block. The colors are now handled in JavaScript for better vibrancy. -->
 
 <!-- Message Modal -->
 <div id="message-modal" class="hidden">
@@ -1212,7 +1211,7 @@
     // --- Main Game State Handler ---
     function handleGameStateUpdate(gameState) {
         const oldTheme = localGameState.currentTheme;
-        const wasWaiting = localGameState.gameStatus === 'waiting';
+        const oldStatus = localGameState.gameStatus; // Capture old status
 
         localGameState = gameState;
         
@@ -1271,7 +1270,9 @@
             if (oldTheme !== gameState.currentTheme) {
                 dom.themeSwitcher.value = gameState.currentTheme;
             }
-            if (wasWaiting && gameState.gameStatus === 'in-progress') {
+            // **FIXED**: Center board on first round start AND subsequent round starts.
+            if ((oldStatus === 'waiting' || oldStatus === 'round-starting') && gameState.gameStatus === 'in-progress') {
+                // Using a timeout within rAF ensures layout has been calculated.
                 requestAnimationFrame(() => setTimeout(centerBoardOnStart, 0));
             }
             dom.reDealButton.classList.toggle('hidden', !isHost);
@@ -1308,6 +1309,8 @@
         const { roundNumber, roundStartInfo } = gameState;
         const starter = gameState.players[roundStartInfo.starterId];
         
+        // **FIXED**: Ensure round-end screen is hidden when round-start screen appears.
+        dom.roundEndScreen.classList.add('hidden');
         dom.gameContainer.classList.add('hidden');
         dom.roundStartNumber.textContent = roundNumber;
         dom.roundStarterName.textContent = starter.name;
@@ -1773,12 +1776,10 @@
         
         if (gameState.gameStatus === 'finished') {
             dom.gameOverScreen.classList.remove('hidden');
-            // **FIXED**: Don't hide the game container, the modal is an overlay
             dom.roundEndScreen.classList.add('hidden');
             return;
         }
 
-        // **FIXED**: Don't hide the game container, the modal is an overlay
         dom.roundEndScreen.classList.remove('hidden');
 
         const { winnerId, points } = gameState.roundEndInfo;
@@ -1800,7 +1801,6 @@
     }
 
     function showFinalScores(gameState) {
-        // **FIXED**: Don't hide the game container, the modal is an overlay
         dom.roundEndScreen.classList.add('hidden');
         dom.gameOverScreen.classList.remove('hidden');
 
@@ -1847,7 +1847,6 @@
         return dominoElement;
     }
     
-    // **FIXED**: Replaced gradients with a vibrant, solid color palette for pips.
     const PIP_COLORS = [
         '#E0E0E0', // 0 - light grey
         '#FBC02D', // 1 - yellow
@@ -1909,8 +1908,7 @@
                 circle.setAttribute('cy', cy);
                 circle.setAttribute('r', 4.5);
                 circle.setAttribute('fill', PIP_COLORS[count] || '#000000');
-                circle.setAttribute('stroke', 'rgba(0,0,0,0.2)');
-                circle.setAttribute('stroke-width', '0.5');
+                // **FIXED**: Removed stroke for a cleaner, more vibrant look
                 svg.appendChild(circle);
             });
         }
