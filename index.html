@@ -277,7 +277,7 @@
             pointer-events: auto;
             cursor: pointer;
             border: 1px solid white;
-            box-shadow: 0 0 5px rgba(255,255,255,0.6);
+            box-shadow: 0 0 3px rgba(255,255,255,0.4); /* Reduced glow */
             transform-origin: center;
         }
         .player-hand-section {
@@ -719,6 +719,11 @@
                     </div>
                 </div>
             </div>
+            <!-- NEW: Zoom Controls -->
+            <div id="zoom-controls" class="absolute bottom-4 right-4 z-10 flex flex-col gap-2">
+                <button id="zoom-in-button" class="w-10 h-10 bg-gray-900 bg-opacity-70 rounded-full text-white text-2xl font-bold flex items-center justify-center shadow-lg hover:bg-opacity-90 transition-all">+</button>
+                <button id="zoom-out-button" class="w-10 h-10 bg-gray-900 bg-opacity-70 rounded-full text-white text-2xl font-bold flex items-center justify-center shadow-lg hover:bg-opacity-90 transition-all">-</button>
+            </div>
         </div>
     </div>
 </div>
@@ -782,6 +787,8 @@
         validateMoveButton: document.getElementById('validate-move-button'),
         challengeMoveButton: document.getElementById('challenge-move-button'),
         detailedScoreboardContent: document.getElementById('detailed-scoreboard-content'),
+        zoomInButton: document.getElementById('zoom-in-button'),
+        zoomOutButton: document.getElementById('zoom-out-button'),
         
         // MODIFIED: Lobby DOM Elements
         createGameFlow: document.getElementById('create-game-flow'),
@@ -830,8 +837,9 @@
     let localPlayers = []; // For host
     let joinerLocalPlayers = []; // NEW: For joiner
 
+    const PLAYER_COLORS = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#FED766', '#F0B37E', '#8A6F52', '#9B59B6', '#3498DB'];
     const SPINNER_VALUE = -1;
-    const BOARD_SIZE = 4000; // MODIFIED: Increased board size
+    const BOARD_SIZE = 4000;
     const DOMINO_WIDTH = 80;
     const DOMINO_HEIGHT = 40;
     
@@ -1019,6 +1027,11 @@
         const gameId = tempGameRef.id.substring(0, 6).toUpperCase();
         const gameRef = doc(db, "games", gameId);
 
+        // Assign colors to initial players
+        playerOrder.forEach((pid, index) => {
+            players[pid].color = PLAYER_COLORS[index % PLAYER_COLORS.length];
+        });
+
         const initialGameState = {
             players, playerOrder, gameStatus: 'waiting', boardDominos: [], boneyard: [],
             currentPlayerIndex: 0, roundNumber: 0, currentStartingDouble: 9, turnState: 'WAITING',
@@ -1068,9 +1081,10 @@
                     throw new Error("This game is full.");
                 }
 
-                const newPlayer = { id: currentPlayerId, controller: currentPlayerId, name: playerName, score: 0, hand: [], isHost: false };
+                const playerCount = gameData.playerOrder.length;
+                const newPlayerColor = PLAYER_COLORS[playerCount % PLAYER_COLORS.length];
+                const newPlayer = { id: currentPlayerId, controller: currentPlayerId, name: playerName, score: 0, hand: [], isHost: false, color: newPlayerColor };
                 
-                // BUG FIX: Use dot notation for updating the nested player object
                 transaction.update(gameRef, {
                     [`players.${currentPlayerId}`]: newPlayer,
                     playerOrder: [...gameData.playerOrder, currentPlayerId]
@@ -1105,17 +1119,22 @@
                 if (!gameSnap.exists()) throw new Error("Game not found.");
                 
                 const gameData = gameSnap.data();
+                let playerCount = gameData.playerOrder.length;
                 const updates = {};
                 const newPlayerIds = [];
 
                 // Add the main joining player
-                updates[`players.${currentPlayerId}`] = { id: currentPlayerId, controller: currentPlayerId, name: playerName, score: 0, hand: [], isHost: false };
+                const mainPlayerColor = PLAYER_COLORS[playerCount % PLAYER_COLORS.length];
+                playerCount++;
+                updates[`players.${currentPlayerId}`] = { id: currentPlayerId, controller: currentPlayerId, name: playerName, score: 0, hand: [], isHost: false, color: mainPlayerColor };
                 newPlayerIds.push(currentPlayerId);
 
                 // Add the local players for the joiner
                 joinerLocalPlayers.forEach((p, i) => {
                     const localId = `local_${Date.now()}_${i}`;
-                    updates[`players.${localId}`] = { id: localId, controller: currentPlayerId, name: p.name, score: 0, hand: [], isHost: false };
+                    const localPlayerColor = PLAYER_COLORS[playerCount % PLAYER_COLORS.length];
+                    playerCount++;
+                    updates[`players.${localId}`] = { id: localId, controller: currentPlayerId, name: p.name, score: 0, hand: [], isHost: false, color: localPlayerColor };
                     newPlayerIds.push(localId);
                 });
 
@@ -1219,7 +1238,6 @@
         
         // Handle modals first, as they take precedence over the main game view
         if (gameState.gameStatus === 'round-starting') {
-            // FIX: Hide the setup/lobby screen when the round-starting modal is shown.
             dom.setupScreen.classList.add('hidden');
             showRoundStartScreen(gameState);
             return;
@@ -1274,7 +1292,7 @@
                 dom.themeSwitcher.value = gameState.currentTheme;
             }
             if (wasWaiting && gameState.gameStatus === 'in-progress') {
-                centerBoardOnStart();
+                setTimeout(centerBoardOnStart, 0);
             }
             dom.reDealButton.classList.toggle('hidden', !isHost);
             renderGameUI(gameState);
@@ -1665,7 +1683,7 @@
             }
 
             const title = document.createElement('h3');
-            title.className = 'font-bold text-center mb-2 text-sm';
+            title.className = 'font-bold text-center mb-2 text-sm flex items-center justify-center';
             
             let nameTag = '';
             if (isMyOwnData) {
@@ -1675,7 +1693,19 @@
             } else if (playerData.isHost) {
                  nameTag = '(Host)';
             }
-            title.textContent = `${playerData.name} ${nameTag} (${playerData.hand.length})`;
+            
+            const colorDot = document.createElement('span');
+            colorDot.style.display = 'inline-block';
+            colorDot.style.width = '10px';
+            colorDot.style.height = '10px';
+            colorDot.style.borderRadius = '50%';
+            colorDot.style.backgroundColor = playerData.color || '#FFFFFF';
+            colorDot.style.marginRight = '8px';
+            colorDot.style.border = '1px solid rgba(255,255,255,0.5)';
+            
+            title.appendChild(colorDot);
+            title.appendChild(document.createTextNode(`${playerData.name} ${nameTag} (${playerData.hand.length})`));
+
 
             const handDiv = document.createElement('div');
             handDiv.className = 'player-hand-content';
@@ -1759,6 +1789,8 @@
             return;
         }
 
+        // Fix: Ensure other modals are hidden
+        dom.setupScreen.classList.add('hidden'); 
         dom.gameContainer.classList.add('hidden');
         dom.roundEndScreen.classList.remove('hidden');
 
@@ -1905,15 +1937,14 @@
 
         originalDominoElement.style.opacity = '0.3';
 
+        // The ghost element's transform origin is center. We position its top-left
+        // corner such that its center is under the cursor.
         const initialLeft = coords.clientX - (DOMINO_WIDTH / 2);
         const initialTop = coords.clientY - (DOMINO_HEIGHT / 2);
         
         const currentRotation = draggedDominoData.rotation || 0;
-        // MODIFIED: Apply zoom level to the ghost image's scale
+        // Apply scale and rotation. The element will scale from its center.
         activeDominoElement.style.transform = `translate3d(${initialLeft}px, ${initialTop}px, 0) scale(${zoomLevel}) rotate(${currentRotation}deg)`;
-        activeDominoElement.style.width = `${DOMINO_WIDTH * zoomLevel}px`;
-        activeDominoElement.style.height = `${DOMINO_HEIGHT * zoomLevel}px`;
-
 
         dom.gameStatusElement.textContent = `Moving a tile...`;
         
@@ -1934,11 +1965,10 @@
             wasDragged = true;
         }
         
-        const newLeft = coords.clientX - ((DOMINO_WIDTH * zoomLevel) / 2);
-        const newTop = coords.clientY - ((DOMINO_HEIGHT * zoomLevel) / 2);
+        const newLeft = coords.clientX - (DOMINO_WIDTH / 2);
+        const newTop = coords.clientY - (DOMINO_HEIGHT / 2);
 
         const currentRotation = draggedDominoData.rotation || 0;
-        // MODIFIED: Apply zoom level to the ghost image's scale during drag
         activeDominoElement.style.transform = `translate3d(${newLeft}px, ${newTop}px, 0) scale(${zoomLevel}) rotate(${currentRotation}deg)`;
     }
 
@@ -2022,7 +2052,6 @@
                             let newLog = [...(gameState.log || [])];
                             let newMoveHistory = [...(gameState.moveHistory || [])];
 
-                            // BUG FIX: Use the ID of the player whose turn it actually is, not the device controller's ID.
                             const currentTurnPlayerId = gameState.playerOrder[gameState.currentPlayerIndex];
                             const currentTurnPlayer = gameState.players[currentTurnPlayerId];
 
@@ -2031,7 +2060,13 @@
                                 const handIndex = playerHand.findIndex(d => d.id === draggedDominoData.dominoData.id);
                                 if (handIndex > -1) {
                                     const playedDomino = playerHand.splice(handIndex, 1)[0];
-                                    newBoardDominos.push({ dominoData: playedDomino, x: newX, y: newY, rotation: newRotation });
+                                    newBoardDominos.push({ 
+                                        dominoData: playedDomino, 
+                                        x: newX, 
+                                        y: newY, 
+                                        rotation: newRotation,
+                                        playerId: currentTurnPlayerId // Add player ID to the domino
+                                    });
                                     
                                     newLog.push(`${currentTurnPlayer.name} played a tile.`);
                                     if (newLog.length > 5) newLog.shift();
@@ -2110,6 +2145,12 @@
             dot.style.left = `${(domino.x + DOMINO_WIDTH / 2) * scale}px`;
             dot.style.top = `${(domino.y + DOMINO_HEIGHT / 2) * scale}px`;
             
+            const player = localGameState.players[domino.playerId];
+            if (player && player.color) {
+                dot.style.backgroundColor = player.color;
+                dot.style.borderColor = player.color;
+            }
+
             dot.style.transform = `translate(-50%, -50%) rotate(${domino.rotation}deg)`;
 
             dot.addEventListener('click', (e) => {
@@ -2157,18 +2198,8 @@
         document.removeEventListener('mouseup', endPanMove);
     }
     
-    dom.worldElement.addEventListener('wheel', (e) => {
-        e.preventDefault();
-        handleZoom(e.deltaY * -0.01, e.clientX, e.clientY);
-    }, { passive: false });
-
     dom.worldElement.addEventListener('touchstart', (e) => {
-        if (e.touches.length === 2) {
-            e.preventDefault();
-            isPanning = true;
-            initialPinchDistance = getPinchDistance(e);
-            panStart = getAverageTouch(e);
-        } else if (e.touches.length === 1 && !isDraggingDomino) {
+        if (e.touches.length === 1 && !isDraggingDomino) {
              if (e.target !== dom.worldElement && e.target !== dom.gameBoardElement && e.target.id !== 'world-wrapper') return;
              isPanning = true;
              dom.worldElement.classList.add('panning');
@@ -2178,23 +2209,7 @@
     }, { passive: false });
 
     dom.worldElement.addEventListener('touchmove', (e) => {
-        if (isPanning) {
-            e.preventDefault();
-        }
-        if (e.touches.length === 2 && isPanning) {
-            const newPinchDistance = getPinchDistance(e);
-            const zoomFactor = newPinchDistance / initialPinchDistance;
-            handleZoom(zoomFactor - 1, panStart.x, panStart.y);
-            initialPinchDistance = newPinchDistance;
-
-            const newAvgTouch = getAverageTouch(e);
-            const dx = newAvgTouch.x - panStart.x;
-            const dy = newAvgTouch.y - panStart.y;
-            boardPosition.x -= dx / zoomLevel;
-            boardPosition.y -= dy / zoomLevel;
-            panStart = newAvgTouch;
-            updateBoardTransform();
-        } else if (e.touches.length === 1 && isPanning) {
+        if (isPanning && e.touches.length === 1) {
             pan(e);
         }
     }, { passive: false });
@@ -2202,22 +2217,9 @@
     dom.worldElement.addEventListener('touchend', (e) => {
         if (e.touches.length < 2) {
             isPanning = false;
-            initialPinchDistance = null;
             dom.worldElement.classList.remove('panning');
         }
     });
-
-    function getPinchDistance(e) {
-        const t1 = e.touches[0];
-        const t2 = e.touches[1];
-        return Math.sqrt(Math.pow(t1.clientX - t2.clientX, 2) + Math.pow(t1.clientY - t2.clientY, 2));
-    }
-
-    function getAverageTouch(e) {
-        const t1 = e.touches[0];
-        const t2 = e.touches[1];
-        return { x: (t1.clientX + t2.clientX) / 2, y: (t1.clientY + t2.clientY) / 2 };
-    }
 
     function handleZoom(delta, clientX, clientY) {
         const rect = dom.worldElement.getBoundingClientRect();
@@ -2233,6 +2235,16 @@
         zoomLevel = newZoom;
         updateBoardTransform();
     }
+
+    function zoomWithControls(delta) {
+        const rect = dom.worldElement.getBoundingClientRect();
+        const centerX = rect.left + rect.width / 2;
+        const centerY = rect.top + rect.height / 2;
+        handleZoom(delta, centerX, centerY);
+    }
+
+    dom.zoomInButton.addEventListener('click', () => zoomWithControls(0.2));
+    dom.zoomOutButton.addEventListener('click', () => zoomWithControls(-0.2));
 
     dom.minimapContainer.addEventListener('click', (e) => {
         e.stopPropagation();
