@@ -418,24 +418,24 @@
         
         /* NEW: Styles for Local Player List */
         #local-player-list-item {
-             display: flex;
-             justify-content: space-between;
-             align-items: center;
-             background-color: #374151; /* bg-gray-700 */
-             padding: 4px 8px;
-             border-radius: 4px;
-         }
-         #local-player-list-item button {
-             background-color: #ef4444; /* bg-red-500 */
-             color: white;
-             border: none;
-             border-radius: 50%;
-             width: 20px;
-             height: 20px;
-             font-weight: bold;
-             line-height: 1;
-             cursor: pointer;
-         }
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              background-color: #374151; /* bg-gray-700 */
+              padding: 4px 8px;
+              border-radius: 4px;
+       }
+       #local-player-list-item button {
+              background-color: #ef4444; /* bg-red-500 */
+              color: white;
+              border: none;
+              border-radius: 50%;
+              width: 20px;
+              height: 20px;
+              font-weight: bold;
+              line-height: 1;
+              cursor: pointer;
+       }
 
 
         @media (max-width: 1024px) {
@@ -474,21 +474,7 @@
 </head>
 <body class="text-white">
 
-<!-- SVG definitions for 3D pips -->
-<svg width="0" height="0" style="position:absolute;z-index:-1;">
-    <defs>
-        <radialGradient id="pipGradient-0" cx="50%" cy="50%" r="65%" fx="35%" fy="35%"><stop offset="0%" style="stop-color:rgb(255,255,255);stop-opacity:0.7" /><stop offset="100%" style="stop-color:#cbd5e0;stop-opacity:1" /></radialGradient>
-        <radialGradient id="pipGradient-1" cx="50%" cy="50%" r="65%" fx="35%" fy="35%"><stop offset="0%" style="stop-color:rgb(255,255,255);stop-opacity:0.7" /><stop offset="100%" style="stop-color:#EADCA6;stop-opacity:1" /></radialGradient>
-        <radialGradient id="pipGradient-2" cx="50%" cy="50%" r="65%" fx="35%" fy="35%"><stop offset="0%" style="stop-color:rgb(255,255,255);stop-opacity:0.7" /><stop offset="100%" style="stop-color:#8B0000;stop-opacity:1" /></radialGradient>
-        <radialGradient id="pipGradient-3" cx="50%" cy="50%" r="65%" fx="35%" fy="35%"><stop offset="0%" style="stop-color:rgb(255,255,255);stop-opacity:0.7" /><stop offset="100%" style="stop-color:#800000;stop-opacity:1" /></radialGradient>
-        <radialGradient id="pipGradient-4" cx="50%" cy="50%" r="65%" fx="35%" fy="35%"><stop offset="0%" style="stop-color:rgb(255,255,255);stop-opacity:0.7" /><stop offset="100%" style="stop-color:#00BFFF;stop-opacity:1" /></radialGradient>
-        <radialGradient id="pipGradient-5" cx="50%" cy="50%" r="65%" fx="35%" fy="35%"><stop offset="0%" style="stop-color:rgb(255,255,255);stop-opacity:0.7" /><stop offset="100%" style="stop-color:#006400;stop-opacity:1" /></radialGradient>
-        <radialGradient id="pipGradient-6" cx="50%" cy="50%" r="65%" fx="35%" fy="35%"><stop offset="0%" style="stop-color:rgb(255,255,255);stop-opacity:0.7" /><stop offset="100%" style="stop-color:#000000;stop-opacity:1" /></radialGradient>
-        <radialGradient id="pipGradient-7" cx="50%" cy="50%" r="65%" fx="35%" fy="35%"><stop offset="0%" style="stop-color:rgb(255,255,255);stop-opacity:0.7" /><stop offset="100%" style="stop-color:#A0522D;stop-opacity:1" /></radialGradient>
-        <radialGradient id="pipGradient-8" cx="50%" cy="50%" r="65%" fx="35%" fy="35%"><stop offset="0%" style="stop-color:rgb(255,255,255);stop-opacity:0.7" /><stop offset="100%" style="stop-color:#9370DB;stop-opacity:1" /></radialGradient>
-        <radialGradient id="pipGradient-9" cx="50%" cy="50%" r="65%" fx="35%" fy="35%"><stop offset="0%" style="stop-color:rgb(255,255,255);stop-opacity:0.7" /><stop offset="100%" style="stop-color:#808080;stop-opacity:1" /></radialGradient>
-    </defs>
-</svg>
+<!-- **FIXED**: Removed the SVG definitions block. The colors are now handled in JavaScript for better vibrancy. -->
 
 <!-- Message Modal -->
 <div id="message-modal" class="hidden">
@@ -930,7 +916,7 @@
             dom.localPlayerNameInput.value = '';
             updateLocalPlayerList();
         } else if (localPlayers.length >= 7) {
-             showMessage("You can have a maximum of 8 players total (including you).");
+            showMessage("You can have a maximum of 8 players total (including you).");
         }
     }
 
@@ -962,7 +948,7 @@
             dom.joinerLocalPlayerNameInput.value = '';
             updateJoinerLocalPlayerList();
         } else if (joinerLocalPlayers.length >= 7) {
-             showMessage("You can have a maximum of 8 players total in your group (including you).");
+            showMessage("You can have a maximum of 8 players total in your group (including you).");
         }
     }
 
@@ -1551,6 +1537,8 @@
 
     dom.continueRoundButton.addEventListener('click', () => {
         if (localGameState.players[currentPlayerId]?.isHost) {
+            dom.continueRoundButton.disabled = true;
+            dom.continueRoundButton.textContent = "Starting...";
             startRound();
         }
     });
@@ -1785,19 +1773,17 @@
         
         if (gameState.gameStatus === 'finished') {
             dom.gameOverScreen.classList.remove('hidden');
-            dom.gameContainer.classList.add('hidden');
+            // **FIXED**: Don't hide the game container, the modal is an overlay
             dom.roundEndScreen.classList.add('hidden');
             return;
         }
 
-        // Fix: Ensure other modals are hidden
-        dom.setupScreen.classList.add('hidden'); 
-        dom.gameContainer.classList.add('hidden');
+        // **FIXED**: Don't hide the game container, the modal is an overlay
         dom.roundEndScreen.classList.remove('hidden');
 
         const { winnerId, points } = gameState.roundEndInfo;
         dom.roundEndTitle.textContent = `Round ${gameState.roundNumber} Over!`;
-        dom.roundWinnerMessage.textContent = `${gameState.players[winnerId].name} wins the round with 0 points!`;
+        dom.roundWinnerMessage.textContent = `${gameState.players[winnerId].name} wins the round!`;
 
         dom.roundResultsList.innerHTML = '';
         gameState.playerOrder.forEach(pid => {
@@ -1814,7 +1800,7 @@
     }
 
     function showFinalScores(gameState) {
-        dom.gameContainer.classList.add('hidden');
+        // **FIXED**: Don't hide the game container, the modal is an overlay
         dom.roundEndScreen.classList.add('hidden');
         dom.gameOverScreen.classList.remove('hidden');
 
@@ -1861,6 +1847,20 @@
         return dominoElement;
     }
     
+    // **FIXED**: Replaced gradients with a vibrant, solid color palette for pips.
+    const PIP_COLORS = [
+        '#E0E0E0', // 0 - light grey
+        '#FBC02D', // 1 - yellow
+        '#D32F2F', // 2 - red
+        '#C2185B', // 3 - pink
+        '#1976D2', // 4 - blue
+        '#388E3C', // 5 - green
+        '#303030', // 6 - black
+        '#6D4C41', // 7 - brown
+        '#7B1FA2', // 8 - purple
+        '#558B2F'  // 9 - olive green
+    ];
+
     function createPipContainer(count, size = 'normal') {
         const container = document.createElement('div');
         container.className = 'pip-container';
@@ -1907,8 +1907,10 @@
                 const circle = document.createElementNS(svgNS, "circle");
                 circle.setAttribute('cx', cx);
                 circle.setAttribute('cy', cy);
-                circle.setAttribute('r', 4);
-                circle.setAttribute('fill', `url(#pipGradient-${count})`);
+                circle.setAttribute('r', 4.5);
+                circle.setAttribute('fill', PIP_COLORS[count] || '#000000');
+                circle.setAttribute('stroke', 'rgba(0,0,0,0.2)');
+                circle.setAttribute('stroke-width', '0.5');
                 svg.appendChild(circle);
             });
         }
@@ -2068,7 +2070,6 @@
                         await runTransaction(db, async (transaction) => {
                             const gameSnap = await transaction.get(gameRef);
                             if (!gameSnap.exists()) throw "Game does not exist!";
-                            const gameState = gameSnap.data();
                             
                             let newBoardDominos = [...gameState.boardDominos];
                             let updatedPlayers = { ...gameState.players };
