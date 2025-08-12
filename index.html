@@ -537,8 +537,8 @@
             <div id="create-game-flow">
                 <label class="block mb-2">Game Mode:</label>
                 <div class="flex gap-4 mb-6">
-                    <button class="w-full bg-gray-600 font-bold py-3 px-4 rounded transition-colors" id="mode-online-button">Create Online Game</button>
-                    <button class="w-full bg-gray-600 font-bold py-3 px-4 rounded transition-colors" id="mode-hybrid-button">Create Hybrid Game</button>
+                    <button class="w-full bg-gray-600 font-bold py-3 px-4 rounded transition-colors" id="mode-online-button" disabled>Create Online Game</button>
+                    <button class="w-full bg-gray-600 font-bold py-3 px-4 rounded transition-colors" id="mode-hybrid-button" disabled>Create Hybrid Game</button>
                 </div>
             </div>
 
@@ -724,7 +724,6 @@
         gameContainer: document.getElementById('game-container'),
         lobbyView: document.getElementById('lobby-view'),
         waitingRoomView: document.getElementById('waiting-room-view'),
-        createGameButton: document.getElementById('create-game-button'),
         joinGameButton: document.getElementById('join-game-button'),
         startGameButton: document.getElementById('start-game-button'),
         reDealButton: document.getElementById('re-deal-button'),
@@ -887,6 +886,8 @@
         dom.loadingScreen.classList.add('hidden');
         dom.setupScreen.classList.remove('hidden');
         dom.joinGameButton.disabled = false;
+        dom.modeOnlineButton.disabled = false; // BUG FIX
+        dom.modeHybridButton.disabled = false; // BUG FIX
     }
 
     // --- Lobby and Game Setup ---
