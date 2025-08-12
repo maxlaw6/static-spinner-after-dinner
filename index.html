@@ -47,6 +47,7 @@
             background-size: 5px 5px;
             border-radius: 20px; /* Rounded corners for the table */
             touch-action: none; /* Critical for smooth touch controls on iPad */
+            transition: background 0.5s ease;
         }
         #world.panning {
             cursor: grabbing;
@@ -83,7 +84,7 @@
             box-shadow: 0 2px 5px rgba(0,0,0,0.2);
             transform-origin: center center;
             color: #1a1a1a;
-            transition: box-shadow 0.2s ease, transform 0.25s ease, top 0.3s ease, left 0.3s ease;
+            transition: all 0.25s ease;
             -webkit-tap-highlight-color: transparent; /* Remove tap highlight on iOS */
         }
         .domino.domino-back {
@@ -470,6 +471,69 @@
                 display: none; /* Hide detailed scoreboard on small screens for now */
             }
         }
+
+        /* --- MODERN THEME --- */
+        #world.modern {
+            background-color: #1a1a1a;
+            border: 20px solid #382e2a;
+            box-shadow: inset 0 0 15px rgba(0,0,0,0.7);
+            background-image: 
+                linear-gradient(45deg, rgba(255, 255, 255, 0.02) 25%, transparent 25%, transparent 75%, rgba(255, 255, 255, 0.02) 75%, rgba(255, 255, 255, 0.02)), 
+                linear-gradient(-45deg, rgba(0, 0, 0, 0.05) 25%, transparent 25%, transparent 75%, rgba(0, 0, 0, 0.05) 75%, rgba(0, 0, 0, 0.05)),
+                linear-gradient(to bottom, #4a3c31, #2c221c);
+            background-size: 60px 60px, 60px 60px, 100% 100%;
+        }
+
+        .modern .domino {
+            background-color: #2d2d2d;
+            border: 1px solid #1a1a1a;
+            color: #fff;
+        }
+
+        .modern .divider {
+            background-color: #555;
+        }
+
+        /* --- ANIMATIONS --- */
+        @keyframes thud {
+            0% { transform: scale(1.1); }
+            50% { transform: scale(0.95); }
+            100% { transform: scale(1); }
+        }
+        .thud-animation {
+            animation: thud 0.2s ease-out;
+        }
+        
+        .confetti-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10002;
+            overflow: hidden;
+        }
+
+        .confetti {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background-color: #f00;
+            opacity: 0;
+            animation: fall 3s linear forwards;
+        }
+
+        @keyframes fall {
+            0% {
+                transform: translateY(-10vh) rotate(0deg);
+                opacity: 1;
+            }
+            100% {
+                transform: translateY(110vh) rotate(720deg);
+                opacity: 0;
+            }
+        }
     </style>
 </head>
 <body class="text-white">
@@ -624,6 +688,7 @@
 
 <!-- Main Game Container -->
 <div class="hidden" id="game-container">
+    <div class="confetti-container"></div>
     <div id="game-layout">
         <div class="bg-gray-900 bg-opacity-70 p-2 rounded-lg shadow-lg flex justify-between items-center flex-wrap gap-4" id="game-info">
             <!-- Group 1: Left Controls -->
@@ -650,6 +715,7 @@
                 <label for="theme-switcher" class="sr-only">Theme</label>
                 <select class="bg-gray-700 text-white rounded p-2" id="theme-switcher">
                     <option value="classic">Classic</option>
+                    <option value="modern">Modern</option>
                     <option value="dr_edell">Dr. Edell</option>
                     <option value="austin">Austin</option>
                     <option value="rose">Rose</option>
@@ -1268,6 +1334,7 @@
             dom.gameContainer.classList.remove('hidden');
             if (oldTheme !== gameState.currentTheme) {
                 dom.themeSwitcher.value = gameState.currentTheme;
+                updateTheme(gameState.currentTheme);
             }
             // **FIXED**: Center board on first round start AND subsequent round starts.
             if ((oldStatus === 'waiting' || oldStatus === 'round-starting') && gameState.gameStatus === 'in-progress') {
@@ -1774,8 +1841,7 @@
         if (!gameState.roundEndInfo) return;
         
         if (gameState.gameStatus === 'finished') {
-            dom.gameOverScreen.classList.remove('hidden');
-            dom.roundEndScreen.classList.add('hidden');
+            showFinalScores(gameState);
             return;
         }
 
@@ -1826,6 +1892,14 @@
             }
             dom.finalScoreList.appendChild(p);
         });
+        
+        // Trigger confetti for the winner(s)
+        winners.forEach(winner => {
+            const winnerData = Object.values(gameState.players).find(p => p.name === winner.name);
+            if (winnerData) {
+                triggerConfetti(winnerData.color);
+            }
+        });
     }
 
     function createDomino(dominoData, isBack = false, size = 'normal') {
@@ -1870,6 +1944,7 @@
             const theme = localGameState.currentTheme || 'classic';
             switch (theme) {
                 case 'classic':
+                case 'modern': // Modern spinner uses classic icon for now
                     iconContainer.innerHTML = `<svg viewBox="0 0 24 24" class="w-full h-full"><g stroke="#B91C1C" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M 12 12 L 12 4 L 6 4" /><path d="M 12 12 L 12 4 L 6 4" transform="rotate(60 12 12)" /><path d="M 12 12 L 12 4 L 6 4" transform="rotate(120 12 12)" /><path d="M 12 12 L 12 4 L 6 4" transform="rotate(180 12 12)" /><path d="M 12 12 L 12 4 L 6 4" transform="rotate(240 12 12)" /><path d="M 12 12 L 12 4 L 6 4" transform="rotate(300 12 12)" /></g></svg>`;
                     break;
                 case 'dr_edell': iconContainer.innerHTML = '<div>🫁</div><div>🩺</div>'; break;
@@ -2331,6 +2406,15 @@
         });
     });
 
+    function updateTheme(theme) {
+        document.body.className = 'text-white'; // Reset
+        dom.worldElement.className = ''; // Reset
+        if (theme === 'modern') {
+            document.body.classList.add('modern');
+            dom.worldElement.classList.add('modern');
+        }
+    }
+
     dom.themeSwitcher.addEventListener('change', async (e) => {
         if (currentGameId) {
             const gameRef = doc(db, "games", currentGameId);
@@ -2495,6 +2579,26 @@
         });
 
         dom.detailedScoreboardContent.appendChild(table);
+    }
+
+    // --- Animation Functions ---
+    function triggerConfetti(color) {
+        const container = document.querySelector('.confetti-container');
+        if (!container) return;
+
+        for (let i = 0; i < 100; i++) {
+            const confetti = document.createElement('div');
+            confetti.className = 'confetti';
+            confetti.style.left = `${Math.random() * 100}vw`;
+            confetti.style.animationDelay = `${Math.random() * 2}s`;
+            confetti.style.backgroundColor = color || PLAYER_COLORS[Math.floor(Math.random() * PLAYER_COLORS.length)];
+            confetti.style.transform = `scale(${Math.random() * 0.5 + 0.5})`;
+            container.appendChild(confetti);
+
+            setTimeout(() => {
+                confetti.remove();
+            }, 3000);
+        }
     }
 
 
