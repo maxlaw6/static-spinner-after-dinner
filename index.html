@@ -80,7 +80,6 @@
             align-items: center;
             border-radius: 6px;
             cursor: grab;
-            /* FIXED: Removed inset shadow which muted the look */
             box-shadow: 0 2px 5px rgba(0,0,0,0.2);
             transform-origin: center center;
             color: #1a1a1a;
@@ -131,12 +130,12 @@
 
         /* Pip and Spinner Styles */
         .pip-container {
-            width: 100%; /* Changed for SVG */
-            height: 100%; /* Changed for SVG */
-            display: flex; /* Changed for SVG */
+            width: 100%;
+            height: 100%;
+            display: flex;
             align-items: center;
             justify-content: center;
-            padding: 2px; /* Changed for SVG */
+            padding: 2px;
             pointer-events: none;
         }
         .divider {
@@ -1847,17 +1846,18 @@
         return dominoElement;
     }
     
+    // **FIXED**: Replaced with user's requested color palette.
     const PIP_COLORS = [
-        '#E0E0E0', // 0 - light grey
-        '#FBC02D', // 1 - yellow
-        '#D32F2F', // 2 - red
-        '#C2185B', // 3 - pink
-        '#1976D2', // 4 - blue
-        '#388E3C', // 5 - green
-        '#303030', // 6 - black
-        '#6D4C41', // 7 - brown
-        '#7B1FA2', // 8 - purple
-        '#558B2F'  // 9 - olive green
+        '#cbd5e0', // 0
+        '#EADCA6', // 1
+        '#8B0000', // 2
+        '#800000', // 3
+        '#00BFFF', // 4
+        '#006400', // 5
+        '#000000', // 6
+        '#A0522D', // 7
+        '#9370DB', // 8
+        '#808080'  // 9
     ];
 
     function createPipContainer(count, size = 'normal') {
@@ -1908,7 +1908,6 @@
                 circle.setAttribute('cy', cy);
                 circle.setAttribute('r', 4.5);
                 circle.setAttribute('fill', PIP_COLORS[count] || '#000000');
-                // **FIXED**: Removed stroke for a cleaner, more vibrant look
                 svg.appendChild(circle);
             });
         }
@@ -1960,13 +1959,10 @@
 
         originalDominoElement.style.opacity = '0.3';
 
-        // The ghost element's transform origin is center. We position its top-left
-        // corner such that its center is under the cursor.
         const initialLeft = coords.clientX - (DOMINO_WIDTH / 2);
         const initialTop = coords.clientY - (DOMINO_HEIGHT / 2);
         
         const currentRotation = draggedDominoData.rotation || 0;
-        // Apply scale and rotation. The element will scale from its center.
         activeDominoElement.style.transform = `translate3d(${initialLeft}px, ${initialTop}px, 0) scale(${zoomLevel}) rotate(${currentRotation}deg)`;
 
         dom.gameStatusElement.textContent = `Moving a tile...`;
@@ -2065,58 +2061,43 @@
 
                 if (isValidPlacement) {
                     try {
+                        // **FIXED**: Rewrote transaction for placing a tile to be more atomic and less prone to errors.
                         await runTransaction(db, async (transaction) => {
                             const gameSnap = await transaction.get(gameRef);
                             if (!gameSnap.exists()) throw "Game does not exist!";
-                            
-                            let newBoardDominos = [...gameState.boardDominos];
-                            let updatedPlayers = { ...gameState.players };
-                            let newLog = [...(gameState.log || [])];
-                            let newMoveHistory = [...(gameState.moveHistory || [])];
-
+                            const gameState = gameSnap.data();
                             const currentTurnPlayerId = gameState.playerOrder[gameState.currentPlayerIndex];
                             const currentTurnPlayer = gameState.players[currentTurnPlayerId];
 
                             if (origin === 'hand') {
-                                const playerHand = updatedPlayers[currentTurnPlayerId].hand;
-                                const handIndex = playerHand.findIndex(d => d.id === draggedDominoData.dominoData.id);
-                                if (handIndex > -1) {
-                                    const playedDomino = playerHand.splice(handIndex, 1)[0];
-                                    newBoardDominos.push({ 
-                                        dominoData: playedDomino, 
-                                        x: newX, 
-                                        y: newY, 
-                                        rotation: newRotation,
-                                        playerId: currentTurnPlayerId // Add player ID to the domino
-                                    });
-                                    
-                                    newLog.push(`${currentTurnPlayer.name} played a tile.`);
-                                    if (newLog.length > 5) newLog.shift();
-                                    
-                                    newMoveHistory = [{ type: 'play', dominoId: playedDomino.id }];
+                                const newHand = gameState.players[currentTurnPlayerId].hand.filter(d => d.id !== draggedDominoData.dominoData.id);
+                                if (newHand.length === gameState.players[currentTurnPlayerId].hand.length) {
+                                    throw new Error("Domino to be played not found in player's hand.");
+                                }
+                                const playedDomino = draggedDominoData.dominoData;
+                                const newBoardDominos = [...gameState.boardDominos, { dominoData: playedDomino, x: newX, y: newY, rotation: newRotation, playerId: currentTurnPlayerId }];
+                                const newLog = [...(gameState.log || []), `${currentTurnPlayer.name} played a tile.`];
+                                if (newLog.length > 5) newLog.shift();
+                                const newMoveHistory = [{ type: 'play', dominoId: playedDomino.id }];
 
-                                    transaction.update(gameRef, {
-                                        boardDominos: newBoardDominos,
-                                        players: updatedPlayers,
-                                        turnState: 'PLACED',
-                                        moveHistory: newMoveHistory,
-                                        lastPlayedDominoId: playedDomino.id,
-                                        log: newLog
-                                    });
-                                }
+                                transaction.update(gameRef, {
+                                    boardDominos: newBoardDominos,
+                                    [`players.${currentTurnPlayerId}.hand`]: newHand,
+                                    turnState: 'PLACED',
+                                    moveHistory: newMoveHistory,
+                                    lastPlayedDominoId: playedDomino.id,
+                                    log: newLog
+                                });
                             } else { // origin === 'board'
-                                const boardIndex = newBoardDominos.findIndex(d => d.dominoData.id === draggedDominoData.dominoData.id);
-                                if (boardIndex > -1) {
-                                    newMoveHistory.push({ type: 'reposition', dominoId: draggedDominoData.dominoData.id, from: { x: newBoardDominos[boardIndex].x, y: newBoardDominos[boardIndex].y } });
-                                    newBoardDominos[boardIndex].x = newX;
-                                    newBoardDominos[boardIndex].y = newY;
-                                    transaction.update(gameRef, { boardDominos: newBoardDominos, moveHistory: newMoveHistory });
-                                }
+                                const newBoardDominos = gameState.boardDominos.map(d => (d.dominoData.id === draggedDominoData.dominoData.id) ? { ...d, x: newX, y: newY } : d);
+                                const newMoveHistory = [...(gameState.moveHistory || []), { type: 'reposition', dominoId: draggedDominoData.dominoData.id, from: { x: draggedDominoData.x, y: draggedDominoData.y } }];
+                                transaction.update(gameRef, { boardDominos: newBoardDominos, moveHistory: newMoveHistory });
                             }
                         });
                     } catch (error) {
-                        console.error("Error during placement transaction:", error);
-                        showMessage("Error placing the domino. Please refresh.");
+                        // **FIXED**: Added more detailed error logging to the console.
+                        console.error("Firebase transaction for placing domino failed:", error);
+                        showMessage("Error placing the domino. Please try again.");
                     }
                 }
             }
