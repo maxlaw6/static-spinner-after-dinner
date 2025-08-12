@@ -1292,7 +1292,7 @@
                 dom.themeSwitcher.value = gameState.currentTheme;
             }
             if (wasWaiting && gameState.gameStatus === 'in-progress') {
-                setTimeout(centerBoardOnStart, 0);
+                requestAnimationFrame(centerBoardOnStart);
             }
             dom.reDealButton.classList.toggle('hidden', !isHost);
             renderGameUI(gameState);
@@ -1370,86 +1370,88 @@
         }
     }
     
-    // MODIFIED: startRound now has two phases
+    // REFACTORED: startRound is now much faster and safer.
     async function startRound() {
-        const gameRef = doc(db, "games", currentGameId);
-        
-        await runTransaction(db, async (transaction) => {
-            const gameSnap = await transaction.get(gameRef);
-            if (!gameSnap.exists()) throw "Game does not exist!";
-            
-            const currentData = gameSnap.data();
-            const playerIds = currentData.playerOrder;
-            const numPlayers = playerIds.length;
+        // --- Preparation (before transaction) ---
+        const currentData = localGameState;
+        const playerIds = currentData.playerOrder;
+        const deck = generateDeck();
+        shuffle(deck);
 
-            const deck = generateDeck();
-            shuffle(deck);
+        const dominoesPerPlayer = 7;
+        const updatedPlayers = JSON.parse(JSON.stringify(currentData.players)); // Deep copy
 
-            const dominoesPerPlayer = 7; // MODIFIED: Always 7
-            const updatedPlayers = { ...currentData.players };
-
-            playerIds.forEach(pid => {
-                updatedPlayers[pid].hand = deck.splice(0, dominoesPerPlayer);
-            });
-
-            const newRoundNumber = currentData.roundNumber + 1;
-            const newStartingDouble = 9 - ((newRoundNumber - 1) % 10);
-
-            let starterIndex;
-            let mustDraw = false;
-
-            const tileStarterIndex = findRoundStarter(updatedPlayers, playerIds, newStartingDouble);
-
-            if (tileStarterIndex !== -1) {
-                starterIndex = tileStarterIndex;
-                mustDraw = false;
-            } else {
-                const previousWinnerId = currentData.roundEndInfo?.winnerId;
-                const previousWinnerIndex = playerIds.indexOf(previousWinnerId);
-
-                if (newRoundNumber > 1 && previousWinnerId && previousWinnerIndex !== -1) {
-                    starterIndex = previousWinnerIndex;
-                    mustDraw = true;
-                } else {
-                    let highestScore = -1;
-                    let highestScoreIndex = -1;
-                    for (let i = 0; i < playerIds.length; i++) {
-                        const pid = playerIds[i];
-                        const handValue = calculateHandValue(updatedPlayers[pid].hand);
-                        if (handValue > highestScore) {
-                            highestScore = handValue;
-                            highestScoreIndex = i;
-                        }
-                    }
-                    starterIndex = highestScoreIndex;
-                    mustDraw = true;
-                }
-            }
-            
-            const starterId = playerIds[starterIndex];
-
-            transaction.update(gameRef, {
-                gameStatus: 'round-starting', // NEW status
-                players: updatedPlayers,
-                boneyard: deck,
-                boardDominos: [],
-                roundNumber: newRoundNumber,
-                currentStartingDouble: newStartingDouble,
-                mustDrawToStart: mustDraw,
-                turnState: 'WAITING',
-                hasDrawn: false,
-                lastPlayedDominoId: null,
-                passCount: 0,
-                moveHistory: [],
-                log: [],
-                roundEndInfo: null,
-                turnConfirmationPending: false,
-                roundStartInfo: { // NEW field
-                    starterId: starterId,
-                    starterIndex: starterIndex,
-                }
-            });
+        playerIds.forEach(pid => {
+            updatedPlayers[pid].hand = deck.splice(0, dominoesPerPlayer);
         });
+
+        const newRoundNumber = currentData.roundNumber + 1;
+        const newStartingDouble = 9 - ((newRoundNumber - 1) % 10);
+
+        let starterIndex;
+        let mustDraw = false;
+
+        const tileStarterIndex = findRoundStarter(updatedPlayers, playerIds, newStartingDouble);
+
+        if (tileStarterIndex !== -1) {
+            starterIndex = tileStarterIndex;
+            mustDraw = false;
+        } else {
+            const previousWinnerId = currentData.roundEndInfo?.winnerId;
+            const previousWinnerIndex = playerIds.indexOf(previousWinnerId);
+
+            if (newRoundNumber > 1 && previousWinnerId && previousWinnerIndex !== -1) {
+                starterIndex = previousWinnerIndex;
+                mustDraw = true;
+            } else {
+                let highestScore = -1;
+                let highestScoreIndex = -1;
+                for (let i = 0; i < playerIds.length; i++) {
+                    const pid = playerIds[i];
+                    const handValue = calculateHandValue(updatedPlayers[pid].hand);
+                    if (handValue > highestScore) {
+                        highestScore = handValue;
+                        highestScoreIndex = i;
+                    }
+                }
+                starterIndex = highestScoreIndex;
+                mustDraw = true;
+            }
+        }
+        
+        const starterId = playerIds[starterIndex];
+
+        // This is the final object we will write to Firestore.
+        const newRoundState = {
+            gameStatus: 'round-starting',
+            players: updatedPlayers,
+            boneyard: deck,
+            boardDominos: [],
+            roundNumber: newRoundNumber,
+            currentStartingDouble: newStartingDouble,
+            mustDrawToStart: mustDraw,
+            turnState: 'WAITING',
+            hasDrawn: false,
+            lastPlayedDominoId: null,
+            passCount: 0,
+            moveHistory: [],
+            log: [],
+            roundEndInfo: null,
+            turnConfirmationPending: false,
+            roundStartInfo: {
+                starterId: starterId,
+                starterIndex: starterIndex,
+            }
+        };
+
+        // --- Transaction (fast write) ---
+        const gameRef = doc(db, "games", currentGameId);
+        try {
+            await setDoc(gameRef, newRoundState, { merge: true });
+        } catch (error) {
+            console.error("Failed to start next round:", error);
+            showMessage("Could not start the next round. The host may need to try again.");
+        }
     }
     
     function findRoundStarter(players, playerOrder, requiredDoubleValue) {
@@ -1516,27 +1518,32 @@
 
     async function submitTurnForValidation() {
         const gameRef = doc(db, "games", currentGameId);
-        await runTransaction(db, async (transaction) => {
-            const gameSnap = await transaction.get(gameRef);
-            if (!gameSnap.exists()) throw "Game does not exist!";
-            const gameState = gameSnap.data();
+        try {
+            await runTransaction(db, async (transaction) => {
+                const gameSnap = await transaction.get(gameRef);
+                if (!gameSnap.exists()) throw "Game does not exist!";
+                const gameState = gameSnap.data();
 
-            const currentTurnPlayerId = gameState.playerOrder[gameState.currentPlayerIndex];
-            const currentTurnPlayer = gameState.players[currentTurnPlayerId];
+                const currentTurnPlayerId = gameState.playerOrder[gameState.currentPlayerIndex];
+                const currentTurnPlayer = gameState.players[currentTurnPlayerId];
 
-            const newLog = [...(gameState.log || [])];
-            if(gameState.hasDrawn && gameState.turnState === 'WAITING'){
-                newLog.push(`${currentTurnPlayer.name} passed their turn.`);
-            } else {
-                 newLog.push(`${currentTurnPlayer.name} submitted their move for validation.`);
-            }
-            if (newLog.length > 5) newLog.shift();
+                const newLog = [...(gameState.log || [])];
+                if(gameState.hasDrawn && gameState.turnState === 'WAITING'){
+                    newLog.push(`${currentTurnPlayer.name} passed their turn.`);
+                } else {
+                     newLog.push(`${currentTurnPlayer.name} submitted their move for validation.`);
+                }
+                if (newLog.length > 5) newLog.shift();
 
-            transaction.update(gameRef, {
-                turnState: 'PENDING_VALIDATION',
-                log: newLog
+                transaction.update(gameRef, {
+                    turnState: 'PENDING_VALIDATION',
+                    log: newLog
+                });
             });
-        });
+        } catch(error) {
+            console.error("Error submitting turn:", error);
+            showMessage("Could not submit turn. Please try again.");
+        }
     }
     dom.endTurnButton.addEventListener('click', submitTurnForValidation);
     
@@ -2337,104 +2344,114 @@
     // --- Validation & Challenge Logic ---
     dom.validateMoveButton.addEventListener('click', async () => {
         const gameRef = doc(db, "games", currentGameId);
-        await runTransaction(db, async (transaction) => {
-            const gameSnap = await transaction.get(gameRef);
-            if (!gameSnap.exists()) return;
-            const gameState = gameSnap.data();
-            
-            if (gameState.turnState !== 'PENDING_VALIDATION') {
-                return; 
-            }
-
-            const currentTurnPlayerId = gameState.playerOrder[gameState.currentPlayerIndex];
-            const playerHand = gameState.players[currentTurnPlayerId].hand;
-
-            if (playerHand.length === 0) {
-                let roundPoints = {};
-                let scoreHistoryEntry = { round: gameState.roundNumber, scores: {} };
-                const updatedPlayers = { ...gameState.players };
-
-                Object.keys(updatedPlayers).forEach(pid => {
-                    const handValue = (pid === currentTurnPlayerId) ? 0 : calculateHandValue(updatedPlayers[pid].hand);
-                    updatedPlayers[pid].score += handValue;
-                    roundPoints[pid] = handValue;
-                    scoreHistoryEntry.scores[pid] = handValue;
-                });
+        try {
+            await runTransaction(db, async (transaction) => {
+                const gameSnap = await transaction.get(gameRef);
+                if (!gameSnap.exists()) return;
+                const gameState = gameSnap.data();
                 
-                const newScoreHistory = [...(gameState.scoreHistory || []), scoreHistoryEntry];
-                const isGameOver = gameState.roundNumber >= 10;
+                if (gameState.turnState !== 'PENDING_VALIDATION') {
+                    return; 
+                }
 
-                transaction.update(gameRef, {
-                    players: updatedPlayers,
-                    gameStatus: isGameOver ? 'finished' : 'round-over',
-                    roundEndInfo: { winnerId: currentTurnPlayerId, points: roundPoints },
-                    turnState: 'WAITING',
-                    hasDrawn: false,
-                    scoreHistory: newScoreHistory
-                });
-            } else {
-                const nextPlayerIndex = (gameState.currentPlayerIndex + 1) % gameState.playerOrder.length;
-                const nextPlayerId = gameState.playerOrder[nextPlayerIndex];
-                const nextPlayerName = gameState.players[nextPlayerId].name;
-                const validatorName = gameState.players[currentPlayerId].name;
-                const newLog = [...(gameState.log || []), `${validatorName} validated the move. It's now ${nextPlayerName}'s turn.`];
-                if (newLog.length > 5) newLog.shift();
+                const currentTurnPlayerId = gameState.playerOrder[gameState.currentPlayerIndex];
+                const playerHand = gameState.players[currentTurnPlayerId].hand;
 
-                // NEW: Check if turn is passing between two local players on the same device.
-                const currentPlayerController = gameState.players[currentTurnPlayerId].controller;
-                const nextPlayerController = gameState.players[nextPlayerId].controller;
-                const needsConfirmation = (currentPlayerController === nextPlayerController);
+                if (playerHand.length === 0) {
+                    let roundPoints = {};
+                    let scoreHistoryEntry = { round: gameState.roundNumber, scores: {} };
+                    const updatedPlayers = { ...gameState.players };
 
-                transaction.update(gameRef, {
-                    currentPlayerIndex: nextPlayerIndex,
-                    turnState: 'WAITING',
-                    hasDrawn: false,
-                    moveHistory: [],
-                    lastPlayedDominoId: null,
-                    log: newLog,
-                    turnConfirmationPending: needsConfirmation // Set the flag
-                });
-            }
-        });
+                    Object.keys(updatedPlayers).forEach(pid => {
+                        const handValue = (pid === currentTurnPlayerId) ? 0 : calculateHandValue(updatedPlayers[pid].hand);
+                        updatedPlayers[pid].score += handValue;
+                        roundPoints[pid] = handValue;
+                        scoreHistoryEntry.scores[pid] = handValue;
+                    });
+                    
+                    const newScoreHistory = [...(gameState.scoreHistory || []), scoreHistoryEntry];
+                    const isGameOver = gameState.roundNumber >= 10;
+
+                    transaction.update(gameRef, {
+                        players: updatedPlayers,
+                        gameStatus: isGameOver ? 'finished' : 'round-over',
+                        roundEndInfo: { winnerId: currentTurnPlayerId, points: roundPoints },
+                        turnState: 'WAITING',
+                        hasDrawn: false,
+                        scoreHistory: newScoreHistory
+                    });
+                } else {
+                    const nextPlayerIndex = (gameState.currentPlayerIndex + 1) % gameState.playerOrder.length;
+                    const nextPlayerId = gameState.playerOrder[nextPlayerIndex];
+                    const nextPlayerName = gameState.players[nextPlayerId].name;
+                    const validatorName = gameState.players[currentPlayerId].name;
+                    const newLog = [...(gameState.log || []), `${validatorName} validated the move. It's now ${nextPlayerName}'s turn.`];
+                    if (newLog.length > 5) newLog.shift();
+
+                    // NEW: Check if turn is passing between two local players on the same device.
+                    const currentPlayerController = gameState.players[currentTurnPlayerId].controller;
+                    const nextPlayerController = gameState.players[nextPlayerId].controller;
+                    const needsConfirmation = (currentPlayerController === nextPlayerController);
+
+                    transaction.update(gameRef, {
+                        currentPlayerIndex: nextPlayerIndex,
+                        turnState: 'WAITING',
+                        hasDrawn: false,
+                        moveHistory: [],
+                        lastPlayedDominoId: null,
+                        log: newLog,
+                        turnConfirmationPending: needsConfirmation // Set the flag
+                    });
+                }
+            });
+        } catch(error) {
+            console.error("Validation failed:", error);
+            showMessage("Could not validate the move. Please try again.");
+        }
     });
 
     dom.challengeMoveButton.addEventListener('click', async () => {
         const gameRef = doc(db, "games", currentGameId);
-        await runTransaction(db, async (transaction) => {
-            const gameSnap = await transaction.get(gameRef);
-            if (!gameSnap.exists()) return;
-            const gameState = gameSnap.data();
+        try {
+            await runTransaction(db, async (transaction) => {
+                const gameSnap = await transaction.get(gameRef);
+                if (!gameSnap.exists()) return;
+                const gameState = gameSnap.data();
 
-            if (gameState.turnState !== 'PENDING_VALIDATION') {
-                return; // Move already validated or challenged
-            }
+                if (gameState.turnState !== 'PENDING_VALIDATION') {
+                    return; // Move already validated or challenged
+                }
 
-            const challengerName = gameState.players[currentPlayerId].name;
-            const challengedPlayerId = gameState.playerOrder[gameState.currentPlayerIndex];
-            const challengedPlayerName = gameState.players[challengedPlayerId].name;
+                const challengerName = gameState.players[currentPlayerId].name;
+                const challengedPlayerId = gameState.playerOrder[gameState.currentPlayerIndex];
+                const challengedPlayerName = gameState.players[challengedPlayerId].name;
 
-            const newBoardDominos = [...gameState.boardDominos];
-            const challengedDominoIndex = newBoardDominos.findIndex(d => d.dominoData.id === gameState.lastPlayedDominoId);
+                const newBoardDominos = [...gameState.boardDominos];
+                const challengedDominoIndex = newBoardDominos.findIndex(d => d.dominoData.id === gameState.lastPlayedDominoId);
 
-            if (challengedDominoIndex > -1) {
-                const challengedDomino = newBoardDominos.splice(challengedDominoIndex, 1)[0];
-                const updatedPlayers = { ...gameState.players };
-                updatedPlayers[challengedPlayerId].hand.push(challengedDomino.dominoData);
+                if (challengedDominoIndex > -1) {
+                    const challengedDomino = newBoardDominos.splice(challengedDominoIndex, 1)[0];
+                    const updatedPlayers = { ...gameState.players };
+                    updatedPlayers[challengedPlayerId].hand.push(challengedDomino.dominoData);
 
-                const newLog = [...(gameState.log || []), `${challengerName} challenged ${challengedPlayerName}'s move! Tile returned.`];
-                if (newLog.length > 5) newLog.shift();
+                    const newLog = [...(gameState.log || []), `${challengerName} challenged ${challengedPlayerName}'s move! Tile returned.`];
+                    if (newLog.length > 5) newLog.shift();
 
-                transaction.update(gameRef, {
-                    boardDominos: newBoardDominos,
-                    players: updatedPlayers,
-                    turnState: 'WAITING',
-                    hasDrawn: false,
-                    lastPlayedDominoId: null,
-                    moveHistory: [],
-                    log: newLog
-                });
-            }
-        });
+                    transaction.update(gameRef, {
+                        boardDominos: newBoardDominos,
+                        players: updatedPlayers,
+                        turnState: 'WAITING',
+                        hasDrawn: false,
+                        lastPlayedDominoId: null,
+                        moveHistory: [],
+                        log: newLog
+                    });
+                }
+            });
+        } catch(error) {
+            console.error("Challenge failed:", error);
+            showMessage("Could not challenge the move. Please try again.");
+        }
     });
     
     // --- Detailed Scoreboard Rendering ---
