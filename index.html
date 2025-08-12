@@ -280,7 +280,7 @@
             gap: 4px;
             justify-content: center;
         }
-        #setup-screen, #round-end-screen, #loading-screen, #game-over-screen, #message-modal {
+        #setup-screen, #round-end-screen, #loading-screen, #game-over-screen, #message-modal, #round-start-screen {
             position: fixed;
             top: 0; left: 0;
             width: 100%; height: 100%;
@@ -299,7 +299,7 @@
         .hidden {
             display: none !important;
         }
-        #final-score-display, #round-end-content, #message-modal-content {
+        #final-score-display, #round-end-content, #message-modal-content, #round-start-content {
             background-color: rgba(31, 41, 55, 0.9);
             padding: 2rem;
             border-radius: 10px;
@@ -499,7 +499,21 @@
     </div>
 </div>
 
-<!-- NEW: Pass Device Screen -->
+<!-- NEW: Round Start Screen -->
+<div id="round-start-screen" class="hidden">
+    <div id="round-start-content" class="w-full max-w-md">
+        <h2 class="text-3xl font-bold text-center mb-4">Starting Round <span id="round-start-number"></span></h2>
+        <p class="text-xl text-center mb-6">
+            <span id="round-starter-name" class="text-yellow-300 font-bold"></span> has the starting tile!
+        </p>
+        <p id="round-start-wait-message" class="text-gray-400 mb-6">Waiting for them to start the round...</p>
+        <button id="confirm-round-start-button" class="w-full bg-green-600 hover:bg-green-700 font-bold py-3 px-4 rounded transition-colors hidden">
+            Show Hand & Start Round
+        </button>
+    </div>
+</div>
+
+<!-- Pass Device Screen -->
 <div id="pass-device-screen" class="hidden fixed top-0 left-0 w-full h-full bg-gray-900 bg-opacity-90 z-[10000] flex items-center justify-center backdrop-filter backdrop-blur-md">
     <div id="pass-device-content" class="bg-gray-800 p-8 rounded-lg shadow-xl text-center">
         <h2 class="text-3xl font-bold mb-4">Pass the Device to...</h2>
@@ -764,6 +778,13 @@
         addJoinerLocalPlayerButton: document.getElementById('add-joiner-local-player-button'),
         joinerLocalPlayerList: document.getElementById('joiner-local-player-list'),
         confirmJoinGroupButton: document.getElementById('confirm-join-group-button'),
+        
+        // NEW: Round Start Screen Elements
+        roundStartScreen: document.getElementById('round-start-screen'),
+        roundStartNumber: document.getElementById('round-start-number'),
+        roundStarterName: document.getElementById('round-starter-name'),
+        roundStartWaitMessage: document.getElementById('round-start-wait-message'),
+        confirmRoundStartButton: document.getElementById('confirm-round-start-button'),
 
         // Pass Device Screen Elements
         passDeviceScreen: document.getElementById('pass-device-screen'),
@@ -1128,6 +1149,13 @@
 
         localGameState = gameState;
         
+        // Handle modals first, as they take precedence over the main game view
+        if (gameState.gameStatus === 'round-starting') {
+            showRoundStartScreen(gameState);
+            return;
+        }
+        dom.roundStartScreen.classList.add('hidden');
+
         if (gameState.turnConfirmationPending) {
             const nextPlayer = gameState.players[gameState.playerOrder[gameState.currentPlayerIndex]];
             if (nextPlayer && nextPlayer.controller === currentPlayerId) {
@@ -1197,6 +1225,7 @@
     
     function showPassDeviceScreen(nextPlayerName) {
         dom.gameContainer.classList.add('hidden');
+        dom.playerHandsContainer.innerHTML = ''; // Explicitly clear hands
         dom.nextPlayerNamePass.textContent = nextPlayerName;
         dom.passDeviceScreen.classList.remove('hidden');
     }
@@ -1206,6 +1235,35 @@
         await updateDoc(gameRef, { turnConfirmationPending: false });
     });
     
+    // NEW: Round Start Screen Logic
+    function showRoundStartScreen(gameState) {
+        const { roundNumber, roundStartInfo } = gameState;
+        const starter = gameState.players[roundStartInfo.starterId];
+        
+        dom.gameContainer.classList.add('hidden');
+        dom.roundStartNumber.textContent = roundNumber;
+        dom.roundStarterName.textContent = starter.name;
+
+        if (starter.controller === currentPlayerId) {
+            dom.confirmRoundStartButton.classList.remove('hidden');
+            dom.roundStartWaitMessage.classList.add('hidden');
+        } else {
+            dom.confirmRoundStartButton.classList.add('hidden');
+            dom.roundStartWaitMessage.classList.remove('hidden');
+        }
+        
+        dom.roundStartScreen.classList.remove('hidden');
+    }
+
+    dom.confirmRoundStartButton.addEventListener('click', async () => {
+        const gameRef = doc(db, "games", currentGameId);
+        await updateDoc(gameRef, {
+            gameStatus: 'in-progress',
+            currentPlayerIndex: localGameState.roundStartInfo.starterIndex,
+            roundStartInfo: null // Clear the info to proceed
+        });
+    });
+
     // --- Core Game Logic ---
     function generateDeck() {
         const deck = [];
@@ -1224,6 +1282,7 @@
         }
     }
     
+    // MODIFIED: startRound now has two phases
     async function startRound() {
         const gameRef = doc(db, "games", currentGameId);
         
@@ -1238,8 +1297,7 @@
             const deck = generateDeck();
             shuffle(deck);
 
-            // MODIFIED: All players now get 7 dominoes
-            const dominoesPerPlayer = 7; 
+            const dominoesPerPlayer = 7; // MODIFIED: Always 7
             const updatedPlayers = { ...currentData.players };
 
             playerIds.forEach(pid => {
@@ -1249,21 +1307,21 @@
             const newRoundNumber = currentData.roundNumber + 1;
             const newStartingDouble = 9 - ((newRoundNumber - 1) % 10);
 
-            let newPlayerIndex;
-            let newMustDraw = false;
+            let starterIndex;
+            let mustDraw = false;
 
             const tileStarterIndex = findRoundStarter(updatedPlayers, playerIds, newStartingDouble);
 
             if (tileStarterIndex !== -1) {
-                newPlayerIndex = tileStarterIndex;
-                newMustDraw = false;
+                starterIndex = tileStarterIndex;
+                mustDraw = false;
             } else {
                 const previousWinnerId = currentData.roundEndInfo?.winnerId;
                 const previousWinnerIndex = playerIds.indexOf(previousWinnerId);
 
                 if (newRoundNumber > 1 && previousWinnerId && previousWinnerIndex !== -1) {
-                    newPlayerIndex = previousWinnerIndex;
-                    newMustDraw = true;
+                    starterIndex = previousWinnerIndex;
+                    mustDraw = true;
                 } else {
                     let highestScore = -1;
                     let highestScoreIndex = -1;
@@ -1275,28 +1333,33 @@
                             highestScoreIndex = i;
                         }
                     }
-                    newPlayerIndex = highestScoreIndex;
-                    newMustDraw = true;
+                    starterIndex = highestScoreIndex;
+                    mustDraw = true;
                 }
             }
             
+            const starterId = playerIds[starterIndex];
+
             transaction.update(gameRef, {
-                gameStatus: 'in-progress',
+                gameStatus: 'round-starting', // NEW status
                 players: updatedPlayers,
                 boneyard: deck,
                 boardDominos: [],
                 roundNumber: newRoundNumber,
                 currentStartingDouble: newStartingDouble,
-                currentPlayerIndex: newPlayerIndex,
-                mustDrawToStart: newMustDraw,
+                mustDrawToStart: mustDraw,
                 turnState: 'WAITING',
                 hasDrawn: false,
                 lastPlayedDominoId: null,
                 passCount: 0,
                 moveHistory: [],
-                log: [`Round ${newRoundNumber} started. Waiting for ${updatedPlayers[playerIds[newPlayerIndex]].name}.`],
+                log: [],
                 roundEndInfo: null,
-                turnConfirmationPending: false, // Reset on new round
+                turnConfirmationPending: false,
+                roundStartInfo: { // NEW field
+                    starterId: starterId,
+                    starterIndex: starterIndex,
+                }
             });
         });
     }
@@ -1370,11 +1433,14 @@
             if (!gameSnap.exists()) throw "Game does not exist!";
             const gameState = gameSnap.data();
 
+            const currentTurnPlayerId = gameState.playerOrder[gameState.currentPlayerIndex];
+            const currentTurnPlayer = gameState.players[currentTurnPlayerId];
+
             const newLog = [...(gameState.log || [])];
             if(gameState.hasDrawn && gameState.turnState === 'WAITING'){
-                newLog.push(`${gameState.players[currentPlayerId].name} passed their turn.`);
+                newLog.push(`${currentTurnPlayer.name} passed their turn.`);
             } else {
-                 newLog.push(`${gameState.players[currentPlayerId].name} submitted their move for validation.`);
+                 newLog.push(`${currentTurnPlayer.name} submitted their move for validation.`);
             }
             if (newLog.length > 5) newLog.shift();
 
@@ -1773,7 +1839,11 @@
         const initialTop = coords.clientY - (DOMINO_HEIGHT / 2);
         
         const currentRotation = draggedDominoData.rotation || 0;
-        activeDominoElement.style.transform = `translate3d(${initialLeft}px, ${initialTop}px, 0) rotate(${currentRotation}deg)`;
+        // MODIFIED: Apply zoom level to the ghost image's scale
+        activeDominoElement.style.transform = `translate3d(${initialLeft}px, ${initialTop}px, 0) scale(${zoomLevel}) rotate(${currentRotation}deg)`;
+        activeDominoElement.style.width = `${DOMINO_WIDTH * zoomLevel}px`;
+        activeDominoElement.style.height = `${DOMINO_HEIGHT * zoomLevel}px`;
+
 
         dom.gameStatusElement.textContent = `Moving a tile...`;
         
@@ -1794,11 +1864,12 @@
             wasDragged = true;
         }
         
-        const newLeft = coords.clientX - (DOMINO_WIDTH / 2);
-        const newTop = coords.clientY - (DOMINO_HEIGHT / 2);
+        const newLeft = coords.clientX - ((DOMINO_WIDTH * zoomLevel) / 2);
+        const newTop = coords.clientY - ((DOMINO_HEIGHT * zoomLevel) / 2);
 
         const currentRotation = draggedDominoData.rotation || 0;
-        activeDominoElement.style.transform = `translate3d(${newLeft}px, ${newTop}px, 0) rotate(${currentRotation}deg)`;
+        // MODIFIED: Apply zoom level to the ghost image's scale during drag
+        activeDominoElement.style.transform = `translate3d(${newLeft}px, ${newTop}px, 0) scale(${zoomLevel}) rotate(${currentRotation}deg)`;
     }
 
     async function endDominoDrag(e, origin, moveHandler, endHandler) {
