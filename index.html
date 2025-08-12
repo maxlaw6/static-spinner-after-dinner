@@ -40,8 +40,8 @@
         }
         #game-board {
             position: absolute;
-            width: 2500px;
-            height: 2500px;
+            width: 4000px; /* MODIFIED: Increased board size */
+            height: 4000px; /* MODIFIED: Increased board size */
             transform-origin: top left;
             will-change: transform; /* Performance hint for the browser */
         }
@@ -781,7 +781,7 @@
     let joinerLocalPlayers = []; // NEW: For joiner
 
     const SPINNER_VALUE = -1;
-    const BOARD_SIZE = 2500;
+    const BOARD_SIZE = 4000; // MODIFIED: Increased board size
     const DOMINO_WIDTH = 80;
     const DOMINO_HEIGHT = 40;
     
@@ -1238,7 +1238,8 @@
             const deck = generateDeck();
             shuffle(deck);
 
-            const dominoesPerPlayer = numPlayers <= 4 ? 7 : 5;
+            // MODIFIED: All players now get 7 dominoes
+            const dominoesPerPlayer = 7; 
             const updatedPlayers = { ...currentData.players };
 
             playerIds.forEach(pid => {
@@ -1880,14 +1881,18 @@
                             let newLog = [...(gameState.log || [])];
                             let newMoveHistory = [...(gameState.moveHistory || [])];
 
+                            // BUG FIX: Use the ID of the player whose turn it actually is, not the device controller's ID.
+                            const currentTurnPlayerId = gameState.playerOrder[gameState.currentPlayerIndex];
+                            const currentTurnPlayer = gameState.players[currentTurnPlayerId];
+
                             if (origin === 'hand') {
-                                const playerHand = updatedPlayers[currentPlayerId].hand;
+                                const playerHand = updatedPlayers[currentTurnPlayerId].hand;
                                 const handIndex = playerHand.findIndex(d => d.id === draggedDominoData.dominoData.id);
                                 if (handIndex > -1) {
                                     const playedDomino = playerHand.splice(handIndex, 1)[0];
                                     newBoardDominos.push({ dominoData: playedDomino, x: newX, y: newY, rotation: newRotation });
                                     
-                                    newLog.push(`${updatedPlayers[currentPlayerId].name} played a tile.`);
+                                    newLog.push(`${currentTurnPlayer.name} played a tile.`);
                                     if (newLog.length > 5) newLog.shift();
                                     
                                     newMoveHistory = [{ type: 'play', dominoId: playedDomino.id }];
