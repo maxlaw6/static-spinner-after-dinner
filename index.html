@@ -446,7 +446,7 @@
              background-color: #374151; /* bg-gray-700 */
              padding: 4px 8px;
              border-radius: 4px;
-        }
+         }
          #local-player-list-item button {
              background-color: #ef4444; /* bg-red-500 */
              color: white;
@@ -1219,6 +1219,8 @@
         
         // Handle modals first, as they take precedence over the main game view
         if (gameState.gameStatus === 'round-starting') {
+            // FIX: Hide the setup/lobby screen when the round-starting modal is shown.
+            dom.setupScreen.classList.add('hidden');
             showRoundStartScreen(gameState);
             return;
         }
