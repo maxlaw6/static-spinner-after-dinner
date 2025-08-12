@@ -1054,9 +1054,14 @@
                 }
 
                 const newPlayer = { id: currentPlayerId, controller: currentPlayerId, name: playerName, score: 0, hand: [], isHost: false };
+                
+                // MODIFIED: Use a robust way to update the players object
+                const updatedPlayers = { ...gameData.players, [currentPlayerId]: newPlayer };
+                const updatedPlayerOrder = [...gameData.playerOrder, currentPlayerId];
+
                 transaction.update(gameRef, {
-                    [`players.${currentPlayerId}`]: newPlayer,
-                    playerOrder: [...gameData.playerOrder, currentPlayerId]
+                    players: updatedPlayers,
+                    playerOrder: updatedPlayerOrder
                 });
             });
             await joinGame(gameId);
@@ -1088,25 +1093,29 @@
                 if (!gameSnap.exists()) throw new Error("Game not found.");
                 
                 const gameData = gameSnap.data();
-                const newPlayers = {};
-                const newPlayerOrder = [];
+                let updatedPlayers = { ...gameData.players };
+                const newPlayerIds = [];
 
-                newPlayers[`players.${currentPlayerId}`] = { id: currentPlayerId, controller: currentPlayerId, name: playerName, score: 0, hand: [], isHost: false };
-                newPlayerOrder.push(currentPlayerId);
+                // Add the main joining player
+                updatedPlayers[currentPlayerId] = { id: currentPlayerId, controller: currentPlayerId, name: playerName, score: 0, hand: [], isHost: false };
+                newPlayerIds.push(currentPlayerId);
 
+                // Add the local players for the joiner
                 joinerLocalPlayers.forEach((p, i) => {
                     const localId = `local_${Date.now()}_${i}`;
-                    newPlayers[`players.${localId}`] = { id: localId, controller: currentPlayerId, name: p.name, score: 0, hand: [], isHost: false };
-                    newPlayerOrder.push(localId);
+                    updatedPlayers[localId] = { id: localId, controller: currentPlayerId, name: p.name, score: 0, hand: [], isHost: false };
+                    newPlayerIds.push(localId);
                 });
 
-                if (Object.keys(gameData.players).length + newPlayerOrder.length > 8) {
+                if (Object.keys(gameData.players).length + newPlayerIds.length > 8) {
                     throw new Error("This would exceed the maximum of 8 players.");
                 }
 
+                const updatedPlayerOrder = [...gameData.playerOrder, ...newPlayerIds];
+
                 transaction.update(gameRef, {
-                    ...newPlayers,
-                    playerOrder: [...gameData.playerOrder, ...newPlayerOrder]
+                    players: updatedPlayers,
+                    playerOrder: updatedPlayerOrder
                 });
             });
 
