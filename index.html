@@ -1764,9 +1764,7 @@
         dom.boneyardPileElement.classList.toggle('can-draw', isMyDeviceTurn && gameState.turnState === 'WAITING' && !gameState.hasDrawn && gameState.boneyard.length > 0);
     }
 
-    // *** LOGIC CHANGE #2: Reworked hand visibility logic ***
-    // This function now ensures that online players can always see their own hand,
-    // while local players' hands are only revealed on their confirmed turn.
+    // *** LOGIC CHANGE #3: Corrected and simplified hand visibility logic ***
     function renderPlayerHands(gameState) {
         const playerOrder = gameState.playerOrder;
         const currentTurnPlayerId = playerOrder[gameState.currentPlayerIndex];
@@ -1804,16 +1802,10 @@
             const isControlledByMe = playerData.controller === currentPlayerId;
             let showHandFaceUp = false;
 
-            if (isControlledByMe) {
-                const isMyOwnHand = playerData.id === currentPlayerId;
-                // A local player's turn is active and confirmed (not pending a pass)
-                const isMyLocalPlayersTurn = isThisPlayerTheActiveTurn && !isTurnPendingConfirmation;
-                
-                if (isMyOwnHand) {
-                    showHandFaceUp = true; // Always show the device owner's own hand
-                } else if (isMyLocalPlayersTurn) {
-                    showHandFaceUp = true; // Show a local player's hand ONLY on their confirmed turn
-                }
+            // The hand should only be shown if it's this player's turn, they are controlled
+            // by the current device, and the turn is not pending a "pass device" confirmation.
+            if (isControlledByMe && isThisPlayerTheActiveTurn && !isTurnPendingConfirmation) {
+                showHandFaceUp = true;
             }
             
             if (showHandFaceUp) {
@@ -1821,7 +1813,6 @@
                     const dominoElement = createDomino(dominoData);
                     dominoElement.dataset.id = dominoData.id;
                     
-                    // Only the active player on their device can drag tiles from their hand
                     const canDrag = isThisPlayerTheActiveTurn && isControlledByMe && gameState.turnState === 'WAITING';
 
                     if (canDrag) {
