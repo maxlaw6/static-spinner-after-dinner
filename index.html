@@ -1415,6 +1415,7 @@
         await updateDoc(gameRef, { turnConfirmationPending: false });
     });
     
+    // *** LOGIC CHANGE #1: Clearer first-turn handoff instructions ***
     function showRoundStartScreen(gameState) {
         const { roundNumber, roundStartInfo } = gameState;
         const starter = gameState.players[roundStartInfo.starterId];
@@ -1423,32 +1424,40 @@
         dom.roundStartNumber.textContent = roundNumber;
         dom.roundStarterName.textContent = starter.name;
 
+        const isLocalPlayerStarting = starter.controller === currentPlayerId && starter.id !== currentPlayerId;
+
         if (starter.controller === currentPlayerId) {
             dom.confirmRoundStartButton.classList.remove('hidden');
             dom.roundStartWaitMessage.classList.add('hidden');
+
+            if (isLocalPlayerStarting) {
+                dom.confirmRoundStartButton.textContent = `Ready to Pass to ${starter.name}`;
+                dom.roundStartWaitMessage.textContent = `When ready, confirm to pass the device to ${starter.name}.`;
+                dom.roundStartWaitMessage.classList.remove('hidden');
+            } else {
+                dom.confirmRoundStartButton.textContent = 'Start Round';
+            }
         } else {
             dom.confirmRoundStartButton.classList.add('hidden');
+            dom.roundStartWaitMessage.textContent = `Waiting for ${localGameState.players[starter.controller].name} to start the round...`;
             dom.roundStartWaitMessage.classList.remove('hidden');
         }
         
         dom.roundStartScreen.classList.remove('hidden');
     }
 
-    // This function now correctly determines if a "pass device" screen is needed for the first turn.
     dom.confirmRoundStartButton.addEventListener('click', async () => {
         const gameRef = doc(db, "games", currentGameId);
         const { roundStartInfo, players, roundNumber } = localGameState;
         const starter = players[roundStartInfo.starterId];
         
-        // A confirmation is needed if the player starting the round is a local player
-        // (i.e., their controller is the current user, but their ID is not the current user's ID).
         const needsConfirmation = starter.controller === currentPlayerId && starter.id !== currentPlayerId;
 
         await updateDoc(gameRef, {
             gameStatus: 'in-progress',
             currentPlayerIndex: roundStartInfo.starterIndex,
-            roundStartInfo: null, // Clear this so we don't re-trigger this screen
-            turnConfirmationPending: needsConfirmation, // This flag triggers the pass device screen
+            roundStartInfo: null,
+            turnConfirmationPending: needsConfirmation,
             log: [...(localGameState.log || []), `Round ${roundNumber} started. ${starter.name} to play.`]
         });
     });
@@ -1764,7 +1773,7 @@
         dom.boneyardPileElement.classList.toggle('can-draw', isMyDeviceTurn && gameState.turnState === 'WAITING' && !gameState.hasDrawn && gameState.boneyard.length > 0);
     }
 
-    // *** LOGIC CHANGE #3: Corrected and simplified hand visibility logic ***
+    // *** LOGIC CHANGE #2: Corrected and simplified hand visibility logic ***
     function renderPlayerHands(gameState) {
         const playerOrder = gameState.playerOrder;
         const currentTurnPlayerId = playerOrder[gameState.currentPlayerIndex];
@@ -1802,8 +1811,8 @@
             const isControlledByMe = playerData.controller === currentPlayerId;
             let showHandFaceUp = false;
 
-            // The hand should only be shown if it's this player's turn, they are controlled
-            // by the current device, and the turn is not pending a "pass device" confirmation.
+            // A player's hand is shown if it's their active turn, they are controlled by the current device,
+            // AND the turn isn't waiting for a "pass device" confirmation.
             if (isControlledByMe && isThisPlayerTheActiveTurn && !isTurnPendingConfirmation) {
                 showHandFaceUp = true;
             }
