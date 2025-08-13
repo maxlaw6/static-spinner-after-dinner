@@ -602,7 +602,7 @@
         </p>
         <p id="round-start-wait-message" class="text-gray-400 mb-6">Waiting for them to start the round...</p>
         <button id="confirm-round-start-button" class="w-full bg-green-600 hover:bg-green-700 font-bold py-3 px-4 rounded transition-colors hidden">
-            Show Hand & Start Round
+            Start Round
         </button>
     </div>
 </div>
@@ -1311,7 +1311,7 @@
 
     // --- Main Game State Handler (REFACTORED) ---
     function handleGameStateUpdate(gameState) {
-        const oldStatus = localGameState.gameStatus; // FIX: Capture previous status for transition detection
+        const oldStatus = localGameState.gameStatus;
         localGameState = gameState; // Always store the latest state
 
         if (!gameState.players || !gameState.playerOrder || gameState.playerOrder.length === 0) {
@@ -1323,7 +1323,7 @@
         if (gameState.turnConfirmationPending && currentTurnPlayer && currentTurnPlayer.controller === currentPlayerId) {
             dom.loadingScreen.classList.add('hidden');
             dom.setupScreen.classList.add('hidden');
-            dom.gameContainer.classList.add('hidden');
+            dom.gameContainer.classList.add('hidden'); // Hide the main game area
             dom.roundStartScreen.classList.add('hidden');
             showPassDeviceScreen(currentTurnPlayer.name);
             return;
@@ -1353,11 +1353,10 @@
         if (['in-progress', 'round-over', 'finished'].includes(gameState.gameStatus)) {
             dom.loadingScreen.classList.add('hidden');
             dom.setupScreen.classList.add('hidden');
-            dom.passDeviceScreen.classList.add('hidden');
+            dom.passDeviceScreen.classList.add('hidden'); // Hide pass screen if we reached here
             dom.roundStartScreen.classList.add('hidden');
             dom.gameContainer.classList.remove('hidden');
 
-            // FIX: Center board on transition to in-progress state.
             if ((oldStatus === 'waiting' || oldStatus === 'round-starting') && gameState.gameStatus === 'in-progress') {
                 requestAnimationFrame(() => setTimeout(centerBoardOnStart, 0));
             }
@@ -1435,18 +1434,23 @@
         dom.roundStartScreen.classList.remove('hidden');
     }
 
+    // *** LOGIC CHANGE #1a: Round start confirmation logic ***
+    // This function now correctly determines if a "pass device" screen is needed for the first turn.
     dom.confirmRoundStartButton.addEventListener('click', async () => {
         const gameRef = doc(db, "games", currentGameId);
-        const { roundStartInfo, players } = localGameState;
+        const { roundStartInfo, players, roundNumber } = localGameState;
         const starter = players[roundStartInfo.starterId];
         
+        // A confirmation is needed if the player starting the round is a local player
+        // (i.e., their controller is the current user, but their ID is not the current user's ID).
         const needsConfirmation = starter.controller === currentPlayerId && starter.id !== currentPlayerId;
 
         await updateDoc(gameRef, {
             gameStatus: 'in-progress',
             currentPlayerIndex: roundStartInfo.starterIndex,
-            roundStartInfo: null,
-            turnConfirmationPending: needsConfirmation
+            roundStartInfo: null, // Clear this so we don't re-trigger this screen
+            turnConfirmationPending: needsConfirmation, // This flag triggers the pass device screen
+            log: [...(localGameState.log || []), `Round ${roundNumber} started. ${starter.name} to play.`]
         });
     });
 
@@ -1761,6 +1765,8 @@
         dom.boneyardPileElement.classList.toggle('can-draw', isMyDeviceTurn && gameState.turnState === 'WAITING' && !gameState.hasDrawn && gameState.boneyard.length > 0);
     }
 
+    // *** VISUAL CHANGE #1: Removed colored dot from player names ***
+    // The code that created and appended the `colorDot` has been removed from this function.
     function renderPlayerHands(gameState) {
         const playerOrder = gameState.playerOrder;
         const currentTurnPlayerId = playerOrder[gameState.currentPlayerIndex];
@@ -1781,7 +1787,7 @@
             }
 
             const title = document.createElement('h3');
-            title.className = 'font-bold text-center mb-2 text-sm flex items-center justify-center';
+            title.className = 'font-bold text-center mb-2 text-sm';
             
             let nameTag = '';
             if (playerData.controller === currentPlayerId && playerId !== currentPlayerId) {
@@ -1792,18 +1798,7 @@
                  nameTag = '(Host)';
             }
             
-            const colorDot = document.createElement('span');
-            colorDot.style.display = 'inline-block';
-            colorDot.style.width = '10px';
-            colorDot.style.height = '10px';
-            colorDot.style.borderRadius = '50%';
-            colorDot.style.backgroundColor = playerData.color || '#FFFFFF';
-            colorDot.style.marginRight = '8px';
-            colorDot.style.border = '1px solid rgba(255,255,255,0.5)';
-            
-            title.appendChild(colorDot);
-            title.appendChild(document.createTextNode(`${playerData.name} ${nameTag} (${playerData.hand.length})`));
-
+            title.textContent = `${playerData.name} ${nameTag} (${playerData.hand.length})`;
 
             const handDiv = document.createElement('div');
             handDiv.className = 'player-hand-content';
@@ -2248,6 +2243,8 @@
         updateMinimap(localGameState.boardDominos || []);
     }
     
+    // *** VISUAL CHANGE #2: Minimap dots are now always white ***
+    // The code that set the background and border color based on player color has been removed.
     function updateMinimap(boardDominos) {
         if (!dom.minimapContainer) return;
         const mapSize = dom.minimapContainer.clientWidth;
@@ -2266,12 +2263,6 @@
             dot.style.left = `${(domino.x + DOMINO_WIDTH / 2) * scale}px`;
             dot.style.top = `${(domino.y + DOMINO_HEIGHT / 2) * scale}px`;
             
-            const player = localGameState.players[domino.playerId];
-            if (player && player.color) {
-                dot.style.backgroundColor = player.color;
-                dot.style.borderColor = player.color;
-            }
-
             dot.style.transform = `translate(-50%, -50%) rotate(${domino.rotation}deg)`;
 
             dot.addEventListener('click', (e) => {
@@ -2462,6 +2453,9 @@
     }
 
     // --- Validation & Challenge Logic ---
+    // *** LOGIC CHANGE #1b: Validation logic now triggers "pass device" screen ***
+    // This function now correctly determines if the next player is on the same device
+    // and sets the `turnConfirmationPending` flag accordingly.
     dom.validateMoveButton.addEventListener('click', async () => {
         const gameRef = doc(db, "games", currentGameId);
         try {
@@ -2508,7 +2502,6 @@
                     const newLog = [...(gameState.log || []), `${validatorName} validated the move. It's now ${nextPlayerName}'s turn.`];
                     if (newLog.length > 5) newLog.shift();
 
-                    // FIX: Make controller check more robust
                     const currentPlayerController = gameState.players[currentTurnPlayerId]?.controller;
                     const nextPlayerController = gameState.players[nextPlayerId]?.controller;
                     const needsConfirmation = !!currentPlayerController && (currentPlayerController === nextPlayerController);
