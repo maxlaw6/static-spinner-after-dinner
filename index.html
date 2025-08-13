@@ -1314,6 +1314,7 @@
 
     // --- Main Game State Handler ---
     function handleGameStateUpdate(gameState) {
+        const oldTheme = localGameState.currentTheme;
         const oldStatus = localGameState.gameStatus; // Capture old status
 
         localGameState = gameState;
@@ -1371,6 +1372,12 @@
             dom.setupScreen.classList.add('hidden');
             dom.gameContainer.classList.remove('hidden');
             
+            if (oldTheme !== gameState.currentTheme) {
+                if(dom.themeSwitcher) {
+                   dom.themeSwitcher.value = gameState.currentTheme;
+                }
+            }
+
             // **FIXED**: Center board on first round start AND subsequent round starts.
             if ((oldStatus === 'waiting' || oldStatus === 'round-starting') && gameState.gameStatus === 'in-progress') {
                 // Using a timeout within rAF ensures layout has been calculated.
@@ -2442,6 +2449,15 @@
             }
         });
     });
+
+    if (dom.themeSwitcher) {
+        dom.themeSwitcher.addEventListener('change', async (e) => {
+            if (currentGameId) {
+                const gameRef = doc(db, "games", currentGameId);
+                await updateDoc(gameRef, { currentTheme: e.target.value });
+            }
+        });
+    }
 
     // --- Validation & Challenge Logic ---
     dom.validateMoveButton.addEventListener('click', async () => {
