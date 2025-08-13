@@ -2457,12 +2457,14 @@
         });
     });
 
-    dom.themeSwitcher.addEventListener('change', async (e) => {
-        if (currentGameId) {
-            const gameRef = doc(db, "games", currentGameId);
-            await updateDoc(gameRef, { currentTheme: e.target.value });
-        }
-    });
+    if (dom.themeSwitcher) {
+        dom.themeSwitcher.addEventListener('change', async (e) => {
+            if (currentGameId) {
+                const gameRef = doc(db, "games", currentGameId);
+                await updateDoc(gameRef, { currentTheme: e.target.value });
+            }
+        });
+    }
 
     // --- Validation & Challenge Logic ---
     dom.validateMoveButton.addEventListener('click', async () => {
