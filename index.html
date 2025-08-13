@@ -2476,8 +2476,6 @@
     }
 
     // --- Validation & Challenge Logic ---
-    // This function now correctly determines if the next player is on the same device
-    // and sets the `turnConfirmationPending` flag accordingly.
     dom.validateMoveButton.addEventListener('click', async () => {
         const gameRef = doc(db, "games", currentGameId);
         try {
@@ -2519,14 +2517,14 @@
                 } else {
                     const nextPlayerIndex = (gameState.currentPlayerIndex + 1) % gameState.playerOrder.length;
                     const nextPlayerId = gameState.playerOrder[nextPlayerIndex];
-                    const nextPlayerName = gameState.players[nextPlayerId].name;
-                    const validatorName = gameState.players[currentPlayerId].name;
-                    const newLog = [...(gameState.log || []), `${validatorName} validated the move. It's now ${nextPlayerName}'s turn.`];
+                    const nextPlayer = gameState.players[nextPlayerId];
+                    const validatorId = currentPlayerId; // The user clicking the button
+                    const validatorName = gameState.players[validatorId].name;
+                    const newLog = [...(gameState.log || []), `${validatorName} validated the move. It's now ${nextPlayer.name}'s turn.`];
                     if (newLog.length > 5) newLog.shift();
 
-                    const currentPlayerController = gameState.players[currentTurnPlayerId]?.controller;
-                    const nextPlayerController = gameState.players[nextPlayerId]?.controller;
-                    const needsConfirmation = !!currentPlayerController && (currentPlayerController === nextPlayerController);
+                    // A confirmation is needed if the next player is controlled by the validator's device.
+                    const needsConfirmation = nextPlayer.controller === validatorId;
 
                     transaction.update(gameRef, {
                         currentPlayerIndex: nextPlayerIndex,
