@@ -1434,7 +1434,6 @@
         dom.roundStartScreen.classList.remove('hidden');
     }
 
-    // *** LOGIC CHANGE #1a: Round start confirmation logic ***
     // This function now correctly determines if a "pass device" screen is needed for the first turn.
     dom.confirmRoundStartButton.addEventListener('click', async () => {
         const gameRef = doc(db, "games", currentGameId);
@@ -1765,13 +1764,12 @@
         dom.boneyardPileElement.classList.toggle('can-draw', isMyDeviceTurn && gameState.turnState === 'WAITING' && !gameState.hasDrawn && gameState.boneyard.length > 0);
     }
 
-    // *** VISUAL CHANGE #1: Removed colored dot from player names ***
-    // The code that created and appended the `colorDot` has been removed from this function.
+    // *** LOGIC CHANGE #2: Reworked hand visibility logic ***
+    // This function now ensures that online players can always see their own hand,
+    // while local players' hands are only revealed on their confirmed turn.
     function renderPlayerHands(gameState) {
         const playerOrder = gameState.playerOrder;
         const currentTurnPlayerId = playerOrder[gameState.currentPlayerIndex];
-        const currentTurnPlayer = gameState.players[currentTurnPlayerId];
-        const isMyDeviceControllingThisTurn = currentTurnPlayer?.controller === currentPlayerId;
         const isTurnPendingConfirmation = gameState.turnConfirmationPending;
 
         playerOrder.forEach(playerId => {
@@ -1803,14 +1801,30 @@
             const handDiv = document.createElement('div');
             handDiv.className = 'player-hand-content';
 
-            const showHandFaceUp = isThisPlayerTheActiveTurn && isMyDeviceControllingThisTurn && !isTurnPendingConfirmation;
+            const isControlledByMe = playerData.controller === currentPlayerId;
+            let showHandFaceUp = false;
+
+            if (isControlledByMe) {
+                const isMyOwnHand = playerData.id === currentPlayerId;
+                // A local player's turn is active and confirmed (not pending a pass)
+                const isMyLocalPlayersTurn = isThisPlayerTheActiveTurn && !isTurnPendingConfirmation;
+                
+                if (isMyOwnHand) {
+                    showHandFaceUp = true; // Always show the device owner's own hand
+                } else if (isMyLocalPlayersTurn) {
+                    showHandFaceUp = true; // Show a local player's hand ONLY on their confirmed turn
+                }
+            }
             
             if (showHandFaceUp) {
                 playerData.hand.forEach(dominoData => {
                     const dominoElement = createDomino(dominoData);
                     dominoElement.dataset.id = dominoData.id;
                     
-                    if (isThisPlayerTheActiveTurn && isMyDeviceControllingThisTurn && gameState.turnState === 'WAITING') {
+                    // Only the active player on their device can drag tiles from their hand
+                    const canDrag = isThisPlayerTheActiveTurn && isControlledByMe && gameState.turnState === 'WAITING';
+
+                    if (canDrag) {
                         dominoElement.addEventListener('mousedown', (e) => startDominoDrag(e, { dominoData }, 'hand'));
                         dominoElement.addEventListener('touchstart', (e) => startDominoDrag(e, { dominoData }, 'hand'), { passive: false });
                     } else {
@@ -1955,7 +1969,6 @@
         return dominoElement;
     }
     
-    // **FIXED**: Replaced with user's requested color palette.
     const PIP_COLORS = [
         '#cbd5e0', // 0
         '#EADCA6', // 1
@@ -1998,7 +2011,6 @@
         svg.style.width = '100%';
         svg.style.height = '100%';
 
-        // **FIXED**: Swapped X and Y coordinates to rotate the pip patterns 90 degrees.
         const pipPositions = {
             1: [[20, 20]],
             2: [[10, 30], [30, 10]],
@@ -2243,8 +2255,6 @@
         updateMinimap(localGameState.boardDominos || []);
     }
     
-    // *** VISUAL CHANGE #2: Minimap dots are now always white ***
-    // The code that set the background and border color based on player color has been removed.
     function updateMinimap(boardDominos) {
         if (!dom.minimapContainer) return;
         const mapSize = dom.minimapContainer.clientWidth;
@@ -2453,7 +2463,6 @@
     }
 
     // --- Validation & Challenge Logic ---
-    // *** LOGIC CHANGE #1b: Validation logic now triggers "pass device" screen ***
     // This function now correctly determines if the next player is on the same device
     // and sets the `turnConfirmationPending` flag accordingly.
     dom.validateMoveButton.addEventListener('click', async () => {
