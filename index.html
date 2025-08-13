@@ -1320,21 +1320,21 @@
         localGameState = gameState;
         
         // Handle modals first, as they take precedence over the main game view
-        if (gameState.gameStatus === 'round-starting') {
-            dom.setupScreen.classList.add('hidden');
-            showRoundStartScreen(gameState);
-            return;
-        }
-        dom.roundStartScreen.classList.add('hidden');
-
         if (gameState.turnConfirmationPending) {
             const nextPlayer = gameState.players[gameState.playerOrder[gameState.currentPlayerIndex]];
             if (nextPlayer && nextPlayer.controller === currentPlayerId) {
                 showPassDeviceScreen(nextPlayer.name);
-                return;
+                return; // IMPORTANT: Stop further rendering
             }
         }
         dom.passDeviceScreen.classList.add('hidden');
+
+        if (gameState.gameStatus === 'round-starting') {
+            dom.setupScreen.classList.add('hidden');
+            showRoundStartScreen(gameState);
+            return; // IMPORTANT: Stop further rendering
+        }
+        dom.roundStartScreen.classList.add('hidden');
 
         if (!gameState.players || !gameState.playerOrder || gameState.playerOrder.length === 0) {
             return;
@@ -1436,10 +1436,16 @@
 
     dom.confirmRoundStartButton.addEventListener('click', async () => {
         const gameRef = doc(db, "games", currentGameId);
+        const { roundStartInfo, players } = localGameState;
+        const starter = players[roundStartInfo.starterId];
+        
+        const needsConfirmation = starter.controller === currentPlayerId && starter.id !== currentPlayerId;
+
         await updateDoc(gameRef, {
             gameStatus: 'in-progress',
-            currentPlayerIndex: localGameState.roundStartInfo.starterIndex,
-            roundStartInfo: null // Clear the info to proceed
+            currentPlayerIndex: roundStartInfo.starterIndex,
+            roundStartInfo: null, // Clear the info to proceed
+            turnConfirmationPending: needsConfirmation // Set the flag here
         });
     });
 
@@ -2451,14 +2457,12 @@
         });
     });
 
-    if (dom.themeSwitcher) {
-        dom.themeSwitcher.addEventListener('change', async (e) => {
-            if (currentGameId) {
-                const gameRef = doc(db, "games", currentGameId);
-                await updateDoc(gameRef, { currentTheme: e.target.value });
-            }
-        });
-    }
+    dom.themeSwitcher.addEventListener('change', async (e) => {
+        if (currentGameId) {
+            const gameRef = doc(db, "games", currentGameId);
+            await updateDoc(gameRef, { currentTheme: e.target.value });
+        }
+    });
 
     // --- Validation & Challenge Logic ---
     dom.validateMoveButton.addEventListener('click', async () => {
