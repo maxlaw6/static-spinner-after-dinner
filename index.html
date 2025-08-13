@@ -1383,7 +1383,10 @@
         }
     }
 
+    // MODIFIED: This function now also sets the Game ID in the UI.
     function updateWaitingRoomUI(gameState) {
+        dom.gameIdDisplay.textContent = currentGameId; // <-- THE FIX IS HERE
+
         const playerIds = gameState.playerOrder;
         const playerCount = playerIds.length;
         const isHost = gameState.players[currentPlayerId]?.isHost;
