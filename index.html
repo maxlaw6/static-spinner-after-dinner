@@ -283,7 +283,7 @@
             gap: 4px;
             justify-content: center;
         }
-        #setup-screen, #round-end-screen, #loading-screen, #game-over-screen, #message-modal, #round-start-screen {
+        #setup-screen, #round-end-screen, #loading-screen, #game-over-screen, #message-modal, #round-start-screen, #pass-device-screen {
             position: fixed;
             top: 0; left: 0;
             width: 100%; height: 100%;
@@ -294,7 +294,7 @@
             justify-content: center;
             backdrop-filter: blur(5px);
         }
-        #round-end-screen, #game-over-screen {
+        #round-end-screen, #game-over-screen, #pass-device-screen {
             z-index: 10001 !important; /* Ensure it's on top */
         }
         #setup-screen > div {
@@ -305,7 +305,7 @@
         .hidden {
             display: none !important;
         }
-        #final-score-display, #round-end-content, #message-modal-content, #round-start-content {
+        #final-score-display, #round-end-content, #message-modal-content, #round-start-content, #pass-device-content {
             background-color: rgba(31, 41, 55, 0.9);
             padding: 2rem;
             border-radius: 10px;
@@ -608,8 +608,8 @@
 </div>
 
 <!-- Pass Device Screen -->
-<div id="pass-device-screen" class="hidden fixed top-0 left-0 w-full h-full bg-gray-900 bg-opacity-90 z-[10000] flex items-center justify-center backdrop-filter backdrop-blur-md">
-    <div id="pass-device-content" class="bg-gray-800 p-8 rounded-lg shadow-xl text-center">
+<div id="pass-device-screen" class="hidden">
+    <div id="pass-device-content" class="text-center">
         <h2 class="text-3xl font-bold mb-4">Pass the Device to...</h2>
         <p id="next-player-name-pass" class="text-5xl font-bold text-yellow-300 mb-8"></p>
         <button id="confirm-turn-button" class="w-full bg-green-600 hover:bg-green-700 font-bold py-4 px-6 rounded transition-colors text-xl">Show My Hand & Start Turn</button>
@@ -1259,9 +1259,6 @@
 
     async function joinGame(gameId) {
         currentGameId = gameId;
-        dom.lobbyView.classList.add('hidden');
-        dom.waitingRoomView.classList.remove('hidden');
-        dom.gameIdDisplay.textContent = gameId;
         
         if (unsubscribeGameListener) unsubscribeGameListener();
         unsubscribeGameListener = onSnapshot(doc(db, "games", currentGameId), (docSnap) => {
@@ -1312,97 +1309,107 @@
         }
     });
 
-    // --- Main Game State Handler ---
+    // --- Main Game State Handler (REFACTORED) ---
     function handleGameStateUpdate(gameState) {
-        const oldTheme = localGameState.currentTheme;
-        const oldStatus = localGameState.gameStatus; // Capture old status
-
-        localGameState = gameState;
-        
-        // Handle modals first, as they take precedence over the main game view
-        if (gameState.turnConfirmationPending) {
-            const nextPlayer = gameState.players[gameState.playerOrder[gameState.currentPlayerIndex]];
-            if (nextPlayer && nextPlayer.controller === currentPlayerId) {
-                showPassDeviceScreen(nextPlayer.name);
-                return; // IMPORTANT: Stop further rendering
-            }
-        }
-        dom.passDeviceScreen.classList.add('hidden');
-
-        if (gameState.gameStatus === 'round-starting') {
-            dom.setupScreen.classList.add('hidden');
-            showRoundStartScreen(gameState);
-            return; // IMPORTANT: Stop further rendering
-        }
-        dom.roundStartScreen.classList.add('hidden');
+        localGameState = gameState; // Always store the latest state
 
         if (!gameState.players || !gameState.playerOrder || gameState.playerOrder.length === 0) {
+            // Not fully initialized, do nothing.
             return;
         }
 
+        // --- State Machine for Primary View ---
+        // This logic ensures only one primary view is active at a time, preventing flashes.
+
+        // 1. Is a "pass device" screen required for this client?
+        const currentTurnPlayer = gameState.players[gameState.playerOrder[gameState.currentPlayerIndex]];
+        if (gameState.turnConfirmationPending && currentTurnPlayer && currentTurnPlayer.controller === currentPlayerId) {
+            dom.loadingScreen.classList.add('hidden');
+            dom.setupScreen.classList.add('hidden');
+            dom.gameContainer.classList.add('hidden');
+            dom.roundStartScreen.classList.add('hidden');
+            showPassDeviceScreen(currentTurnPlayer.name);
+            return; // Stop all other rendering
+        }
+
+        // 2. Is the round starting?
+        if (gameState.gameStatus === 'round-starting') {
+            dom.loadingScreen.classList.add('hidden');
+            dom.setupScreen.classList.add('hidden');
+            dom.gameContainer.classList.add('hidden');
+            dom.passDeviceScreen.classList.add('hidden');
+            showRoundStartScreen(gameState);
+            return; // Stop all other rendering
+        }
+
+        // 3. Is it the lobby/waiting room?
+        if (gameState.gameStatus === 'waiting') {
+            dom.loadingScreen.classList.add('hidden');
+            dom.gameContainer.classList.add('hidden');
+            dom.passDeviceScreen.classList.add('hidden');
+            dom.roundStartScreen.classList.add('hidden');
+            dom.setupScreen.classList.remove('hidden');
+            dom.lobbyView.classList.add('hidden');
+            dom.waitingRoomView.classList.remove('hidden');
+            updateWaitingRoomUI(gameState);
+            return; // Stop all other rendering
+        }
+
+        // 4. Is the game in progress (or over)?
+        if (['in-progress', 'round-over', 'finished'].includes(gameState.gameStatus)) {
+            // Hide all other primary views
+            dom.loadingScreen.classList.add('hidden');
+            dom.setupScreen.classList.add('hidden');
+            dom.passDeviceScreen.classList.add('hidden');
+            dom.roundStartScreen.classList.add('hidden');
+            
+            // Show the main game container and render it
+            dom.gameContainer.classList.remove('hidden');
+            renderGameUI(gameState);
+
+            // Handle overlay modals for round-over and game-over
+            if (gameState.gameStatus === 'round-over') {
+                displayRoundEndScreen(gameState);
+            } else {
+                dom.roundEndScreen.classList.add('hidden');
+            }
+
+            if (gameState.gameStatus === 'finished') {
+                showFinalScores(gameState);
+            } else {
+                dom.gameOverScreen.classList.add('hidden');
+            }
+            return; // All processing for this state is done
+        }
+    }
+
+    function updateWaitingRoomUI(gameState) {
         const playerIds = gameState.playerOrder;
         const playerCount = playerIds.length;
         const isHost = gameState.players[currentPlayerId]?.isHost;
 
-        if (gameState.gameStatus === 'waiting') {
-            dom.playerList.innerHTML = '';
-            playerIds.forEach(pid => {
-                const p = document.createElement('p');
-                p.textContent = `${gameState.players[pid].name} ${gameState.players[pid].isHost ? '(Host)' : ''}`;
-                dom.playerList.appendChild(p);
-            });
-            
-            const canStart = isHost && playerCount >= 2 && playerCount <= 8;
-            dom.startGameButton.disabled = !canStart;
-            dom.reDealButton.classList.toggle('hidden', true);
+        dom.playerList.innerHTML = '';
+        playerIds.forEach(pid => {
+            const p = document.createElement('p');
+            p.textContent = `${gameState.players[pid].name} ${gameState.players[pid].isHost ? '(Host)' : ''}`;
+            dom.playerList.appendChild(p);
+        });
 
-            if (isHost) {
-                if (playerCount < 2) dom.waitingMessage.textContent = "Need at least 2 players to start.";
-                else if (playerCount > 8) dom.waitingMessage.textContent = "Cannot start with more than 8 players.";
-                else dom.waitingMessage.textContent = "You're the host. Start the game when ready!";
-            } else {
-                dom.waitingMessage.textContent = "Waiting for the host to start the game...";
-            }
+        const canStart = isHost && playerCount >= 2 && playerCount <= 8;
+        dom.startGameButton.disabled = !canStart;
+        dom.reDealButton.classList.add('hidden');
 
-            dom.waitingRoomView.classList.remove('hidden');
-            dom.setupScreen.classList.remove('hidden');
-            dom.gameContainer.classList.add('hidden');
-
-        } else if (gameState.gameStatus === 'in-progress' || gameState.gameStatus === 'round-over' || gameState.gameStatus === 'finished') {
-            dom.setupScreen.classList.add('hidden');
-            dom.gameContainer.classList.remove('hidden');
-            
-            if (oldTheme !== gameState.currentTheme) {
-                if(dom.themeSwitcher) {
-                   dom.themeSwitcher.value = gameState.currentTheme;
-                }
-            }
-
-            // **FIXED**: Center board on first round start AND subsequent round starts.
-            if ((oldStatus === 'waiting' || oldStatus === 'round-starting') && gameState.gameStatus === 'in-progress') {
-                // Using a timeout within rAF ensures layout has been calculated.
-                requestAnimationFrame(() => setTimeout(centerBoardOnStart, 0));
-            }
-            dom.reDealButton.classList.toggle('hidden', !isHost);
-            renderGameUI(gameState);
-        }
-        
-        if (gameState.gameStatus === 'round-over') {
-            displayRoundEndScreen(gameState);
+        if (isHost) {
+            if (playerCount < 2) dom.waitingMessage.textContent = "Need at least 2 players to start.";
+            else if (playerCount > 8) dom.waitingMessage.textContent = "Cannot start with more than 8 players.";
+            else dom.waitingMessage.textContent = "You're the host. Start the game when ready!";
         } else {
-            dom.roundEndScreen.classList.add('hidden');
-        }
-
-        if (gameState.gameStatus === 'finished') {
-            showFinalScores(gameState);
-        } else {
-            dom.gameOverScreen.classList.add('hidden');
+            dom.waitingMessage.textContent = "Waiting for the host to start the game...";
         }
     }
     
+    // MODIFIED: This function now only manages its own elements.
     function showPassDeviceScreen(nextPlayerName) {
-        dom.gameContainer.classList.add('hidden');
-        dom.playerHandsContainer.innerHTML = ''; // Explicitly clear hands
         dom.nextPlayerNamePass.textContent = nextPlayerName;
         dom.passDeviceScreen.classList.remove('hidden');
     }
@@ -1417,9 +1424,7 @@
         const { roundNumber, roundStartInfo } = gameState;
         const starter = gameState.players[roundStartInfo.starterId];
         
-        // **FIXED**: Ensure round-end screen is hidden when round-start screen appears.
         dom.roundEndScreen.classList.add('hidden');
-        dom.gameContainer.classList.add('hidden');
         dom.roundStartNumber.textContent = roundNumber;
         dom.roundStarterName.textContent = starter.name;
 
@@ -1544,6 +1549,8 @@
         // --- Transaction (fast write) ---
         const gameRef = doc(db, "games", currentGameId);
         try {
+            // Center the board visually just before the round starts
+            requestAnimationFrame(() => setTimeout(centerBoardOnStart, 0));
             await updateDoc(gameRef, newRoundState);
         } catch (error) {
             console.error("Failed to start next round:", error);
