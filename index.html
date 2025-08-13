@@ -1311,17 +1311,14 @@
 
     // --- Main Game State Handler (REFACTORED) ---
     function handleGameStateUpdate(gameState) {
+        const oldStatus = localGameState.gameStatus; // FIX: Capture previous status for transition detection
         localGameState = gameState; // Always store the latest state
 
         if (!gameState.players || !gameState.playerOrder || gameState.playerOrder.length === 0) {
-            // Not fully initialized, do nothing.
             return;
         }
 
         // --- State Machine for Primary View ---
-        // This logic ensures only one primary view is active at a time, preventing flashes.
-
-        // 1. Is a "pass device" screen required for this client?
         const currentTurnPlayer = gameState.players[gameState.playerOrder[gameState.currentPlayerIndex]];
         if (gameState.turnConfirmationPending && currentTurnPlayer && currentTurnPlayer.controller === currentPlayerId) {
             dom.loadingScreen.classList.add('hidden');
@@ -1329,20 +1326,18 @@
             dom.gameContainer.classList.add('hidden');
             dom.roundStartScreen.classList.add('hidden');
             showPassDeviceScreen(currentTurnPlayer.name);
-            return; // Stop all other rendering
+            return;
         }
 
-        // 2. Is the round starting?
         if (gameState.gameStatus === 'round-starting') {
             dom.loadingScreen.classList.add('hidden');
             dom.setupScreen.classList.add('hidden');
             dom.gameContainer.classList.add('hidden');
             dom.passDeviceScreen.classList.add('hidden');
             showRoundStartScreen(gameState);
-            return; // Stop all other rendering
+            return;
         }
 
-        // 3. Is it the lobby/waiting room?
         if (gameState.gameStatus === 'waiting') {
             dom.loadingScreen.classList.add('hidden');
             dom.gameContainer.classList.add('hidden');
@@ -1352,22 +1347,23 @@
             dom.lobbyView.classList.add('hidden');
             dom.waitingRoomView.classList.remove('hidden');
             updateWaitingRoomUI(gameState);
-            return; // Stop all other rendering
+            return;
         }
 
-        // 4. Is the game in progress (or over)?
         if (['in-progress', 'round-over', 'finished'].includes(gameState.gameStatus)) {
-            // Hide all other primary views
             dom.loadingScreen.classList.add('hidden');
             dom.setupScreen.classList.add('hidden');
             dom.passDeviceScreen.classList.add('hidden');
             dom.roundStartScreen.classList.add('hidden');
-            
-            // Show the main game container and render it
             dom.gameContainer.classList.remove('hidden');
+
+            // FIX: Center board on transition to in-progress state.
+            if ((oldStatus === 'waiting' || oldStatus === 'round-starting') && gameState.gameStatus === 'in-progress') {
+                requestAnimationFrame(() => setTimeout(centerBoardOnStart, 0));
+            }
+
             renderGameUI(gameState);
 
-            // Handle overlay modals for round-over and game-over
             if (gameState.gameStatus === 'round-over') {
                 displayRoundEndScreen(gameState);
             } else {
@@ -1379,13 +1375,12 @@
             } else {
                 dom.gameOverScreen.classList.add('hidden');
             }
-            return; // All processing for this state is done
+            return;
         }
     }
 
-    // MODIFIED: This function now also sets the Game ID in the UI.
     function updateWaitingRoomUI(gameState) {
-        dom.gameIdDisplay.textContent = currentGameId; // <-- THE FIX IS HERE
+        dom.gameIdDisplay.textContent = currentGameId;
 
         const playerIds = gameState.playerOrder;
         const playerCount = playerIds.length;
@@ -1411,7 +1406,6 @@
         }
     }
     
-    // MODIFIED: This function now only manages its own elements.
     function showPassDeviceScreen(nextPlayerName) {
         dom.nextPlayerNamePass.textContent = nextPlayerName;
         dom.passDeviceScreen.classList.remove('hidden');
@@ -1422,7 +1416,6 @@
         await updateDoc(gameRef, { turnConfirmationPending: false });
     });
     
-    // NEW: Round Start Screen Logic
     function showRoundStartScreen(gameState) {
         const { roundNumber, roundStartInfo } = gameState;
         const starter = gameState.players[roundStartInfo.starterId];
@@ -1452,8 +1445,8 @@
         await updateDoc(gameRef, {
             gameStatus: 'in-progress',
             currentPlayerIndex: roundStartInfo.starterIndex,
-            roundStartInfo: null, // Clear the info to proceed
-            turnConfirmationPending: needsConfirmation // Set the flag here
+            roundStartInfo: null,
+            turnConfirmationPending: needsConfirmation
         });
     });
 
@@ -1475,16 +1468,14 @@
         }
     }
     
-    // REFACTORED: startRound is now much faster and safer.
     async function startRound() {
-        // --- Preparation (before transaction) ---
         const currentData = localGameState;
         const playerIds = currentData.playerOrder;
         const deck = generateDeck();
         shuffle(deck);
 
         const dominoesPerPlayer = 7;
-        const updatedPlayers = JSON.parse(JSON.stringify(currentData.players)); // Deep copy
+        const updatedPlayers = JSON.parse(JSON.stringify(currentData.players));
 
         playerIds.forEach(pid => {
             updatedPlayers[pid].hand = deck.splice(0, dominoesPerPlayer);
@@ -1526,7 +1517,6 @@
         
         const starterId = playerIds[starterIndex];
 
-        // This is the final object we will write to Firestore.
         const newRoundState = {
             gameStatus: 'round-starting',
             players: updatedPlayers,
@@ -1549,11 +1539,8 @@
             }
         };
 
-        // --- Transaction (fast write) ---
         const gameRef = doc(db, "games", currentGameId);
         try {
-            // Center the board visually just before the round starts
-            requestAnimationFrame(() => setTimeout(centerBoardOnStart, 0));
             await updateDoc(gameRef, newRoundState);
         } catch (error) {
             console.error("Failed to start next round:", error);
@@ -2193,7 +2180,6 @@
 
                 if (isValidPlacement) {
                     try {
-                        // **FIXED**: Rewrote transaction for placing a tile to be more atomic and less prone to errors.
                         await runTransaction(db, async (transaction) => {
                             const gameSnap = await transaction.get(gameRef);
                             if (!gameSnap.exists()) throw "Game does not exist!";
@@ -2228,7 +2214,6 @@
                         });
                         triggerRippleEffect(newX + DOMINO_WIDTH / 2, newY + DOMINO_HEIGHT / 2);
                     } catch (error) {
-                        // **FIXED**: Added more detailed error logging to the console.
                         console.error("Firebase transaction for placing domino failed:", error);
                         showMessage("Error placing the domino. Please try again.");
                     }
@@ -2523,10 +2508,10 @@
                     const newLog = [...(gameState.log || []), `${validatorName} validated the move. It's now ${nextPlayerName}'s turn.`];
                     if (newLog.length > 5) newLog.shift();
 
-                    // NEW: Check if turn is passing between two local players on the same device.
-                    const currentPlayerController = gameState.players[currentTurnPlayerId].controller;
-                    const nextPlayerController = gameState.players[nextPlayerId].controller;
-                    const needsConfirmation = (currentPlayerController === nextPlayerController);
+                    // FIX: Make controller check more robust
+                    const currentPlayerController = gameState.players[currentTurnPlayerId]?.controller;
+                    const nextPlayerController = gameState.players[nextPlayerId]?.controller;
+                    const needsConfirmation = !!currentPlayerController && (currentPlayerController === nextPlayerController);
 
                     transaction.update(gameRef, {
                         currentPlayerIndex: nextPlayerIndex,
@@ -2535,7 +2520,7 @@
                         moveHistory: [],
                         lastPlayedDominoId: null,
                         log: newLog,
-                        turnConfirmationPending: needsConfirmation // Set the flag
+                        turnConfirmationPending: needsConfirmation
                     });
                 }
             });
