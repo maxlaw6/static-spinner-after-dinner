@@ -568,12 +568,19 @@
 </head>
 <body class="text-white">
 
+<!-- VISUAL CHANGE: Added radial gradients for each pip color to add depth -->
 <svg width="0" height="0" style="position:absolute;z-index:-1;">
     <defs>
-        <radialGradient id="pipGradient" cx="50%" cy="50%" r="65%" fx="30%" fy="30%">
-            <stop offset="0%" style="stop-color:rgba(255,255,255,0.4)" />
-            <stop offset="100%" style="stop-color:rgba(0,0,0,0.4)" />
-        </radialGradient>
+        <radialGradient id="pipGradient-0" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#f1f5f9"/><stop offset="100%" stop-color="#cbd5e0"/></radialGradient>
+        <radialGradient id="pipGradient-1" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#FBF8F0"/><stop offset="100%" stop-color="#EADCA6"/></radialGradient>
+        <radialGradient id="pipGradient-2" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#A52A2A"/><stop offset="100%" stop-color="#8B0000"/></radialGradient>
+        <radialGradient id="pipGradient-3" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#A52A2A"/><stop offset="100%" stop-color="#800000"/></radialGradient>
+        <radialGradient id="pipGradient-4" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#87CEFA"/><stop offset="100%" stop-color="#00BFFF"/></radialGradient>
+        <radialGradient id="pipGradient-5" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#2E8B57"/><stop offset="100%" stop-color="#006400"/></radialGradient>
+        <radialGradient id="pipGradient-6" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#444"/><stop offset="100%" stop-color="#000000"/></radialGradient>
+        <radialGradient id="pipGradient-7" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#CD853F"/><stop offset="100%" stop-color="#A0522D"/></radialGradient>
+        <radialGradient id="pipGradient-8" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#B39DD1"/><stop offset="100%" stop-color="#9370DB"/></radialGradient>
+        <radialGradient id="pipGradient-9" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#A9A9A9"/><stop offset="100%" stop-color="#808080"/></radialGradient>
     </defs>
 </svg>
 
@@ -2040,7 +2047,12 @@
                 circle.setAttribute('cx', cx);
                 circle.setAttribute('cy', cy);
                 circle.setAttribute('r', 4.5);
-                circle.setAttribute('fill', PIP_COLORS[count] || '#000000');
+                // VISUAL CHANGE: Use gradient for pip fill
+                if (count >= 0 && count <= 9) {
+                    circle.setAttribute('fill', `url(#pipGradient-${count})`);
+                } else {
+                    circle.setAttribute('fill', '#000000'); // Fallback
+                }
                 svg.appendChild(circle);
             });
         }
