@@ -109,13 +109,11 @@
             content: '';
             position: absolute;
             left: 50%;
-            top: 50%;
-            transform: translate(-50%, -50%);
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            background: radial-gradient(circle, #8B4513, #A0522D);
-            box-shadow: inset 0 0 3px rgba(0,0,0,0.5);
+            top: 10%;
+            height: 80%;
+            width: 2px;
+            background-color: rgba(0,0,0,0.1);
+            transform: translateX(-50%);
         }
         .domino.dragging {
             cursor: grabbing;
@@ -140,8 +138,7 @@
             cursor: default !important;
         }
         .mini-domino.domino-back::after {
-            width: 6px;
-            height: 6px;
+            width: 1px;
         }
 
         /* Pip and Spinner Styles */
@@ -1750,18 +1747,12 @@
         const currentTurnPlayer = gameState.players[currentTurnPlayerId];
         const isMyDeviceControllingThisTurn = currentTurnPlayer?.controller === currentPlayerId;
 
-        const myIndex = playerOrder.indexOf(currentPlayerId);
-        const displayOrder = myIndex !== -1 
-            ? [...playerOrder.slice(myIndex), ...playerOrder.slice(0, myIndex)]
-            : playerOrder;
-
-        displayOrder.forEach(playerId => {
+        playerOrder.forEach(playerId => {
             const playerData = gameState.players[playerId];
             if (!playerData) return;
 
             const isThisPlayerTheActiveTurn = playerId === currentTurnPlayerId;
-            const isMyOwnData = playerId === currentPlayerId;
-
+            
             const section = document.createElement('div');
             section.className = 'player-hand-section';
             if (isThisPlayerTheActiveTurn) {
@@ -1772,10 +1763,10 @@
             title.className = 'font-bold text-center mb-2 text-sm flex items-center justify-center';
             
             let nameTag = '';
-            if (isMyOwnData) {
-                nameTag = '(You)';
-            } else if (playerData.controller === currentPlayerId) {
+            if (playerData.controller === currentPlayerId && playerId !== currentPlayerId) {
                 nameTag = '(Local)';
+            } else if (playerId === currentPlayerId) {
+                nameTag = '(You)';
             } else if (playerData.isHost) {
                  nameTag = '(Host)';
             }
@@ -1796,7 +1787,7 @@
             const handDiv = document.createElement('div');
             handDiv.className = 'player-hand-content';
 
-            const showHandFaceUp = isMyOwnData || (isThisPlayerTheActiveTurn && isMyDeviceControllingThisTurn);
+            const showHandFaceUp = isThisPlayerTheActiveTurn && isMyDeviceControllingThisTurn;
             
             if (showHandFaceUp) {
                 playerData.hand.forEach(dominoData => {
