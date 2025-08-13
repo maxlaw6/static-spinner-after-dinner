@@ -19,7 +19,10 @@
             font-family: 'Inter', sans-serif;
             user-select: none;
             -webkit-user-select: none; /* Safari */
-            background-color: #1f2937; /* bg-gray-800 */
+            background-color: #3a2a21; /* Wood color */
+            background-image: linear-gradient(rgba(0,0,0,0.2) 0 0.1em, transparent 0.1em 100%),
+                              linear-gradient(90deg, rgba(0,0,0,0.2) 0 0.1em, transparent 0.1em 100%);
+            background-size: 3em 3em;
         }
         
         /* Accessibility class */
@@ -42,12 +45,21 @@
             cursor: grab;
             width: 100%;
             height: 100%;
-            background-color: #00693E; /* Felt Green */
-            background-image: radial-gradient(rgba(255, 255, 255, 0.05) 10%, transparent 0);
+            background-color: #004d25;
+            background-image: radial-gradient(rgba(255, 255, 255, 0.03) 15%, transparent 0);
             background-size: 5px 5px;
-            border-radius: 20px; /* Rounded corners for the table */
-            touch-action: none; /* Critical for smooth touch controls on iPad */
+            border-radius: 9999px; /* Make it a circle/oval */
+            box-shadow: 0 0 0 15px #6b4f4f, 0 0 0 20px #4a3c31, inset 0 0 25px rgba(0,0,0,0.6);
             transition: background 0.5s ease;
+        }
+        #world::after {
+            content: '';
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            border-radius: 9999px;
+            background: radial-gradient(circle at center, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0) 60%);
+            pointer-events: none;
         }
         #world.panning {
             cursor: grabbing;
@@ -75,33 +87,35 @@
             width: 80px;
             height: 40px;
             border: 1px solid #1a1a1a;
-            background-color: #f7f7f7;
+            background-color: #f5f5dc; /* Ivory */
             display: flex;
             justify-content: space-around;
             align-items: center;
             border-radius: 6px;
             cursor: grab;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3), inset 0 1px 1px rgba(255,255,255,0.3);
             transform-origin: center center;
             color: #1a1a1a;
             transition: all 0.25s ease;
             -webkit-tap-highlight-color: transparent; /* Remove tap highlight on iOS */
         }
         .domino.domino-back {
-            background-color: #f7f7f7;
-            border: 1px solid #a0aec0;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            background-color: #333;
+            border: 1px solid #1a1a1a;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.4);
             position: relative;
         }
         .domino.domino-back::after {
             content: '';
             position: absolute;
             left: 50%;
-            top: 10%;
-            height: 80%;
-            width: 2px;
-            background-color: rgba(0,0,0,0.1);
-            transform: translateX(-50%);
+            top: 50%;
+            transform: translate(-50%, -50%);
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: radial-gradient(circle, #c0c0c0, #a9a9a9);
+            box-shadow: inset 0 0 3px rgba(0,0,0,0.5);
         }
         .domino.dragging {
             cursor: grabbing;
@@ -140,10 +154,12 @@
             pointer-events: none;
         }
         .divider {
-            width: 2px;
-            height: 80%;
-            background-color: #1a1a1a;
+            width: 1.5px;
+            height: 70%;
+            background-color: #555;
             pointer-events: none;
+            border-radius: 1px;
+            box-shadow: inset 0 0 1px rgba(0,0,0,0.5);
         }
         .spinner-icon {
             width: 24px;
@@ -379,7 +395,7 @@
             min-width: 150px;
         }
 
-        /* NEW: Styles for Validation */
+        /* --- ANIMATIONS & EFFECTS --- */
         @keyframes pending-glow {
             0%, 100% { box-shadow: 0 0 10px 2px rgba(74, 222, 128, 0.7); } /* green-400 */
             50% { box-shadow: 0 0 20px 5px rgba(74, 222, 128, 1); }
@@ -388,7 +404,66 @@
             animation: pending-glow 1.5s infinite;
         }
 
-        /* NEW: Styles for Detailed Scoreboard */
+        @keyframes thud {
+            from { transform: scale(1.1); }
+            to { transform: scale(1); }
+        }
+        .thud-animation {
+            animation: thud 0.2s ease-out;
+        }
+        
+        #particle-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            pointer-events: none;
+            z-index: 5000;
+        }
+        .particle {
+            position: absolute;
+            background-color: rgba(255, 215, 0, 0.7);
+            border-radius: 50%;
+            width: 5px;
+            height: 5px;
+            animation: burst 0.5s ease-out forwards;
+        }
+        @keyframes burst {
+            0% { transform: translate(0, 0) scale(1); opacity: 1; }
+            100% { transform: translate(var(--x), var(--y)) scale(0); opacity: 0; }
+        }
+        
+        .confetti-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10002;
+            overflow: hidden;
+        }
+        .confetti {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background-color: #f00;
+            opacity: 0;
+            animation: fall 3s linear forwards;
+        }
+        @keyframes fall {
+            0% {
+                transform: translateY(-10vh) rotate(0deg);
+                opacity: 1;
+            }
+            100% {
+                transform: translateY(110vh) rotate(720deg);
+                opacity: 0;
+            }
+        }
+
+        /* --- DETAILED SCOREBOARD --- */
         #detailed-scoreboard-container {
             background-color: rgba(0,0,0,0.3);
             border: 1px solid rgba(255,255,255,0.2);
@@ -417,7 +492,7 @@
             background-color: rgba(31, 41, 55, 0.5); /* bg-gray-800 */
         }
         
-        /* NEW: Styles for Local Player List */
+        /* --- LOCAL PLAYER LIST --- */
         #local-player-list-item {
               display: flex;
               justify-content: space-between;
@@ -471,72 +546,18 @@
                 display: none; /* Hide detailed scoreboard on small screens for now */
             }
         }
-
-        /* --- MODERN THEME --- */
-        #world.modern {
-            background-color: #1a1a1a;
-            border: 20px solid #382e2a;
-            box-shadow: inset 0 0 15px rgba(0,0,0,0.7);
-            background-image: 
-                linear-gradient(45deg, rgba(255, 255, 255, 0.02) 25%, transparent 25%, transparent 75%, rgba(255, 255, 255, 0.02) 75%, rgba(255, 255, 255, 0.02)), 
-                linear-gradient(-45deg, rgba(0, 0, 0, 0.05) 25%, transparent 25%, transparent 75%, rgba(0, 0, 0, 0.05) 75%, rgba(0, 0, 0, 0.05)),
-                linear-gradient(to bottom, #4a3c31, #2c221c);
-            background-size: 60px 60px, 60px 60px, 100% 100%;
-        }
-
-        .modern .domino {
-            background-color: #2d2d2d;
-            border: 1px solid #1a1a1a;
-            color: #fff;
-        }
-
-        .modern .divider {
-            background-color: #555;
-        }
-
-        /* --- ANIMATIONS --- */
-        @keyframes thud {
-            0% { transform: scale(1.1); }
-            50% { transform: scale(0.95); }
-            100% { transform: scale(1); }
-        }
-        .thud-animation {
-            animation: thud 0.2s ease-out;
-        }
-        
-        .confetti-container {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-            z-index: 10002;
-            overflow: hidden;
-        }
-
-        .confetti {
-            position: absolute;
-            width: 10px;
-            height: 10px;
-            background-color: #f00;
-            opacity: 0;
-            animation: fall 3s linear forwards;
-        }
-
-        @keyframes fall {
-            0% {
-                transform: translateY(-10vh) rotate(0deg);
-                opacity: 1;
-            }
-            100% {
-                transform: translateY(110vh) rotate(720deg);
-                opacity: 0;
-            }
-        }
     </style>
 </head>
 <body class="text-white">
+
+<svg width="0" height="0" style="position:absolute;z-index:-1;">
+    <defs>
+        <radialGradient id="pipGradient" cx="50%" cy="50%" r="65%" fx="30%" fy="30%">
+            <stop offset="0%" style="stop-color:rgba(255,255,255,0.4)" />
+            <stop offset="100%" style="stop-color:rgba(0,0,0,0.4)" />
+        </radialGradient>
+    </defs>
+</svg>
 
 <!-- Message Modal -->
 <div id="message-modal" class="hidden">
@@ -688,6 +709,7 @@
 
 <!-- Main Game Container -->
 <div class="hidden" id="game-container">
+    <div id="particle-container"></div>
     <div class="confetti-container"></div>
     <div id="game-layout">
         <div class="bg-gray-900 bg-opacity-70 p-2 rounded-lg shadow-lg flex justify-between items-center flex-wrap gap-4" id="game-info">
@@ -715,7 +737,6 @@
                 <label for="theme-switcher" class="sr-only">Theme</label>
                 <select class="bg-gray-700 text-white rounded p-2" id="theme-switcher">
                     <option value="classic">Classic</option>
-                    <option value="modern">Modern</option>
                     <option value="dr_edell">Dr. Edell</option>
                     <option value="austin">Austin</option>
                     <option value="rose">Rose</option>
@@ -2084,6 +2105,10 @@
             if (originalDominoElement) {
                 originalDominoElement.style.transform = `rotate(${newRotation}deg)`;
                 originalDominoElement.dataset.rotation = newRotation;
+                const rect = originalDominoElement.getBoundingClientRect();
+                const centerX = rect.left + rect.width / 2;
+                const centerY = rect.top + rect.height / 2;
+                triggerParticleEffect(centerX, centerY);
             }
 
             await runTransaction(db, async (transaction) => {
@@ -2386,6 +2411,10 @@
             const newRotation = (currentRotation + 45) % 360;
             dominoEl.style.transform = `rotate(${newRotation}deg)`;
             dominoEl.dataset.rotation = newRotation;
+            const rect = dominoEl.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            triggerParticleEffect(centerX, centerY);
         }
 
         await runTransaction(db, async (transaction) => {
@@ -2598,6 +2627,29 @@
             setTimeout(() => {
                 confetti.remove();
             }, 3000);
+        }
+    }
+
+    function triggerParticleEffect(x, y) {
+        const container = document.getElementById('particle-container');
+        if (!container) return;
+        const particleCount = 15;
+        for (let i = 0; i < particleCount; i++) {
+            const particle = document.createElement('div');
+            particle.className = 'particle';
+            particle.style.left = `${x}px`;
+            particle.style.top = `${y}px`;
+
+            const angle = Math.random() * 2 * Math.PI;
+            const distance = Math.random() * 40 + 20;
+            const endX = Math.cos(angle) * distance;
+            const endY = Math.sin(angle) * distance;
+
+            particle.style.setProperty('--x', `${endX}px`);
+            particle.style.setProperty('--y', `${endY}px`);
+
+            container.appendChild(particle);
+            setTimeout(() => particle.remove(), 500);
         }
     }
 
