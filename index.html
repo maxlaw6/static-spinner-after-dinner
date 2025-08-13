@@ -1674,6 +1674,10 @@
         const currentTurnPlayerId = gameState.playerOrder[gameState.currentPlayerIndex];
         const currentTurnPlayer = gameState.players[currentTurnPlayerId];
         const isMyDeviceTurn = currentTurnPlayer?.controller === currentPlayerId;
+        const isHost = gameState.players[currentPlayerId]?.isHost;
+
+        // *** LOGIC CHANGE #3: Show re-deal button for host ***
+        dom.reDealButton.classList.toggle('hidden', !isHost);
         
         // --- Render Board and Dominoes ---
         if (!isDraggingDomino) {
@@ -1778,6 +1782,9 @@
         const playerOrder = gameState.playerOrder;
         const currentTurnPlayerId = playerOrder[gameState.currentPlayerIndex];
         const isTurnPendingConfirmation = gameState.turnConfirmationPending;
+        
+        // Check if the current client is controlling more than one player (i.e., is a host for local players)
+        const isControllingMultiplePlayers = gameState.playerOrder.filter(pid => gameState.players[pid].controller === currentPlayerId).length > 1;
 
         playerOrder.forEach(playerId => {
             const playerData = gameState.players[playerId];
@@ -1808,13 +1815,19 @@
             const handDiv = document.createElement('div');
             handDiv.className = 'player-hand-content';
 
-            const isControlledByMe = playerData.controller === currentPlayerId;
             let showHandFaceUp = false;
 
-            // A player's hand is shown if it's their active turn, they are controlled by the current device,
-            // AND the turn isn't waiting for a "pass device" confirmation.
-            if (isControlledByMe && isThisPlayerTheActiveTurn && !isTurnPendingConfirmation) {
-                showHandFaceUp = true;
+            if (isControllingMultiplePlayers) {
+                // HYBRID/LOCAL MODE: Only show the active player's hand after confirmation
+                const isControlledByMe = playerData.controller === currentPlayerId;
+                if (isControlledByMe && isThisPlayerTheActiveTurn && !isTurnPendingConfirmation) {
+                    showHandFaceUp = true;
+                }
+            } else {
+                // ONLINE-ONLY MODE: Always show my own hand
+                if (playerId === currentPlayerId) {
+                    showHandFaceUp = true;
+                }
             }
             
             if (showHandFaceUp) {
@@ -1822,7 +1835,7 @@
                     const dominoElement = createDomino(dominoData);
                     dominoElement.dataset.id = dominoData.id;
                     
-                    const canDrag = isThisPlayerTheActiveTurn && isControlledByMe && gameState.turnState === 'WAITING';
+                    const canDrag = isThisPlayerTheActiveTurn && playerData.controller === currentPlayerId && gameState.turnState === 'WAITING';
 
                     if (canDrag) {
                         dominoElement.addEventListener('mousedown', (e) => startDominoDrag(e, { dominoData }, 'hand'));
