@@ -152,12 +152,14 @@
             pointer-events: none;
         }
         .divider {
-            width: 1.5px;
-            height: 70%;
-            background-color: #555;
+            width: 2px; /* A bit thicker */
+            height: 80%; /* A bit longer */
+            background-color: #333; /* Darker base color */
             pointer-events: none;
-            border-radius: 1px;
-            box-shadow: inset 0 0 1px rgba(0,0,0,0.5);
+            border-radius: 2px;
+            /* Create a 3D groove effect with shadows */
+            box-shadow: inset 0.5px 0.5px 1px rgba(0,0,0,0.7), /* Dark inner shadow for the groove */
+                        0.5px 0.5px 1px rgba(255,255,255,0.4); /* Light outer highlight */
         }
         .spinner-icon {
             width: 24px;
@@ -347,17 +349,18 @@
             display: flex;
             flex-direction: column;
             gap: 1rem;
-            min-height: 0;
+            min-height: 0; /* Crucial for flexbox children scrolling */
         }
+        /* LAYOUT FIX: Ensure player hands container can grow and scroll */
         #player-hands-container {
-            flex-grow: 1;
+            flex: 1 1 auto; /* Allow growing and shrinking */
             overflow-y: auto;
             display: flex;
             flex-direction: column;
             gap: 1rem;
         }
-        #boneyard-container {
-            flex-shrink: 0;
+        #boneyard-container, #detailed-scoreboard-container {
+            flex-shrink: 0; /* Prevent these from shrinking */
         }
         #main-game-area {
             grid-column: 2 / 3;
@@ -568,19 +571,29 @@
 </head>
 <body class="text-white">
 
-<!-- COLOR CHANGE: Updated radial gradients for each pip color to be darker and more primary -->
+<!-- Domino Pip Colors -->
 <svg width="0" height="0" style="position:absolute;z-index:-1;">
     <defs>
+        <!-- 0: White/Blank -->
         <radialGradient id="pipGradient-0" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#FFFFFF"/><stop offset="100%" stop-color="#E0E0E0"/></radialGradient>
-        <radialGradient id="pipGradient-1" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#FFD700"/><stop offset="100%" stop-color="#DAA520"/></radialGradient> <!-- Gold -->
-        <radialGradient id="pipGradient-2" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#FF4136"/><stop offset="100%" stop-color="#D60000"/></radialGradient> <!-- Red -->
-        <radialGradient id="pipGradient-3" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#FF851B"/><stop offset="100%" stop-color="#E46100"/></radialGradient> <!-- Orange -->
-        <radialGradient id="pipGradient-4" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#0074D9"/><stop offset="100%" stop-color="#005299"/></radialGradient> <!-- Blue -->
-        <radialGradient id="pipGradient-5" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#2ECC40"/><stop offset="100%" stop-color="#1A8A26"/></radialGradient> <!-- Green -->
-        <radialGradient id="pipGradient-6" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#444"/><stop offset="100%" stop-color="#000000"/></radialGradient> <!-- Black -->
-        <radialGradient id="pipGradient-7" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#F012BE"/><stop offset="100%" stop-color="#B4008F"/></radialGradient> <!-- Fuchsia -->
-        <radialGradient id="pipGradient-8" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#B10DC9"/><stop offset="100%" stop-color="#810099"/></radialGradient> <!-- Purple -->
-        <radialGradient id="pipGradient-9" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#7FDBFF"/><stop offset="100%" stop-color="#4FA2C2"/></radialGradient> <!-- Aqua -->
+        <!-- 1: Yellow -->
+        <radialGradient id="pipGradient-1" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#FFD700"/><stop offset="100%" stop-color="#DAA520"/></radialGradient>
+        <!-- 2: Red -->
+        <radialGradient id="pipGradient-2" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#FF3B30"/><stop offset="100%" stop-color="#E12D22"/></radialGradient>
+        <!-- 3: Maroon -->
+        <radialGradient id="pipGradient-3" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#9A2A2A"/><stop offset="100%" stop-color="#800000"/></radialGradient>
+        <!-- 4: Royal Blue -->
+        <radialGradient id="pipGradient-4" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#5899E2"/><stop offset="100%" stop-color="#4169E1"/></radialGradient>
+        <!-- 5: Green -->
+        <radialGradient id="pipGradient-5" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#2ECC40"/><stop offset="100%" stop-color="#28A745"/></radialGradient>
+        <!-- 6: Black -->
+        <radialGradient id="pipGradient-6" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#444444"/><stop offset="100%" stop-color="#000000"/></radialGradient>
+        <!-- 7: Burnt Umber -->
+        <radialGradient id="pipGradient-7" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#A0522D"/><stop offset="100%" stop-color="#8B4513"/></radialGradient>
+        <!-- 8: Lavender -->
+        <radialGradient id="pipGradient-8" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#C7B8E2"/><stop offset="100%" stop-color="#A48CD3"/></radialGradient>
+        <!-- 9: Greyish Blue -->
+        <radialGradient id="pipGradient-9" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#8492A6"/><stop offset="100%" stop-color="#64748B"/></radialGradient>
     </defs>
 </svg>
 
@@ -754,6 +767,11 @@
                     <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Your Hand Pips</h3>
                     <p id="hand-value-display" class="text-2xl font-bold text-yellow-300">0</p>
                 </div>
+                <!-- NEW: Round Indicator -->
+                <div class="text-center px-4">
+                    <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Round</h3>
+                    <p id="round-indicator" class="text-2xl font-bold text-white">0</p>
+                </div>
             </div>
 
             <!-- Group 3: Right Controls -->
@@ -879,6 +897,7 @@
         detailedScoreboardContent: document.getElementById('detailed-scoreboard-content'),
         zoomInButton: document.getElementById('zoom-in-button'),
         zoomOutButton: document.getElementById('zoom-out-button'),
+        roundIndicator: document.getElementById('round-indicator'), // NEW: Round indicator
         
         // MODIFIED: Lobby DOM Elements
         createGameFlow: document.getElementById('create-game-flow'),
@@ -1697,6 +1716,9 @@
         const currentTurnPlayer = gameState.players[currentTurnPlayerId];
         const isMyDeviceTurn = currentTurnPlayer?.controller === currentPlayerId;
         const isHost = gameState.players[currentPlayerId]?.isHost;
+
+        // NEW: Update round indicator
+        dom.roundIndicator.textContent = gameState.roundNumber;
 
         // Show re-deal button for host
         dom.reDealButton.classList.toggle('hidden', !isHost);
