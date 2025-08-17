@@ -971,9 +971,8 @@
     // --- Firebase Initialization ---
     async function initializeFirebase() {
         try {
-            // IMPORTANT: Replace this with your actual Firebase configuration
-            // It's recommended to use environment variables for this in a real application
-            // to avoid exposing your keys in the source code.
+            // IMPORTANT: This is a sample Firebase configuration. 
+            // You should replace it with your actual Firebase project's configuration.
             const firebaseConfig = {
                 apiKey: "AIzaSyCTmUo5UpQW77xhOkI_3XELSISo6WHyqLs",
                 authDomain: "spinner-live.firebaseapp.com",
@@ -1332,13 +1331,16 @@
             startRound();
         }
     });
+
+    // This listener on the header button allows the host to start a new round
+    // once the previous one is over. It's disabled during active gameplay.
     dom.reDealButton.addEventListener('click', () => {
         if (localGameState.players[currentPlayerId]?.isHost) {
             startRound();
         }
     });
 
-    // --- Main Game State Handler (REFACTORED) ---
+    // --- Main Game State Handler ---
     function handleGameStateUpdate(gameState) {
         const oldStatus = localGameState.gameStatus;
         localGameState = gameState; // Always store the latest state
@@ -1382,12 +1384,15 @@
         if (['in-progress', 'round-over', 'finished'].includes(gameState.gameStatus)) {
             dom.loadingScreen.classList.add('hidden');
             dom.setupScreen.classList.add('hidden');
-            dom.passDeviceScreen.classList.add('hidden'); // Hide pass screen if we reached here
+            dom.passDeviceScreen.classList.add('hidden'); 
             dom.roundStartScreen.classList.add('hidden');
             dom.gameContainer.classList.remove('hidden');
 
+            // --- FIX: CENTER VIEW ON START ---
+            // When the game state transitions from waiting/starting to in-progress,
+            // we call the function to center the board. The timeout ensures the
+            // game container is visible and has dimensions before we try to center it.
             if ((oldStatus === 'waiting' || oldStatus === 'round-starting') && gameState.gameStatus === 'in-progress') {
-                // BUG FIX: Wrap in a timeout to ensure the DOM is visible before calculating dimensions.
                 setTimeout(() => centerBoardOnStart(), 100);
             }
 
@@ -1509,9 +1514,9 @@
         }
     }
     
+    // This function handles resetting the board, dealing cards, and advancing the round.
+    // It's called by the "Start Game", "Next Round", and "Continue" buttons.
     async function startRound() {
-        // This function can be called by anyone now, so we need to ensure it only runs once
-        // by checking the game status. We'll use a transaction for safety.
         const gameRef = doc(db, "games", currentGameId);
 
         try {
@@ -1520,7 +1525,8 @@
                 if (!gameSnap.exists()) throw new Error("Game not found.");
                 const currentData = gameSnap.data();
 
-                // Prevent starting a new round if one is already in progress or starting
+                // Prevent starting a new round if one is already in progress.
+                // This is why the "Next Round" button in the header appears to do nothing mid-game.
                 if (currentData.gameStatus !== 'round-over' && currentData.gameStatus !== 'waiting') {
                     console.log("Round start blocked, already in progress.");
                     return;
@@ -1749,7 +1755,9 @@
         }, 0);
     }
 
-    // LOGIC CHANGE: Removed host check. Anyone can start the next round.
+    // --- FIX: NEXT ROUND BUTTON ---
+    // This listener on the round-end screen's button calls startRound()
+    // to begin the next round. It's enabled for all players.
     dom.continueRoundButton.addEventListener('click', () => {
         dom.continueRoundButton.disabled = true;
         dom.continueRoundButton.textContent = "Starting...";
@@ -1763,10 +1771,13 @@
         const isMyDeviceTurn = currentTurnPlayer?.controller === currentPlayerId;
         const isHost = gameState.players[currentPlayerId]?.isHost;
 
-        // NEW: Update round indicator
         dom.roundIndicator.textContent = gameState.roundNumber;
 
-        // Show re-deal button for host
+        // --- FIX: CLARIFY HOST'S "NEXT ROUND" BUTTON ---
+        // This makes the host's "Next Round" button in the header disabled during a round,
+        // preventing confusion about why it doesn't work. It's only active between rounds.
+        const canHostStartNewRound = isHost && (gameState.gameStatus === 'round-over' || gameState.gameStatus === 'waiting');
+        dom.reDealButton.disabled = !canHostStartNewRound;
         dom.reDealButton.classList.toggle('hidden', !isHost);
         
         // --- Render Board and Dominoes ---
@@ -2010,7 +2021,7 @@
             dom.roundResultsList.appendChild(p);
         });
         
-        // LOGIC CHANGE: Anyone can start the next round. The button is always enabled.
+        // Ensure the button is ready for the next round
         dom.continueRoundButton.disabled = false;
         dom.continueRoundButton.textContent = "Start Next Round";
     }
@@ -2070,21 +2081,6 @@
         return dominoElement;
     }
     
-    // COLOR CHANGE: This array is not used for rendering anymore, but kept for logic if needed.
-    // The actual colors are now set in the SVG gradients in the HTML.
-    const PIP_COLORS = [
-        '#E0E0E0', // 0 - White
-        '#DAA520', // 1 - Gold
-        '#D60000', // 2 - Red
-        '#E46100', // 3 - Orange
-        '#005299', // 4 - Blue
-        '#1A8A26', // 5 - Green
-        '#000000', // 6 - Black
-        '#B4008F', // 7 - Fuchsia
-        '#810099', // 8 - Purple
-        '#4FA2C2'  // 9 - Aqua
-    ];
-
     function createPipContainer(count, size = 'normal') {
         const container = document.createElement('div');
         container.className = 'pip-container';
@@ -2111,7 +2107,6 @@
         const svgNS = "http://www.w3.org/2000/svg";
         const svg = document.createElementNS(svgNS, "svg");
         svg.setAttribute('viewBox', '0 0 40 40');
-        // BUG FIX: Ensure uniform scaling of pips
         svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
         svg.style.width = '100%';
         svg.style.height = '100%';
@@ -2134,7 +2129,6 @@
                 circle.setAttribute('cx', cx);
                 circle.setAttribute('cy', cy);
                 circle.setAttribute('r', 4.5);
-                // Use gradient for pip fill
                 if (count >= 0 && count <= 9) {
                     circle.setAttribute('fill', `url(#pipGradient-${count})`);
                 } else {
@@ -2619,8 +2613,6 @@
                     const newLog = [...(gameState.log || []), `${validatorName} validated the move. It's now ${nextPlayer.name}'s turn.`];
                     if (newLog.length > 5) newLog.shift();
 
-                    // BUG FIX: This logic correctly determines if the next player is a "local" player
-                    // controlled by a remote host, thus requiring the pass-device screen on that host's device.
                     const needsConfirmation = nextPlayer.id !== nextPlayer.controller;
 
                     transaction.update(gameRef, {
