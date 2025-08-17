@@ -1687,17 +1687,45 @@
                 // BUG FIX: Check if the game is fully local (only one controller)
                 const controllerIds = new Set(Object.values(gameState.players).map(p => p.controller));
                 if (controllerIds.size === 1) {
-                    // It's a fully local game, so auto-validate and pass the turn
-                    const nextPlayerIndex = (gameState.currentPlayerIndex + 1) % gameState.playerOrder.length;
-                    transaction.update(gameRef, {
-                        currentPlayerIndex: nextPlayerIndex,
-                        turnState: 'WAITING',
-                        hasDrawn: false,
-                        moveHistory: [],
-                        lastPlayedDominoId: null,
-                        log: newLog,
-                        turnConfirmationPending: true // Always show pass screen for local games
-                    });
+                    const playerHand = gameState.players[currentTurnPlayerId].hand;
+
+                    if (playerHand.length === 0) {
+                        // End of round logic for local game
+                        let roundPoints = {};
+                        let scoreHistoryEntry = { round: gameState.roundNumber, scores: {} };
+                        const updatedPlayers = { ...gameState.players };
+
+                        Object.keys(updatedPlayers).forEach(pid => {
+                            const handValue = (pid === currentTurnPlayerId) ? 0 : calculateHandValue(updatedPlayers[pid].hand);
+                            updatedPlayers[pid].score += handValue;
+                            roundPoints[pid] = handValue;
+                            scoreHistoryEntry.scores[pid] = handValue;
+                        });
+                        
+                        const newScoreHistory = [...(gameState.scoreHistory || []), scoreHistoryEntry];
+                        const isGameOver = gameState.roundNumber >= 10;
+
+                        transaction.update(gameRef, {
+                            players: updatedPlayers,
+                            gameStatus: isGameOver ? 'finished' : 'round-over',
+                            roundEndInfo: { winnerId: currentTurnPlayerId, points: roundPoints },
+                            turnState: 'WAITING',
+                            hasDrawn: false,
+                            scoreHistory: newScoreHistory
+                        });
+                    } else {
+                        // Pass turn logic for local game
+                        const nextPlayerIndex = (gameState.currentPlayerIndex + 1) % gameState.playerOrder.length;
+                        transaction.update(gameRef, {
+                            currentPlayerIndex: nextPlayerIndex,
+                            turnState: 'WAITING',
+                            hasDrawn: false,
+                            moveHistory: [],
+                            lastPlayedDominoId: null,
+                            log: newLog,
+                            turnConfirmationPending: true
+                        });
+                    }
                 } else {
                     // It's a hybrid/online game, wait for validation
                     transaction.update(gameRef, {
