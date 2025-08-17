@@ -512,23 +512,23 @@
         
         /* --- LOCAL PLAYER LIST --- */
         #local-player-list-item {
-              display: flex;
-              justify-content: space-between;
-              align-items: center;
-              background-color: #374151; /* bg-gray-700 */
-              padding: 4px 8px;
-              border-radius: 4px;
+             display: flex;
+             justify-content: space-between;
+             align-items: center;
+             background-color: #374151; /* bg-gray-700 */
+             padding: 4px 8px;
+             border-radius: 4px;
        }
        #local-player-list-item button {
-              background-color: #ef4444; /* bg-red-500 */
-              color: white;
-              border: none;
-              border-radius: 50%;
-              width: 20px;
-              height: 20px;
-              font-weight: bold;
-              line-height: 1;
-              cursor: pointer;
+             background-color: #ef4444; /* bg-red-500 */
+             color: white;
+             border: none;
+             border-radius: 50%;
+             width: 20px;
+             height: 20px;
+             font-weight: bold;
+             line-height: 1;
+             cursor: pointer;
        }
 
 
@@ -568,19 +568,19 @@
 </head>
 <body class="text-white">
 
-<!-- VISUAL CHANGE: Added radial gradients for each pip color to add depth -->
+<!-- COLOR CHANGE: Updated radial gradients for each pip color to be darker and more primary -->
 <svg width="0" height="0" style="position:absolute;z-index:-1;">
     <defs>
-        <radialGradient id="pipGradient-0" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#f1f5f9"/><stop offset="100%" stop-color="#cbd5e0"/></radialGradient>
-        <radialGradient id="pipGradient-1" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#FBF8F0"/><stop offset="100%" stop-color="#EADCA6"/></radialGradient>
-        <radialGradient id="pipGradient-2" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#A52A2A"/><stop offset="100%" stop-color="#8B0000"/></radialGradient>
-        <radialGradient id="pipGradient-3" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#A52A2A"/><stop offset="100%" stop-color="#800000"/></radialGradient>
-        <radialGradient id="pipGradient-4" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#87CEFA"/><stop offset="100%" stop-color="#00BFFF"/></radialGradient>
-        <radialGradient id="pipGradient-5" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#2E8B57"/><stop offset="100%" stop-color="#006400"/></radialGradient>
-        <radialGradient id="pipGradient-6" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#444"/><stop offset="100%" stop-color="#000000"/></radialGradient>
-        <radialGradient id="pipGradient-7" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#CD853F"/><stop offset="100%" stop-color="#A0522D"/></radialGradient>
-        <radialGradient id="pipGradient-8" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#B39DD1"/><stop offset="100%" stop-color="#9370DB"/></radialGradient>
-        <radialGradient id="pipGradient-9" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#A9A9A9"/><stop offset="100%" stop-color="#808080"/></radialGradient>
+        <radialGradient id="pipGradient-0" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#FFFFFF"/><stop offset="100%" stop-color="#E0E0E0"/></radialGradient>
+        <radialGradient id="pipGradient-1" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#FFD700"/><stop offset="100%" stop-color="#DAA520"/></radialGradient> <!-- Gold -->
+        <radialGradient id="pipGradient-2" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#FF4136"/><stop offset="100%" stop-color="#D60000"/></radialGradient> <!-- Red -->
+        <radialGradient id="pipGradient-3" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#FF851B"/><stop offset="100%" stop-color="#E46100"/></radialGradient> <!-- Orange -->
+        <radialGradient id="pipGradient-4" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#0074D9"/><stop offset="100%" stop-color="#005299"/></radialGradient> <!-- Blue -->
+        <radialGradient id="pipGradient-5" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#2ECC40"/><stop offset="100%" stop-color="#1A8A26"/></radialGradient> <!-- Green -->
+        <radialGradient id="pipGradient-6" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#444"/><stop offset="100%" stop-color="#000000"/></radialGradient> <!-- Black -->
+        <radialGradient id="pipGradient-7" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#F012BE"/><stop offset="100%" stop-color="#B4008F"/></radialGradient> <!-- Fuchsia -->
+        <radialGradient id="pipGradient-8" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#B10DC9"/><stop offset="100%" stop-color="#810099"/></radialGradient> <!-- Purple -->
+        <radialGradient id="pipGradient-9" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#7FDBFF"/><stop offset="100%" stop-color="#4FA2C2"/></radialGradient> <!-- Aqua -->
     </defs>
 </svg>
 
@@ -952,6 +952,9 @@
     // --- Firebase Initialization ---
     async function initializeFirebase() {
         try {
+            // IMPORTANT: Replace this with your actual Firebase configuration
+            // It's recommended to use environment variables for this in a real application
+            // to avoid exposing your keys in the source code.
             const firebaseConfig = {
                 apiKey: "AIzaSyCTmUo5UpQW77xhOkI_3XELSISo6WHyqLs",
                 authDomain: "spinner-live.firebaseapp.com",
@@ -1487,82 +1490,96 @@
     }
     
     async function startRound() {
-        const currentData = localGameState;
-        const playerIds = currentData.playerOrder;
-        const deck = generateDeck();
-        shuffle(deck);
+        // This function can be called by anyone now, so we need to ensure it only runs once
+        // by checking the game status. We'll use a transaction for safety.
+        const gameRef = doc(db, "games", currentGameId);
 
-        const dominoesPerPlayer = 7;
-        const updatedPlayers = JSON.parse(JSON.stringify(currentData.players));
+        try {
+            await runTransaction(db, async (transaction) => {
+                const gameSnap = await transaction.get(gameRef);
+                if (!gameSnap.exists()) throw new Error("Game not found.");
+                const currentData = gameSnap.data();
 
-        playerIds.forEach(pid => {
-            updatedPlayers[pid].hand = deck.splice(0, dominoesPerPlayer);
-        });
+                // Prevent starting a new round if one is already in progress or starting
+                if (currentData.gameStatus !== 'round-over' && currentData.gameStatus !== 'waiting') {
+                    console.log("Round start blocked, already in progress.");
+                    return;
+                }
 
-        const newRoundNumber = currentData.roundNumber + 1;
-        const newStartingDouble = 9 - ((newRoundNumber - 1) % 10);
+                const playerIds = currentData.playerOrder;
+                const deck = generateDeck();
+                shuffle(deck);
 
-        let starterIndex;
-        let mustDraw = false;
+                const dominoesPerPlayer = 7;
+                const updatedPlayers = JSON.parse(JSON.stringify(currentData.players));
 
-        const tileStarterIndex = findRoundStarter(updatedPlayers, playerIds, newStartingDouble);
+                playerIds.forEach(pid => {
+                    updatedPlayers[pid].hand = deck.splice(0, dominoesPerPlayer);
+                });
 
-        if (tileStarterIndex !== -1) {
-            starterIndex = tileStarterIndex;
-            mustDraw = false;
-        } else {
-            const previousWinnerId = currentData.roundEndInfo?.winnerId;
-            const previousWinnerIndex = playerIds.indexOf(previousWinnerId);
+                const newRoundNumber = currentData.roundNumber + 1;
+                const newStartingDouble = 9 - ((newRoundNumber - 1) % 10);
 
-            if (newRoundNumber > 1 && previousWinnerId && previousWinnerIndex !== -1) {
-                starterIndex = previousWinnerIndex;
-                mustDraw = true;
-            } else {
-                let highestScore = -1;
-                let highestScoreIndex = -1;
-                for (let i = 0; i < playerIds.length; i++) {
-                    const pid = playerIds[i];
-                    const handValue = calculateHandValue(updatedPlayers[pid].hand);
-                    if (handValue > highestScore) {
-                        highestScore = handValue;
-                        highestScoreIndex = i;
+                let starterIndex;
+                let mustDraw = false;
+
+                const tileStarterIndex = findRoundStarter(updatedPlayers, playerIds, newStartingDouble);
+
+                if (tileStarterIndex !== -1) {
+                    starterIndex = tileStarterIndex;
+                    mustDraw = false;
+                } else {
+                    const previousWinnerId = currentData.roundEndInfo?.winnerId;
+                    const previousWinnerIndex = playerIds.indexOf(previousWinnerId);
+
+                    if (newRoundNumber > 1 && previousWinnerId && previousWinnerIndex !== -1) {
+                        starterIndex = previousWinnerIndex;
+                        mustDraw = true;
+                    } else {
+                        let highestScore = -1;
+                        let highestScoreIndex = -1;
+                        for (let i = 0; i < playerIds.length; i++) {
+                            const pid = playerIds[i];
+                            const handValue = calculateHandValue(updatedPlayers[pid].hand);
+                            if (handValue > highestScore) {
+                                highestScore = handValue;
+                                highestScoreIndex = i;
+                            }
+                        }
+                        starterIndex = highestScoreIndex;
+                        mustDraw = true;
                     }
                 }
-                starterIndex = highestScoreIndex;
-                mustDraw = true;
-            }
-        }
-        
-        const starterId = playerIds[starterIndex];
+                
+                const starterId = playerIds[starterIndex];
 
-        const newRoundState = {
-            gameStatus: 'round-starting',
-            players: updatedPlayers,
-            boneyard: deck,
-            boardDominos: [],
-            roundNumber: newRoundNumber,
-            currentStartingDouble: newStartingDouble,
-            mustDrawToStart: mustDraw,
-            turnState: 'WAITING',
-            hasDrawn: false,
-            lastPlayedDominoId: null,
-            passCount: 0,
-            moveHistory: [],
-            log: [],
-            roundEndInfo: null,
-            turnConfirmationPending: false,
-            roundStartInfo: {
-                starterId: starterId,
-                starterIndex: starterIndex,
-            }
-        };
-
-        const gameRef = doc(db, "games", currentGameId);
-        try {
-            await updateDoc(gameRef, newRoundState);
+                const newRoundState = {
+                    gameStatus: 'round-starting',
+                    players: updatedPlayers,
+                    boneyard: deck,
+                    boardDominos: [],
+                    roundNumber: newRoundNumber,
+                    currentStartingDouble: newStartingDouble,
+                    mustDrawToStart: mustDraw,
+                    turnState: 'WAITING',
+                    hasDrawn: false,
+                    lastPlayedDominoId: null,
+                    passCount: 0,
+                    moveHistory: [],
+                    log: [],
+                    roundEndInfo: null,
+                    turnConfirmationPending: false,
+                    roundStartInfo: {
+                        starterId: starterId,
+                        starterIndex: starterIndex,
+                    }
+                };
+                
+                transaction.update(gameRef, newRoundState);
+            });
         } catch (error) {
             console.error("Failed to start next round:", error);
-            showMessage("Could not start the next round. The host may need to try again.");
+            showMessage("Could not start the next round. Please try again.");
         }
     }
     
@@ -1667,12 +1684,11 @@
         }, 0);
     }
 
+    // LOGIC CHANGE: Removed host check. Anyone can start the next round.
     dom.continueRoundButton.addEventListener('click', () => {
-        if (localGameState.players[currentPlayerId]?.isHost) {
-            dom.continueRoundButton.disabled = true;
-            dom.continueRoundButton.textContent = "Starting...";
-            startRound();
-        }
+        dom.continueRoundButton.disabled = true;
+        dom.continueRoundButton.textContent = "Starting...";
+        startRound();
     });
 
     // --- UI Rendering ---
@@ -1682,7 +1698,7 @@
         const isMyDeviceTurn = currentTurnPlayer?.controller === currentPlayerId;
         const isHost = gameState.players[currentPlayerId]?.isHost;
 
-        // *** LOGIC CHANGE #3: Show re-deal button for host ***
+        // Show re-deal button for host
         dom.reDealButton.classList.toggle('hidden', !isHost);
         
         // --- Render Board and Dominoes ---
@@ -1783,7 +1799,6 @@
         dom.boneyardPileElement.classList.toggle('can-draw', isMyDeviceTurn && gameState.turnState === 'WAITING' && !gameState.hasDrawn && gameState.boneyard.length > 0);
     }
 
-    // *** LOGIC CHANGE #2: Corrected and simplified hand visibility logic ***
     function renderPlayerHands(gameState) {
         const playerOrder = gameState.playerOrder;
         const currentTurnPlayerId = playerOrder[gameState.currentPlayerIndex];
@@ -1927,9 +1942,9 @@
             dom.roundResultsList.appendChild(p);
         });
         
-        const isHost = gameState.players[currentPlayerId]?.isHost;
-        dom.continueRoundButton.disabled = !isHost;
-        dom.continueRoundButton.textContent = isHost ? "Start Next Round" : "Waiting for Host...";
+        // LOGIC CHANGE: Anyone can start the next round. The button is always enabled.
+        dom.continueRoundButton.disabled = false;
+        dom.continueRoundButton.textContent = "Start Next Round";
     }
 
     function showFinalScores(gameState) {
@@ -1987,17 +2002,19 @@
         return dominoElement;
     }
     
+    // COLOR CHANGE: This array is not used for rendering anymore, but kept for logic if needed.
+    // The actual colors are now set in the SVG gradients in the HTML.
     const PIP_COLORS = [
-        '#cbd5e0', // 0
-        '#EADCA6', // 1
-        '#8B0000', // 2
-        '#800000', // 3
-        '#00BFFF', // 4
-        '#006400', // 5
-        '#000000', // 6
-        '#A0522D', // 7
-        '#9370DB', // 8
-        '#808080'  // 9
+        '#E0E0E0', // 0 - White
+        '#DAA520', // 1 - Gold
+        '#D60000', // 2 - Red
+        '#E46100', // 3 - Orange
+        '#005299', // 4 - Blue
+        '#1A8A26', // 5 - Green
+        '#000000', // 6 - Black
+        '#B4008F', // 7 - Fuchsia
+        '#810099', // 8 - Purple
+        '#4FA2C2'  // 9 - Aqua
     ];
 
     function createPipContainer(count, size = 'normal') {
@@ -2047,7 +2064,7 @@
                 circle.setAttribute('cx', cx);
                 circle.setAttribute('cy', cy);
                 circle.setAttribute('r', 4.5);
-                // VISUAL CHANGE: Use gradient for pip fill
+                // Use gradient for pip fill
                 if (count >= 0 && count <= 9) {
                     circle.setAttribute('fill', `url(#pipGradient-${count})`);
                 } else {
