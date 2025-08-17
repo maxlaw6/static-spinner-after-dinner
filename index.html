@@ -584,14 +584,14 @@
         <radialGradient id="pipGradient-3" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#9A2A2A"/><stop offset="100%" stop-color="#800000"/></radialGradient>
         <!-- 4: Royal Blue -->
         <radialGradient id="pipGradient-4" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#5899E2"/><stop offset="100%" stop-color="#4169E1"/></radialGradient>
-        <!-- 5: Green -->
-        <radialGradient id="pipGradient-5" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#2ECC40"/><stop offset="100%" stop-color="#28A745"/></radialGradient>
+        <!-- 5: Forest Green -->
+        <radialGradient id="pipGradient-5" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#228B22"/><stop offset="100%" stop-color="#1E7E1E"/></radialGradient>
         <!-- 6: Black -->
         <radialGradient id="pipGradient-6" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#444444"/><stop offset="100%" stop-color="#000000"/></radialGradient>
         <!-- 7: Burnt Umber -->
         <radialGradient id="pipGradient-7" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#A0522D"/><stop offset="100%" stop-color="#8B4513"/></radialGradient>
-        <!-- 8: Lavender -->
-        <radialGradient id="pipGradient-8" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#C7B8E2"/><stop offset="100%" stop-color="#A48CD3"/></radialGradient>
+        <!-- 8: Rich Purple -->
+        <radialGradient id="pipGradient-8" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#9B59B6"/><stop offset="100%" stop-color="#8E44AD"/></radialGradient>
         <!-- 9: Greyish Blue -->
         <radialGradient id="pipGradient-9" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#8492A6"/><stop offset="100%" stop-color="#64748B"/></radialGradient>
     </defs>
@@ -1387,7 +1387,8 @@
             dom.gameContainer.classList.remove('hidden');
 
             if ((oldStatus === 'waiting' || oldStatus === 'round-starting') && gameState.gameStatus === 'in-progress') {
-                requestAnimationFrame(() => setTimeout(centerBoardOnStart, 0));
+                // BUG FIX: Wrap in a timeout to ensure the DOM is visible before calculating dimensions.
+                setTimeout(() => centerBoardOnStart(), 100);
             }
 
             renderGameUI(gameState);
@@ -2302,8 +2303,8 @@
     // --- Pan and Zoom Logic ---
     function centerBoardOnStart() {
         zoomLevel = 1.0;
-        boardPosition.x = (BOARD_SIZE / 2) - (dom.worldElement.clientWidth / 2);
-        boardPosition.y = (BOARD_SIZE / 2) - (dom.worldElement.clientHeight / 2);
+        boardPosition.x = (BOARD_SIZE / 2) - (dom.worldElement.clientWidth / 2 / zoomLevel);
+        boardPosition.y = (BOARD_SIZE / 2) - (dom.worldElement.clientHeight / 2 / zoomLevel);
         updateBoardTransform();
     }
 
@@ -2571,8 +2572,9 @@
                     const newLog = [...(gameState.log || []), `${validatorName} validated the move. It's now ${nextPlayer.name}'s turn.`];
                     if (newLog.length > 5) newLog.shift();
 
-                    // A confirmation is needed if the next player is a local player (not the device owner)
-                    const needsConfirmation = nextPlayer.id !== nextPlayer.controller;
+                    // BUG FIX: A confirmation is needed if the next player is a local player (not the device owner)
+                    // OR if the device owner is passing the turn to themselves as another player.
+                    const needsConfirmation = nextPlayer.controller === currentPlayerId;
 
                     transaction.update(gameRef, {
                         currentPlayerIndex: nextPlayerIndex,
