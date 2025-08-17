@@ -2066,6 +2066,8 @@
         const svgNS = "http://www.w3.org/2000/svg";
         const svg = document.createElementNS(svgNS, "svg");
         svg.setAttribute('viewBox', '0 0 40 40');
+        // BUG FIX: Ensure uniform scaling of pips
+        svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
         svg.style.width = '100%';
         svg.style.height = '100%';
 
@@ -2572,9 +2574,9 @@
                     const newLog = [...(gameState.log || []), `${validatorName} validated the move. It's now ${nextPlayer.name}'s turn.`];
                     if (newLog.length > 5) newLog.shift();
 
-                    // BUG FIX: A confirmation is needed if the next player is a local player (not the device owner)
-                    // OR if the device owner is passing the turn to themselves as another player.
-                    const needsConfirmation = nextPlayer.controller === currentPlayerId;
+                    // BUG FIX: This logic correctly determines if the next player is a "local" player
+                    // controlled by a remote host, thus requiring the pass-device screen on that host's device.
+                    const needsConfirmation = nextPlayer.id !== nextPlayer.controller;
 
                     transaction.update(gameRef, {
                         currentPlayerIndex: nextPlayerIndex,
