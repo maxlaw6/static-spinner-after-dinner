@@ -767,9 +767,9 @@
                     <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Your Hand Pips</h3>
                     <p id="hand-value-display" class="text-2xl font-bold text-yellow-300">0</p>
                 </div>
-                <!-- NEW: Round Indicator -->
+                <!-- STARTING TILE INDICATOR -->
                 <div class="text-center px-4">
-                    <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Round</h3>
+                    <h3 id="round-indicator-label" class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Round</h3>
                     <p id="round-indicator" class="text-2xl font-bold text-white">0</p>
                 </div>
             </div>
@@ -897,7 +897,8 @@
         detailedScoreboardContent: document.getElementById('detailed-scoreboard-content'),
         zoomInButton: document.getElementById('zoom-in-button'),
         zoomOutButton: document.getElementById('zoom-out-button'),
-        roundIndicator: document.getElementById('round-indicator'), // NEW: Round indicator
+        roundIndicator: document.getElementById('round-indicator'),
+        roundIndicatorLabel: document.getElementById('round-indicator-label'),
         
         // MODIFIED: Lobby DOM Elements
         createGameFlow: document.getElementById('create-game-flow'),
@@ -1331,9 +1332,7 @@
             startRound();
         }
     });
-
-    // This listener on the header button allows the host to start a new round
-    // once the previous one is over. It's disabled during active gameplay.
+    
     dom.reDealButton.addEventListener('click', () => {
         if (localGameState.players[currentPlayerId]?.isHost) {
             startRound();
@@ -1343,18 +1342,17 @@
     // --- Main Game State Handler ---
     function handleGameStateUpdate(gameState) {
         const oldStatus = localGameState.gameStatus;
-        localGameState = gameState; // Always store the latest state
+        localGameState = gameState; 
 
         if (!gameState.players || !gameState.playerOrder || gameState.playerOrder.length === 0) {
             return;
         }
 
-        // --- State Machine for Primary View ---
         const currentTurnPlayer = gameState.players[gameState.playerOrder[gameState.currentPlayerIndex]];
         if (gameState.turnConfirmationPending && currentTurnPlayer && currentTurnPlayer.controller === currentPlayerId) {
             dom.loadingScreen.classList.add('hidden');
             dom.setupScreen.classList.add('hidden');
-            dom.gameContainer.classList.add('hidden'); // Hide the main game area
+            dom.gameContainer.classList.add('hidden');
             dom.roundStartScreen.classList.add('hidden');
             showPassDeviceScreen(currentTurnPlayer.name);
             return;
@@ -1388,12 +1386,10 @@
             dom.roundStartScreen.classList.add('hidden');
             dom.gameContainer.classList.remove('hidden');
 
-            // --- FIX: CENTER VIEW ON START ---
-            // When the game state transitions from waiting/starting to in-progress,
-            // we call the function to center the board. The timeout ensures the
-            // game container is visible and has dimensions before we try to center it.
             if ((oldStatus === 'waiting' || oldStatus === 'round-starting') && gameState.gameStatus === 'in-progress') {
-                setTimeout(() => centerBoardOnStart(), 100);
+                requestAnimationFrame(() => {
+                    requestAnimationFrame(centerBoardOnStart);
+                });
             }
 
             renderGameUI(gameState);
@@ -1514,8 +1510,6 @@
         }
     }
     
-    // This function handles resetting the board, dealing cards, and advancing the round.
-    // It's called by the "Start Game", "Next Round", and "Continue" buttons.
     async function startRound() {
         const gameRef = doc(db, "games", currentGameId);
 
@@ -1524,12 +1518,10 @@
                 const gameSnap = await transaction.get(gameRef);
                 if (!gameSnap.exists()) throw new Error("Game not found.");
                 const currentData = gameSnap.data();
-
-                // Prevent starting a new round if one is already in progress.
-                // This is why the "Next Round" button in the header appears to do nothing mid-game.
-                if (currentData.gameStatus !== 'round-over' && currentData.gameStatus !== 'waiting') {
-                    console.log("Round start blocked, already in progress.");
-                    return;
+                
+                // Allow starting a new round from 'waiting', 'in-progress' (for host redeal), or 'round-over'.
+                if (!['waiting', 'in-progress', 'round-over'].includes(currentData.gameStatus)) {
+                    throw new Error("Invalid state for starting a new round.");
                 }
 
                 const playerIds = currentData.playerOrder;
@@ -1543,6 +1535,9 @@
                     updatedPlayers[pid].hand = deck.splice(0, dominoesPerPlayer);
                 });
 
+                // --- FIX: "NEXT ROUND" BUTTON LOGIC ---
+                // This now correctly increments the round number every time, ensuring the game progresses.
+                // It no longer re-deals the same round if the game is 'in-progress'.
                 const newRoundNumber = currentData.roundNumber + 1;
                 const newStartingDouble = 9 - ((newRoundNumber - 1) % 10);
 
@@ -1605,7 +1600,11 @@
             });
         } catch (error) {
             console.error("Failed to start next round:", error);
-            showMessage("Could not start the next round. Please try again.");
+            showMessage("Could not start the next round. Someone may have already started it.");
+            if (dom.roundEndScreen && !dom.roundEndScreen.classList.contains('hidden')) {
+                dom.continueRoundButton.disabled = false;
+                dom.continueRoundButton.textContent = "Start Next Round";
+            }
         }
     }
     
@@ -1690,13 +1689,11 @@
                 }
                 if (newLog.length > 5) newLog.shift();
                 
-                // BUG FIX: Check if the game is fully local (only one controller)
                 const controllerIds = new Set(Object.values(gameState.players).map(p => p.controller));
                 if (controllerIds.size === 1) {
                     const playerHand = gameState.players[currentTurnPlayerId].hand;
 
                     if (playerHand.length === 0) {
-                        // End of round logic for local game
                         let roundPoints = {};
                         let scoreHistoryEntry = { round: gameState.roundNumber, scores: {} };
                         const updatedPlayers = { ...gameState.players };
@@ -1720,7 +1717,6 @@
                             hasDrawn: false
                         });
                     } else {
-                        // Pass turn logic for local game
                         const nextPlayerIndex = (gameState.currentPlayerIndex + 1) % gameState.playerOrder.length;
                         transaction.update(gameRef, {
                             currentPlayerIndex: nextPlayerIndex,
@@ -1733,7 +1729,6 @@
                         });
                     }
                 } else {
-                    // It's a hybrid/online game, wait for validation
                     transaction.update(gameRef, {
                         turnState: 'PENDING_VALIDATION',
                         log: newLog
@@ -1754,10 +1749,7 @@
             return total + topValue + bottomValue;
         }, 0);
     }
-
-    // --- FIX: NEXT ROUND BUTTON ---
-    // This listener on the round-end screen's button calls startRound()
-    // to begin the next round. It's enabled for all players.
+    
     dom.continueRoundButton.addEventListener('click', () => {
         dom.continueRoundButton.disabled = true;
         dom.continueRoundButton.textContent = "Starting...";
@@ -1771,16 +1763,18 @@
         const isMyDeviceTurn = currentTurnPlayer?.controller === currentPlayerId;
         const isHost = gameState.players[currentPlayerId]?.isHost;
 
-        dom.roundIndicator.textContent = gameState.roundNumber;
+        // --- UPDATE STARTING TILE INDICATOR ---
+        if (dom.roundIndicatorLabel) {
+            dom.roundIndicatorLabel.textContent = "Starting Tile";
+        }
+        const startingDouble = gameState.currentStartingDouble;
+        // The game logic allows the double spinner as an alternative for the first play.
+        dom.roundIndicator.innerHTML = `<span class="text-lg">Dbl ${startingDouble}</span> <span class="text-gray-400 text-sm">or Spinner</span>`;
 
-        // --- FIX: CLARIFY HOST'S "NEXT ROUND" BUTTON ---
-        // This makes the host's "Next Round" button in the header disabled during a round,
-        // preventing confusion about why it doesn't work. It's only active between rounds.
-        const canHostStartNewRound = isHost && (gameState.gameStatus === 'round-over' || gameState.gameStatus === 'waiting');
-        dom.reDealButton.disabled = !canHostStartNewRound;
+        const canHostRedeal = isHost && gameState.gameStatus !== 'waiting';
+        dom.reDealButton.disabled = !canHostRedeal;
         dom.reDealButton.classList.toggle('hidden', !isHost);
         
-        // --- Render Board and Dominoes ---
         if (!isDraggingDomino) {
             dom.gameBoardElement.querySelectorAll('.domino').forEach(d => d.remove());
             gameState.boardDominos.forEach(domino => {
@@ -1806,7 +1800,6 @@
         }
         updateMinimap(gameState.boardDominos);
 
-        // --- Render Player Hands, Scoreboards, and Logs ---
         dom.playerHandsContainer.innerHTML = '';
         dom.scoreboard.innerHTML = '';
         renderPlayerHands(gameState);
@@ -1822,7 +1815,6 @@
             dom.handValueDisplay.textContent = calculateHandValue(myPlayerData.hand);
         }
 
-        // --- Update UI State (Buttons, Status Text) ---
         renderBoneyard(gameState, isMyDeviceTurn);
         dom.currentPlayerElement.textContent = gameState.players[currentTurnPlayerId].name;
         
@@ -1917,13 +1909,11 @@
             let showHandFaceUp = false;
 
             if (isDeviceControllingMultiple) {
-                // HYBRID/LOCAL MODE: Only show the active player's hand after confirmation
                 const isControlledByMyDevice = playerData.controller === currentPlayerId;
                 if (isControlledByMyDevice && isThisPlayerTheActiveTurn && !isTurnPendingConfirmation) {
                     showHandFaceUp = true;
                 }
             } else {
-                // ONLINE-ONLY MODE: Always show my own hand
                 if (playerId === currentPlayerId) {
                     showHandFaceUp = true;
                 }
@@ -2021,7 +2011,6 @@
             dom.roundResultsList.appendChild(p);
         });
         
-        // Ensure the button is ready for the next round
         dom.continueRoundButton.disabled = false;
         dom.continueRoundButton.textContent = "Start Next Round";
     }
@@ -2054,7 +2043,6 @@
             dom.finalScoreList.appendChild(p);
         });
         
-        // Trigger confetti for the winner(s)
         winners.forEach(winner => {
             const winnerData = Object.values(gameState.players).find(p => p.name === winner.name);
             if (winnerData) {
@@ -2343,9 +2331,12 @@
 
     // --- Pan and Zoom Logic ---
     function centerBoardOnStart() {
+        const worldWidth = dom.worldElement.clientWidth;
+        const worldHeight = dom.worldElement.clientHeight;
+
         zoomLevel = 1.0;
-        boardPosition.x = (BOARD_SIZE / 2) - (dom.worldElement.clientWidth / 2 / zoomLevel);
-        boardPosition.y = (BOARD_SIZE / 2) - (dom.worldElement.clientHeight / 2 / zoomLevel);
+        boardPosition.x = (BOARD_SIZE / 2) - (worldWidth / 2 / zoomLevel);
+        boardPosition.y = (BOARD_SIZE / 2) - (worldHeight / 2 / zoomLevel);
         updateBoardTransform();
     }
 
