@@ -515,23 +515,23 @@
         
         /* --- LOCAL PLAYER LIST --- */
         #local-player-list-item {
-             display: flex;
-             justify-content: space-between;
-             align-items: center;
-             background-color: #374151; /* bg-gray-700 */
-             padding: 4px 8px;
-             border-radius: 4px;
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              background-color: #374151; /* bg-gray-700 */
+              padding: 4px 8px;
+              border-radius: 4px;
        }
        #local-player-list-item button {
-             background-color: #ef4444; /* bg-red-500 */
-             color: white;
-             border: none;
-             border-radius: 50%;
-             width: 20px;
-             height: 20px;
-             font-weight: bold;
-             line-height: 1;
-             cursor: pointer;
+              background-color: #ef4444; /* bg-red-500 */
+              color: white;
+              border: none;
+              border-radius: 50%;
+              width: 20px;
+              height: 20px;
+              font-weight: bold;
+              line-height: 1;
+              cursor: pointer;
        }
 
 
@@ -2147,16 +2147,19 @@
             return;
         }
         
+        // --- MODIFICATION START ---
+        // This logic has been changed to allow players to move any tile on the board during their turn.
         if (origin === 'board') {
+            // Players can only adjust the board AFTER they have made their primary move for the turn (when turnState is 'PLACED').
             if (localGameState.turnState !== 'PLACED') {
+                // Provide feedback to the user instead of silently failing.
+                showMessage("You must play a tile from your hand before you can adjust the board layout.");
                 return;
             }
-            const playedThisTurn = (localGameState.moveHistory || []).some(move => move.dominoId === dominoObject.dominoData.id);
-            if (!playedThisTurn) {
-                showMessage("You can only reposition tiles played this turn.");
-                return;
-            }
+            // The original check that limited movement to only the tile played in the current turn has been removed.
+            // Now, any tile on the board can be moved to make space.
         }
+        // --- MODIFICATION END ---
         
         originalDominoElement = e.currentTarget;
         draggedDominoData = dominoObject;
@@ -2418,10 +2421,10 @@
     dom.worldElement.addEventListener('touchstart', (e) => {
         if (e.touches.length === 1 && !isDraggingDomino) {
              if (e.target !== dom.worldElement && e.target !== dom.gameBoardElement && e.target.id !== 'world-wrapper') return;
-             isPanning = true;
-             dom.worldElement.classList.add('panning');
-             const coords = getEventCoords(e);
-             panStart = { x: coords.clientX, y: coords.clientY };
+              isPanning = true;
+              dom.worldElement.classList.add('panning');
+              const coords = getEventCoords(e);
+              panStart = { x: coords.clientX, y: coords.clientY };
         }
     }, { passive: false });
 
