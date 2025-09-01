@@ -429,6 +429,26 @@
             animation: pending-glow 1.5s infinite;
         }
 
+        /* NEW: Winner Animations */
+        @keyframes winner-pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+        @keyframes winner-shake {
+            0%, 100% { transform: rotate(0deg); }
+            25% { transform: rotate(-1.5deg); }
+            75% { transform: rotate(1.5deg); }
+        }
+        @keyframes winner-flash {
+            0%, 100% { text-shadow: 0 0 8px #FFD700; }
+            50% { text-shadow: 0 0 20px #FFFFFF, 0 0 8px #FFD700; }
+        }
+        .winner-animation {
+            animation: winner-pulse 1.2s ease-in-out infinite, 
+                       winner-shake 0.4s ease-in-out infinite,
+                       winner-flash 1.5s linear infinite;
+        }
+
         @keyframes thud {
             from { transform: scale(1.1); }
             to { transform: scale(1); }
@@ -761,7 +781,8 @@
 
 <!-- Game Over Screen -->
 <div class="hidden" id="game-over-screen">
-    <div class="w-full max-w-md" id="final-score-display">
+    <!-- FIX: Increased max-width to accommodate the full scoreboard -->
+    <div class="w-full max-w-3xl" id="final-score-display">
         <h2 class="text-4xl font-bold text-center mb-4 text-yellow-300">Game Over!</h2>
         <p class="text-xl mb-6" id="final-winner-message"></p>
         <div class="space-y-2 text-lg mb-8" id="final-score-list"></div>
@@ -2043,15 +2064,51 @@
         } else {
             dom.finalWinnerMessage.textContent = `${winners[0].name} wins the game!`;
         }
+        
+        // FIX: Add animation to winner message
+        dom.finalWinnerMessage.classList.add('winner-animation');
+
         dom.finalScoreList.innerHTML = '';
-        finalScores.forEach(player => {
-            const p = document.createElement('p');
-            p.textContent = `${player.name}: ${player.score} points`;
-            if (player.score === winnerScore) {
-                p.classList.add('winner');
-            }
-            dom.finalScoreList.appendChild(p);
-        });
+
+        // FIX: Render the full detailed scoreboard instead of a simple list
+        const { scoreHistory, players, playerOrder } = gameState;
+        if (scoreHistory && scoreHistory.length > 0) {
+            const table = document.createElement('table');
+            table.id = 'detailed-scoreboard-table'; // Reuse existing styles
+            table.style.width = '100%';
+            table.style.margin = '0 auto';
+
+            const thead = table.createTHead();
+            const headerRow = thead.insertRow();
+            const roundHeader = document.createElement('th');
+            roundHeader.textContent = 'R';
+            headerRow.appendChild(roundHeader);
+            playerOrder.forEach(pid => {
+                const th = document.createElement('th');
+                th.textContent = players[pid].name.substring(0, 3);
+                headerRow.appendChild(th);
+            });
+
+            const tbody = table.createTBody();
+            scoreHistory.forEach(roundData => {
+                const row = tbody.insertRow();
+                row.insertCell().textContent = roundData.round;
+                playerOrder.forEach(pid => {
+                    row.insertCell().textContent = roundData.scores[pid] ?? '0';
+                });
+            });
+
+            const tfoot = table.createTFoot();
+            const totalRow = tfoot.insertRow();
+            totalRow.className = 'total-row';
+            totalRow.insertCell().textContent = 'Total';
+            playerOrder.forEach(pid => {
+                const cell = totalRow.insertCell();
+                cell.textContent = players[pid].score;
+            });
+            dom.finalScoreList.appendChild(table);
+        }
+
         winners.forEach(winner => {
             const winnerData = Object.values(gameState.players).find(p => p.name === winner.name);
             if (winnerData) {
@@ -2921,5 +2978,6 @@
 </script>
 </body>
 </html>
+
 
 
