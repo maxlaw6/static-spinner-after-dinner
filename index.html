@@ -1782,6 +1782,15 @@
         dom.reDealButton.disabled = !canHostRedeal;
         dom.reDealButton.classList.toggle('hidden', !isHost);
         
+        // --- FIX: Clear old dominoes from the board that are no longer in the state ---
+        const currentDominoIds = new Set(gameState.boardDominos.map(d => d.dominoData.id));
+        const dominoesInDom = dom.gameBoardElement.querySelectorAll('.domino-on-board');
+        dominoesInDom.forEach(dominoElement => {
+            if (!currentDominoIds.has(dominoElement.dataset.id)) {
+                dominoElement.remove();
+            }
+        });
+
         // Create any domino DOM elements that don't exist yet, and ensure all have fresh listeners
         gameState.boardDominos.forEach(domino => {
             const id = domino.dominoData.id;
@@ -2912,4 +2921,5 @@
 </script>
 </body>
 </html>
+
 
