@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
     <title>Spinner after Dinner</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- REMOVED: Matter.js is no longer needed -->
     <link rel="preconnect" href="https://fonts.googleapis.com"/>
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet"/>
@@ -96,8 +97,13 @@
             box-shadow: 0 4px 6px rgba(0,0,0,0.3), inset 0 1px 1px rgba(255,255,255,0.3);
             transform-origin: center center;
             color: #1a1a1a;
-            transition: all 0.25s ease;
+            transition: box-shadow 0.25s ease, border 0.25s ease; /* Modified for selection glow */
             -webkit-tap-highlight-color: transparent; /* Remove tap highlight on iOS */
+        }
+        .domino-on-board {
+            position: absolute;
+            transform-origin: center;
+            transition: none;
         }
         .domino.domino-back {
             background-color: #f5f5dc;
@@ -124,9 +130,19 @@
             left: 0;
             opacity: 0.95;
             pointer-events: none;
-            transform-origin: center center; 
+            transform-origin: center center;  
             will-change: transform;
             backface-visibility: hidden;
+        }
+
+        /* Style for selected dominoes for moving branch */
+        .domino.selected-for-branch {
+            box-shadow: 0 0 15px 5px #0ea5e9, inset 0 0 5px #0ea5e9; /* sky-500 */
+            border: 2px solid #38bdf8; /* sky-400 */
+        }
+        .domino.anchor-domino {
+             box-shadow: 0 0 15px 5px #f59e0b, inset 0 0 5px #f59e0b; /* amber-500 */
+            border: 2px solid #fbbf24; /* amber-400 */
         }
         
         /* Mini Domino Styles for Opponent Hands */
@@ -181,6 +197,12 @@
             opacity: 0.5;
             cursor: not-allowed;
         }
+        /* NEW: Style for active tool button */
+        .tool-button.active {
+            background-color: #0ea5e9; /* sky-500 */
+            box-shadow: 0 0 10px #0ea5e9;
+        }
+
         #boneyard-pile {
             border: 2px dashed #a0aec0;
             height: 60px;
@@ -253,6 +275,7 @@
             border-radius: 4px;
             z-index: 2000;
             cursor: pointer;
+            pointer-events: auto !important; /* FIX: Ensure minimap is always clickable */
         }
         #minimap-viewport {
             position: absolute;
@@ -383,6 +406,7 @@
         
         #boneyard-buttons {
             flex-direction: row;
+            flex-wrap: wrap; /* Allow buttons to wrap */
         }
         
         #game-log {
@@ -618,7 +642,7 @@
     <div id="round-start-content" class="w-full max-w-md">
         <h2 class="text-3xl font-bold text-center mb-4">Starting Round <span id="round-start-number"></span></h2>
         <p class="text-xl text-center mb-6">
-            <span id="round-starter-name" class="text-yellow-300 font-bold"></span> has the starting tile!
+            <span id="round-starter-name" class="text-yellow-300 font-bold"></span> starts the round!
         </p>
         <p id="round-start-wait-message" class="text-gray-400 mb-6">Waiting for them to start the round...</p>
         <button id="confirm-round-start-button" class="w-full bg-green-600 hover:bg-green-700 font-bold py-3 px-4 rounded transition-colors hidden">
@@ -801,10 +825,9 @@
                     <span id="boneyard-count">0</span>
                 </div>
                 <div class="mt-2 flex items-center justify-center gap-2" id="boneyard-buttons">
-                    <button class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition-colors" id="undo-button">Undo</button>
                     <button class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition-colors" id="end-turn-button">End Turn</button>
-                    <button class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded transition-colors hidden" id="rotate-last-tile-button">Rotate Tile</button>
-                    <!-- NEW: Validation Buttons -->
+                    <button class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded transition-colors" id="rotate-last-tile-button">Rotate Tile</button>
+                    <button class="tool-button bg-sky-600 hover:bg-sky-700 text-white font-bold py-2 px-3 rounded transition-colors" id="move-branch-button">Move Branch</button>
                     <button class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-3 rounded transition-colors hidden" id="validate-move-button">Validate Move</button>
                     <button class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-3 rounded transition-colors hidden" id="challenge-move-button">Challenge</button>
                 </div>
@@ -839,8 +862,8 @@
 <script type="module">
     // Import Firebase modules
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-    import { getFirestore, doc, getDoc, setDoc, updateDoc, onSnapshot, collection, serverTimestamp, runTransaction } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, doc, getDoc, setDoc, updateDoc, onSnapshot, collection, serverTimestamp, runTransaction, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
     import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-analytics.js";
 
     // --- DOM Elements ---
@@ -857,7 +880,6 @@
         playerNameInput: document.getElementById('player-name'),
         joinGameIdInput: document.getElementById('join-game-id'),
         gameIdDisplay: document.getElementById('game-id-display'),
-        gameIdHeader: document.getElementById('game-id-header'),
         copyGameIdButton: document.getElementById('copy-game-id'),
         playerList: document.getElementById('player-list'),
         waitingMessage: document.getElementById('waiting-message'),
@@ -869,7 +891,6 @@
         boneyardCountElement: document.getElementById('boneyard-count'),
         currentPlayerElement: document.getElementById('current-player'),
         endTurnButton: document.getElementById('end-turn-button'),
-        undoButton: document.getElementById('undo-button'),
         rotateLastTileButton: document.getElementById('rotate-last-tile-button'),
         gameStatusElement: document.getElementById('game-status'),
         playerHandsContainer: document.getElementById('player-hands-container'),
@@ -936,6 +957,9 @@
         passDeviceScreen: document.getElementById('pass-device-screen'),
         nextPlayerNamePass: document.getElementById('next-player-name-pass'),
         confirmTurnButton: document.getElementById('confirm-turn-button'),
+
+        // NEW: Move Branch buttons
+        moveBranchButton: document.getElementById('move-branch-button'),
     };
     
     // --- Firebase & Game State ---
@@ -964,16 +988,23 @@
     let zoomLevel = 1.0;
     const MIN_ZOOM = 0.3;
     const MAX_ZOOM = 3.0;
-    let initialPinchDistance = null;
     let activeDominoElement = null;
     let draggedDominoData = null;
     let originalDominoElement = null;
 
+    // --- REWORKED: Branch Moving State (No Physics) ---
+    let moveBranchMode = false;
+    let selectedBranch = {
+        anchor: null, // The domino object that is the pivot point
+        dominos: [], // Array of all domino objects in the branch
+        originalPositions: new Map(), // Map of dominoId -> {x, y, rotation}
+        isDraggingBranch: false,
+    };
+    
     // --- Firebase Initialization ---
     async function initializeFirebase() {
         try {
-            // IMPORTANT: This is a sample Firebase configuration. 
-            // You should replace it with your actual Firebase project's configuration.
+            // Reverted to the original hardcoded Firebase config as requested.
             const firebaseConfig = {
                 apiKey: "AIzaSyCTmUo5UpQW77xhOkI_3XELSISo6WHyqLs",
                 authDomain: "spinner-live.firebaseapp.com",
@@ -983,19 +1014,20 @@
                 appId: "1:878930500451:web:e281c28d5c29218044d156",
                 measurementId: "G-BPHD3B8WDT"
             };
-            
             const app = initializeApp(firebaseConfig);
+
             db = getFirestore(app);
             auth = getAuth(app);
             analytics = getAnalytics(app);
 
             dom.authStatus.textContent = 'Authenticating...';
-            
+
             onAuthStateChanged(auth, async (user) => {
                 if (user) {
                     currentPlayerId = user.uid;
                     enableLobby();
                 } else {
+                    // Reverted to simple anonymous sign-in
                     await signInAnonymously(auth);
                 }
             });
@@ -1024,8 +1056,7 @@
         dom.modeHybridButton.disabled = false;
     }
 
-    // --- Lobby and Game Setup ---
-
+    // --- Lobby and Game Setup --- (No major changes in this section)
     function showMainLobbyView() {
         dom.createGameFlow.classList.remove('hidden');
         dom.joinGameFlow.classList.remove('hidden');
@@ -1139,7 +1170,6 @@
         const gameId = tempGameRef.id.substring(0, 6).toUpperCase();
         const gameRef = doc(db, "games", gameId);
 
-        // Assign colors to initial players
         playerOrder.forEach((pid, index) => {
             players[pid].color = PLAYER_COLORS[index % PLAYER_COLORS.length];
         });
@@ -1171,7 +1201,6 @@
             return;
         }
         
-        // Show the join type selection screen
         dom.createGameFlow.classList.add('hidden');
         dom.joinGameFlow.classList.add('hidden');
         dom.joinTypeSelectionView.classList.remove('hidden');
@@ -1235,13 +1264,11 @@
                 const updates = {};
                 const newPlayerIds = [];
 
-                // Add the main joining player
                 const mainPlayerColor = PLAYER_COLORS[playerCount % PLAYER_COLORS.length];
                 playerCount++;
                 updates[`players.${currentPlayerId}`] = { id: currentPlayerId, controller: currentPlayerId, name: playerName, score: 0, hand: [], isHost: false, color: mainPlayerColor };
                 newPlayerIds.push(currentPlayerId);
 
-                // Add the local players for the joiner
                 joinerLocalPlayers.forEach((p, i) => {
                     const localId = `local_${Date.now()}_${i}`;
                     const localPlayerColor = PLAYER_COLORS[playerCount % PLAYER_COLORS.length];
@@ -1307,24 +1334,31 @@
     dom.mainMenuButtonFinal.addEventListener('click', leaveGame);
 
     dom.copyGameIdButton.addEventListener('click', () => {
-        navigator.clipboard.writeText(currentGameId).then(() => {
-            dom.copyGameIdButton.textContent = 'Copied!';
-            setTimeout(() => { dom.copyGameIdButton.textContent = 'Copy'; }, 2000);
-        }).catch(err => {
+        const copyText = currentGameId;
+        // Use modern clipboard API if available, with a fallback
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(copyText).then(() => {
+                dom.copyGameIdButton.textContent = 'Copied!';
+                setTimeout(() => { dom.copyGameIdButton.textContent = 'Copy'; }, 2000);
+            });
+        } else {
+            // Fallback for insecure contexts or older browsers
             const textArea = document.createElement("textarea");
-            textArea.value = currentGameId;
+            textArea.value = copyText;
+            textArea.style.position = "absolute";
+            textArea.style.left = "-9999px";
             document.body.appendChild(textArea);
-            textArea.focus();
             textArea.select();
             try {
                 document.execCommand('copy');
                 dom.copyGameIdButton.textContent = 'Copied!';
             } catch (err) {
+                console.error('Fallback copy failed', err);
                 dom.copyGameIdButton.textContent = 'Failed!';
             }
             document.body.removeChild(textArea);
             setTimeout(() => { dom.copyGameIdButton.textContent = 'Copy'; }, 2000);
-        });
+        }
     });
 
     dom.startGameButton.addEventListener('click', () => {
@@ -1385,11 +1419,14 @@
             dom.passDeviceScreen.classList.add('hidden'); 
             dom.roundStartScreen.classList.add('hidden');
             dom.gameContainer.classList.remove('hidden');
-
-            if ((oldStatus === 'waiting' || oldStatus === 'round-starting') && gameState.gameStatus === 'in-progress') {
-                requestAnimationFrame(() => {
-                    requestAnimationFrame(centerBoardOnStart);
-                });
+            
+            // Center board at the start of every round.
+            if (oldStatus !== 'in-progress' && gameState.gameStatus === 'in-progress') {
+                 // Trigger a visual effect at the center of the board
+                 triggerRippleEffect(BOARD_SIZE / 2, BOARD_SIZE / 2);
+                 requestAnimationFrame(() => {
+                     requestAnimationFrame(centerBoardOnStart);
+                 });
             }
 
             renderGameUI(gameState);
@@ -1411,22 +1448,18 @@
 
     function updateWaitingRoomUI(gameState) {
         dom.gameIdDisplay.textContent = currentGameId;
-
         const playerIds = gameState.playerOrder;
         const playerCount = playerIds.length;
         const isHost = gameState.players[currentPlayerId]?.isHost;
-
         dom.playerList.innerHTML = '';
         playerIds.forEach(pid => {
             const p = document.createElement('p');
             p.textContent = `${gameState.players[pid].name} ${gameState.players[pid].isHost ? '(Host)' : ''}`;
             dom.playerList.appendChild(p);
         });
-
         const canStart = isHost && playerCount >= 2 && playerCount <= 8;
         dom.startGameButton.disabled = !canStart;
         dom.reDealButton.classList.add('hidden');
-
         if (isHost) {
             if (playerCount < 2) dom.waitingMessage.textContent = "Need at least 2 players to start.";
             else if (playerCount > 8) dom.waitingMessage.textContent = "Cannot start with more than 8 players.";
@@ -1449,17 +1482,13 @@
     function showRoundStartScreen(gameState) {
         const { roundNumber, roundStartInfo } = gameState;
         const starter = gameState.players[roundStartInfo.starterId];
-        
         dom.roundEndScreen.classList.add('hidden');
         dom.roundStartNumber.textContent = roundNumber;
         dom.roundStarterName.textContent = starter.name;
-
         const isLocalPlayerStarting = starter.controller === currentPlayerId && starter.id !== currentPlayerId;
-
         if (starter.controller === currentPlayerId) {
             dom.confirmRoundStartButton.classList.remove('hidden');
             dom.roundStartWaitMessage.classList.add('hidden');
-
             if (isLocalPlayerStarting) {
                 dom.confirmRoundStartButton.textContent = `Ready to Pass to ${starter.name}`;
                 dom.roundStartWaitMessage.textContent = `When ready, confirm to pass the device to ${starter.name}.`;
@@ -1472,7 +1501,6 @@
             dom.roundStartWaitMessage.textContent = `Waiting for ${localGameState.players[starter.controller].name} to start the round...`;
             dom.roundStartWaitMessage.classList.remove('hidden');
         }
-        
         dom.roundStartScreen.classList.remove('hidden');
     }
 
@@ -1480,9 +1508,7 @@
         const gameRef = doc(db, "games", currentGameId);
         const { roundStartInfo, players, roundNumber } = localGameState;
         const starter = players[roundStartInfo.starterId];
-        
         const needsConfirmation = starter.controller === currentPlayerId && starter.id !== currentPlayerId;
-
         await updateDoc(gameRef, {
             gameStatus: 'in-progress',
             currentPlayerIndex: roundStartInfo.starterIndex,
@@ -1512,51 +1538,36 @@
     
     async function startRound() {
         const gameRef = doc(db, "games", currentGameId);
-
         try {
             await runTransaction(db, async (transaction) => {
                 const gameSnap = await transaction.get(gameRef);
                 if (!gameSnap.exists()) throw new Error("Game not found.");
                 const currentData = gameSnap.data();
-                
-                // Allow starting a new round from 'waiting', 'in-progress' (for host redeal), or 'round-over'.
                 if (!['waiting', 'in-progress', 'round-over'].includes(currentData.gameStatus)) {
                     throw new Error("Invalid state for starting a new round.");
                 }
-
                 const playerIds = currentData.playerOrder;
                 const deck = generateDeck();
                 shuffle(deck);
-
                 const dominoesPerPlayer = 7;
                 const updatedPlayers = JSON.parse(JSON.stringify(currentData.players));
-
                 playerIds.forEach(pid => {
                     updatedPlayers[pid].hand = deck.splice(0, dominoesPerPlayer);
                 });
-
-                // --- FIX: "NEXT ROUND" BUTTON LOGIC ---
-                // This now correctly increments the round number every time, ensuring the game progresses.
-                // It no longer re-deals the same round if the game is 'in-progress'.
                 const newRoundNumber = currentData.roundNumber + 1;
                 const newStartingDouble = 9 - ((newRoundNumber - 1) % 10);
-
                 let starterIndex;
                 let mustDraw = false;
-
+                
                 const tileStarterIndex = findRoundStarter(updatedPlayers, playerIds, newStartingDouble);
-
+                
                 if (tileStarterIndex !== -1) {
                     starterIndex = tileStarterIndex;
                     mustDraw = false;
                 } else {
-                    const previousWinnerId = currentData.roundEndInfo?.winnerId;
-                    const previousWinnerIndex = playerIds.indexOf(previousWinnerId);
-
-                    if (newRoundNumber > 1 && previousWinnerId && previousWinnerIndex !== -1) {
-                        starterIndex = previousWinnerIndex;
-                        mustDraw = true;
-                    } else {
+                    // LOGIC CHANGE: Different rules for round 1 vs subsequent rounds
+                    if (newRoundNumber === 1) {
+                        // Round 1: Highest pip count starts.
                         let highestScore = -1;
                         let highestScoreIndex = -1;
                         for (let i = 0; i < playerIds.length; i++) {
@@ -1568,12 +1579,24 @@
                             }
                         }
                         starterIndex = highestScoreIndex;
-                        mustDraw = true;
+                        mustDraw = false; // They start by playing, not drawing.
+                    } else {
+                        // Round 2+: Previous winner starts.
+                        const previousWinnerId = currentData.roundEndInfo?.winnerId;
+                        const previousWinnerIndex = playerIds.indexOf(previousWinnerId);
+                        
+                        if (previousWinnerId && previousWinnerIndex !== -1) {
+                            starterIndex = previousWinnerIndex;
+                        } else {
+                             // Fallback if there's no clear winner (e.g., a tie or error)
+                             // This is unlikely but safe to have. We'll default to player 0.
+                             starterIndex = 0; 
+                        }
+                        mustDraw = true; // This player MUST draw to start their turn.
                     }
                 }
-                
-                const starterId = playerIds[starterIndex];
 
+                const starterId = playerIds[starterIndex];
                 const newRoundState = {
                     gameStatus: 'round-starting',
                     players: updatedPlayers,
@@ -1595,7 +1618,6 @@
                         starterIndex: starterIndex,
                     }
                 };
-                
                 transaction.update(gameRef, newRoundState);
             });
         } catch (error) {
@@ -1611,54 +1633,46 @@
     function findRoundStarter(players, playerOrder, requiredDoubleValue) {
         const hasSpecificDouble = (hand, val) => hand.some(d => d.top === val && d.bottom === val);
         const hasDoubleSpinner = (hand) => hand.some(d => d.top === SPINNER_VALUE && d.bottom === SPINNER_VALUE);
-
         for (let i = 0; i < playerOrder.length; i++) {
             const pid = playerOrder[i];
             if (hasSpecificDouble(players[pid].hand, requiredDoubleValue)) {
                 return i;
             }
         }
-        
         for (let i = 0; i < playerOrder.length; i++) {
             const pid = playerOrder[i];
             if (hasDoubleSpinner(players[pid].hand)) {
                 return i;
             }
         }
-
         return -1;
     }
     
     async function drawFromBoneyard() {
         const gameRef = doc(db, "games", currentGameId);
-        
         try {
             await runTransaction(db, async (transaction) => {
                 const gameSnap = await transaction.get(gameRef);
                 if (!gameSnap.exists()) throw "Game does not exist!";
                 const gameState = gameSnap.data();
-                
                 const currentTurnPlayer = gameState.players[gameState.playerOrder[gameState.currentPlayerIndex]];
                 const isMyDeviceTurn = currentTurnPlayer.controller === currentPlayerId;
-
                 if (!isMyDeviceTurn || gameState.hasDrawn || gameState.turnState !== 'WAITING' || gameState.boneyard.length === 0) {
                     return;
                 }
-
                 const boneyard = [...gameState.boneyard];
                 const drawnDomino = boneyard.pop();
-                
                 const updatedPlayers = { ...gameState.players };
                 updatedPlayers[currentTurnPlayer.id].hand.push(drawnDomino);
-                
                 const newLog = [...(gameState.log || [])];
                 newLog.push(`${currentTurnPlayer.name} drew from the boneyard.`);
                 if (newLog.length > 5) newLog.shift();
-
                 transaction.update(gameRef, {
                     players: updatedPlayers,
                     boneyard: boneyard,
                     hasDrawn: true,
+                    // If they had to draw to start, that condition is now met
+                    mustDrawToStart: false, 
                     log: newLog
                 });
             });
@@ -1677,10 +1691,8 @@
                 const gameSnap = await transaction.get(gameRef);
                 if (!gameSnap.exists()) throw "Game does not exist!";
                 const gameState = gameSnap.data();
-
                 const currentTurnPlayerId = gameState.playerOrder[gameState.currentPlayerIndex];
                 const currentTurnPlayer = gameState.players[currentTurnPlayerId];
-
                 const newLog = [...(gameState.log || [])];
                 if(gameState.hasDrawn && gameState.turnState === 'WAITING'){
                     newLog.push(`${currentTurnPlayer.name} passed their turn.`);
@@ -1692,12 +1704,10 @@
                 const controllerIds = new Set(Object.values(gameState.players).map(p => p.controller));
                 if (controllerIds.size === 1) {
                     const playerHand = gameState.players[currentTurnPlayerId].hand;
-
                     if (playerHand.length === 0) {
                         let roundPoints = {};
                         let scoreHistoryEntry = { round: gameState.roundNumber, scores: {} };
                         const updatedPlayers = { ...gameState.players };
-
                         Object.keys(updatedPlayers).forEach(pid => {
                             const handValue = (pid === currentTurnPlayerId) ? 0 : calculateHandValue(updatedPlayers[pid].hand);
                             updatedPlayers[pid].score += handValue;
@@ -1707,7 +1717,6 @@
                         
                         const newScoreHistory = [...(gameState.scoreHistory || []), scoreHistoryEntry];
                         const isGameOver = gameState.roundNumber >= 10;
-
                         transaction.update(gameRef, {
                             players: updatedPlayers,
                             gameStatus: isGameOver ? 'finished' : 'round-over',
@@ -1743,6 +1752,7 @@
     dom.endTurnButton.addEventListener('click', submitTurnForValidation);
     
     function calculateHandValue(hand) {
+        if (!hand) return 0;
         return hand.reduce((total, domino) => {
             const topValue = domino.top === SPINNER_VALUE ? 10 : domino.top;
             const bottomValue = domino.bottom === SPINNER_VALUE ? 10 : domino.bottom;
@@ -1762,89 +1772,97 @@
         const currentTurnPlayer = gameState.players[currentTurnPlayerId];
         const isMyDeviceTurn = currentTurnPlayer?.controller === currentPlayerId;
         const isHost = gameState.players[currentPlayerId]?.isHost;
-
-        // --- UPDATE STARTING TILE INDICATOR ---
         if (dom.roundIndicatorLabel) {
             dom.roundIndicatorLabel.textContent = "Starting Tile";
         }
         const startingDouble = gameState.currentStartingDouble;
-        // The game logic allows the double spinner as an alternative for the first play.
         dom.roundIndicator.innerHTML = `<span class="text-lg">Dbl ${startingDouble}</span> <span class="text-gray-400 text-sm">or Spinner</span>`;
-
         const canHostRedeal = isHost && gameState.gameStatus !== 'waiting';
         dom.reDealButton.disabled = !canHostRedeal;
         dom.reDealButton.classList.toggle('hidden', !isHost);
         
-        if (!isDraggingDomino) {
-            dom.gameBoardElement.querySelectorAll('.domino').forEach(d => d.remove());
-            gameState.boardDominos.forEach(domino => {
-                const el = createDomino(domino.dominoData);
-                el.style.position = 'absolute';
-                el.style.left = `${domino.x}px`;
-                el.style.top = `${domino.y}px`;
-                el.style.transform = `rotate(${domino.rotation}deg)`;
-                el.dataset.rotation = domino.rotation;
-                el.dataset.id = domino.dominoData.id;
-                
-                if (isMyDeviceTurn) {
-                    el.addEventListener('mousedown', (e) => startDominoDrag(e, domino, 'board'));
-                    el.addEventListener('touchstart', (e) => startDominoDrag(e, domino, 'board'), { passive: false });
-                }
-
-                if (gameState.turnState === 'PENDING_VALIDATION' && domino.dominoData.id === gameState.lastPlayedDominoId) {
-                    el.classList.add('pending-validation-glow');
-                }
-
+        // Create any domino DOM elements that don't exist yet, and ensure all have fresh listeners
+        gameState.boardDominos.forEach(domino => {
+            const id = domino.dominoData.id;
+            let el = dom.gameBoardElement.querySelector(`.domino[data-id="${id}"]`);
+            
+            if (!el) {
+                el = createDomino(domino.dominoData);
+                el.classList.add('domino-on-board');
+                el.dataset.id = id;
                 dom.gameBoardElement.appendChild(el);
-            });
-        }
-        updateMinimap(gameState.boardDominos);
+            }
 
+            el.style.left = `${domino.x}px`;
+            el.style.top = `${domino.y}px`;
+            el.style.transform = `rotate(${domino.rotation}deg)`;
+            
+            // Re-attach event listeners to ensure the closure has the latest domino data
+            const newEl = el.cloneNode(true); // Cloning is an effective way to remove all old listeners
+            el.parentNode.replaceChild(newEl, el);
+            
+            newEl.addEventListener('mousedown', (e) => handleBoardClick(e, domino));
+            newEl.addEventListener('touchstart', (e) => handleBoardClick(e, domino), { passive: false });
+            
+            if (gameState.turnState === 'PENDING_VALIDATION' && id === gameState.lastPlayedDominoId) {
+                newEl.classList.add('pending-validation-glow');
+            }
+
+            const isSelected = selectedBranch.dominos.some(d => d.dominoData.id === id);
+            const isAnchor = selectedBranch.anchor?.dominoData.id === id;
+
+            newEl.classList.toggle('selected-for-branch', isSelected && !isAnchor);
+            newEl.classList.toggle('anchor-domino', isAnchor);
+        });
+        
+        updateMinimap(gameState.boardDominos);
         dom.playerHandsContainer.innerHTML = '';
         dom.scoreboard.innerHTML = '';
         renderPlayerHands(gameState);
         renderGameLog(gameState.log);
         renderDetailedScoreboard(gameState);
-
         gameState.playerOrder.forEach(pid => {
             renderScoreboardEntry(gameState.players[pid], pid);
         });
-        
         const myPlayerData = gameState.players[currentPlayerId];
         if (myPlayerData) {
             dom.handValueDisplay.textContent = calculateHandValue(myPlayerData.hand);
         }
-
         renderBoneyard(gameState, isMyDeviceTurn);
         dom.currentPlayerElement.textContent = gameState.players[currentTurnPlayerId].name;
-        
         updateStatusAndButtons(gameState, isMyDeviceTurn, currentTurnPlayerId);
     }
 
     function updateStatusAndButtons(gameState, isMyDeviceTurn, currentTurnPlayerId) {
         let statusText = '';
-        dom.endTurnButton.classList.add('hidden');
+        
+        // FIX: Buttons are always present but may be disabled
+        dom.endTurnButton.classList.remove('hidden');
+        dom.rotateLastTileButton.classList.remove('hidden');
+        dom.moveBranchButton.classList.remove('hidden');
         dom.validateMoveButton.classList.add('hidden');
         dom.challengeMoveButton.classList.add('hidden');
 
-        if (isMyDeviceTurn) {
+        if (moveBranchMode) {
+             if (!selectedBranch.anchor) {
+                 statusText = "Move Branch: Select an anchor tile to pivot around.";
+             } else {
+                 statusText = `Move Branch: Select adjacent tiles. Drag any selected tile to rotate.`;
+             }
+        } else if (isMyDeviceTurn) {
             switch(gameState.turnState) {
                 case 'PENDING_VALIDATION':
                     statusText = "Waiting for other players to validate your move...";
                     break;
                 case 'PLACED':
                     statusText = "You've played. You can adjust your tile or end your turn.";
-                    dom.endTurnButton.classList.remove('hidden');
-                    dom.endTurnButton.disabled = false;
                     break;
                 case 'WAITING':
                 default:
-                    if(gameState.hasDrawn){
-                        statusText = "You have drawn a tile. Play it or end your turn.";
-                        dom.endTurnButton.classList.remove('hidden');
-                        dom.endTurnButton.disabled = false;
-                    } else if(gameState.mustDrawToStart) {
+                    if(gameState.mustDrawToStart) {
                         statusText = "You must draw to start the round.";
+                    } else if(gameState.hasDrawn){
+                        statusText = "You have drawn a tile. Play it or end your turn.";
                     } else if (gameState.boardDominos.length === 0) {
                         statusText = `You must play the Double ${gameState.currentStartingDouble} or Double Spinner.`;
                     } else {
@@ -1860,12 +1878,13 @@
                 dom.challengeMoveButton.classList.remove('hidden');
             }
         }
-        if (!isDraggingDomino) {
+        if (!isDraggingDomino && !selectedBranch.isDraggingBranch) {
             dom.gameStatusElement.textContent = statusText;
         }
 
-        dom.undoButton.disabled = !(isMyDeviceTurn && (gameState.moveHistory || []).length > 0);
-        dom.rotateLastTileButton.classList.toggle('hidden', !(isMyDeviceTurn && gameState.turnState === 'PLACED' && gameState.lastPlayedDominoId));
+        dom.endTurnButton.disabled = !isMyDeviceTurn || (gameState.turnState !== 'PLACED' && !gameState.hasDrawn) || moveBranchMode;
+        dom.rotateLastTileButton.disabled = !(isMyDeviceTurn && gameState.turnState === 'PLACED' && gameState.lastPlayedDominoId) || moveBranchMode;
+        dom.moveBranchButton.disabled = !isMyDeviceTurn || gameState.turnState !== 'PLACED';
         dom.boneyardPileElement.style.cursor = (isMyDeviceTurn && gameState.turnState === 'WAITING' && !gameState.hasDrawn && gameState.boneyard.length > 0) ? 'pointer' : 'not-allowed';
         dom.boneyardPileElement.classList.toggle('can-draw', isMyDeviceTurn && gameState.turnState === 'WAITING' && !gameState.hasDrawn && gameState.boneyard.length > 0);
     }
@@ -1873,25 +1892,21 @@
     function renderPlayerHands(gameState) {
         const playerOrder = gameState.playerOrder;
         const currentTurnPlayerId = playerOrder[gameState.currentPlayerIndex];
+        const currentTurnPlayer = gameState.players[currentTurnPlayerId];
+        const isMyDeviceTurn = currentTurnPlayer?.controller === currentPlayerId;
         const isTurnPendingConfirmation = gameState.turnConfirmationPending;
-        
         const isDeviceControllingMultiple = gameState.playerOrder.filter(pid => gameState.players[pid].controller === currentPlayerId).length > 1;
-
         playerOrder.forEach(playerId => {
             const playerData = gameState.players[playerId];
             if (!playerData) return;
-
             const isThisPlayerTheActiveTurn = playerId === currentTurnPlayerId;
-            
             const section = document.createElement('div');
             section.className = 'player-hand-section';
             if (isThisPlayerTheActiveTurn) {
                 section.classList.add('flashing-border');
             }
-
             const title = document.createElement('h3');
             title.className = 'font-bold text-center mb-2 text-sm';
-            
             let nameTag = '';
             if (playerData.controller === currentPlayerId && playerId !== currentPlayerId) {
                 nameTag = '(Local)';
@@ -1900,14 +1915,10 @@
             } else if (playerData.isHost) {
                  nameTag = '(Host)';
             }
-            
             title.textContent = `${playerData.name} ${nameTag} (${playerData.hand.length})`;
-
             const handDiv = document.createElement('div');
             handDiv.className = 'player-hand-content';
-
             let showHandFaceUp = false;
-
             if (isDeviceControllingMultiple) {
                 const isControlledByMyDevice = playerData.controller === currentPlayerId;
                 if (isControlledByMyDevice && isThisPlayerTheActiveTurn && !isTurnPendingConfirmation) {
@@ -1918,17 +1929,15 @@
                     showHandFaceUp = true;
                 }
             }
-            
             if (showHandFaceUp) {
                 playerData.hand.forEach(dominoData => {
                     const dominoElement = createDomino(dominoData);
                     dominoElement.dataset.id = dominoData.id;
+                    const canDrag = isThisPlayerTheActiveTurn && playerData.controller === currentPlayerId && gameState.turnState === 'WAITING' && !moveBranchMode && !gameState.mustDrawToStart;
                     
-                    const canDrag = isThisPlayerTheActiveTurn && playerData.controller === currentPlayerId && gameState.turnState === 'WAITING';
-
                     if (canDrag) {
-                        dominoElement.addEventListener('mousedown', (e) => startDominoDrag(e, { dominoData }, 'hand'));
-                        dominoElement.addEventListener('touchstart', (e) => startDominoDrag(e, { dominoData }, 'hand'), { passive: false });
+                        dominoElement.addEventListener('mousedown', (e) => startRegularDominoDrag(e, { dominoData }, 'hand'));
+                        dominoElement.addEventListener('touchstart', (e) => startRegularDominoDrag(e, { dominoData }, 'hand'), { passive: false });
                     } else {
                         dominoElement.style.cursor = 'not-allowed';
                     }
@@ -1940,13 +1949,11 @@
                     handDiv.appendChild(dominoElement);
                 });
             }
-            
             section.appendChild(title);
             section.appendChild(handDiv);
             dom.playerHandsContainer.appendChild(section);
         });
     }
-
 
     function renderScoreboardEntry(playerData, playerId) {
         if (!playerData) return;
@@ -1968,40 +1975,32 @@
 
     function renderBoneyard(gameState, isMyDeviceTurn) {
         dom.boneyardStack.innerHTML = '';
-        
         if (gameState.boneyard.length > 0) {
             const dominoDisplay = document.createElement('div');
             dominoDisplay.className = 'boneyard-domino-display';
             dom.boneyardStack.appendChild(dominoDisplay);
         }
-
         const existingMessage = document.getElementById('boneyard-message');
         if (existingMessage) existingMessage.remove();
-
         if (isMyDeviceTurn && gameState.turnState === 'WAITING' && !gameState.hasDrawn && gameState.boneyard.length > 0) {
             const message = document.createElement('div');
             message.id = 'boneyard-message';
             message.textContent = 'Click to Draw';
             dom.boneyardPileElement.appendChild(message);
         }
-
         dom.boneyardCountElement.textContent = gameState.boneyard.length;
     }
     
     function displayRoundEndScreen(gameState) {
         if (!gameState.roundEndInfo) return;
-        
         if (gameState.gameStatus === 'finished') {
             showFinalScores(gameState);
             return;
         }
-
         dom.roundEndScreen.classList.remove('hidden');
-
         const { winnerId, points } = gameState.roundEndInfo;
         dom.roundEndTitle.textContent = `Round ${gameState.roundNumber} Over!`;
         dom.roundWinnerMessage.textContent = `${gameState.players[winnerId].name} wins the round!`;
-
         dom.roundResultsList.innerHTML = '';
         gameState.playerOrder.forEach(pid => {
             const p = document.createElement('p');
@@ -2010,7 +2009,6 @@
             if (pid === winnerId) p.classList.add('winner');
             dom.roundResultsList.appendChild(p);
         });
-        
         dom.continueRoundButton.disabled = false;
         dom.continueRoundButton.textContent = "Start Next Round";
     }
@@ -2018,21 +2016,17 @@
     function showFinalScores(gameState) {
         dom.roundEndScreen.classList.add('hidden');
         dom.gameOverScreen.classList.remove('hidden');
-
         const finalScores = gameState.playerOrder.map(pid => ({
             name: gameState.players[pid].name,
             score: gameState.players[pid].score
         })).sort((a, b) => a.score - b.score);
-
         const winnerScore = finalScores[0].score;
         const winners = finalScores.filter(p => p.score === winnerScore);
-
         if (winners.length > 1) {
             dom.finalWinnerMessage.textContent = `It's a tie between ${winners.map(w => w.name).join(' and ')}!`;
         } else {
             dom.finalWinnerMessage.textContent = `${winners[0].name} wins the game!`;
         }
-
         dom.finalScoreList.innerHTML = '';
         finalScores.forEach(player => {
             const p = document.createElement('p');
@@ -2042,7 +2036,6 @@
             }
             dom.finalScoreList.appendChild(p);
         });
-        
         winners.forEach(winner => {
             const winnerData = Object.values(gameState.players).find(p => p.name === winner.name);
             if (winnerData) {
@@ -2057,12 +2050,10 @@
         if (size === 'mini') {
             dominoElement.classList.add('mini-domino');
         }
-
         if (isBack) {
             dominoElement.classList.add('domino-back');
             return dominoElement;
         }
-        
         dominoElement.appendChild(createPipContainer(dominoData.top, size));
         dominoElement.appendChild(document.createElement('div')).className = 'divider';
         dominoElement.appendChild(createPipContainer(dominoData.bottom, size));
@@ -2072,7 +2063,6 @@
     function createPipContainer(count, size = 'normal') {
         const container = document.createElement('div');
         container.className = 'pip-container';
-
         if (count === SPINNER_VALUE) {
             const iconContainer = document.createElement('div');
             iconContainer.className = 'spinner-icon';
@@ -2091,14 +2081,12 @@
             container.appendChild(iconContainer);
             return container;
         }
-
         const svgNS = "http://www.w3.org/2000/svg";
         const svg = document.createElementNS(svgNS, "svg");
         svg.setAttribute('viewBox', '0 0 40 40');
         svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
         svg.style.width = '100%';
         svg.style.height = '100%';
-
         const pipPositions = {
             1: [[20, 20]],
             2: [[10, 30], [30, 10]],
@@ -2110,7 +2098,6 @@
             8: [[10, 10], [20, 10], [30, 10], [10, 20], [30, 20], [10, 30], [20, 30], [30, 30]],
             9: [[10, 10], [20, 10], [30, 10], [10, 20], [20, 20], [30, 20], [10, 30], [20, 30], [30, 30]]
         };
-
         if (pipPositions[count]) {
             pipPositions[count].forEach(([cx, cy]) => {
                 const circle = document.createElementNS(svgNS, "circle");
@@ -2125,7 +2112,6 @@
                 svg.appendChild(circle);
             });
         }
-        
         container.appendChild(svg);
         return container;
     }
@@ -2135,58 +2121,58 @@
         return e.touches?.[0] || e.changedTouches?.[0] || e;
     }
 
-    function startDominoDrag(e, dominoObject, origin) {
+    function handleBoardClick(e, domino) {
+        if (moveBranchMode) {
+            // If the clicked domino is already part of the selection, start dragging.
+            // Otherwise, handle selecting/deselecting it.
+            const isSelected = selectedBranch.dominos.some(d => d.dominoData.id === domino.dominoData.id);
+            if (isSelected && selectedBranch.anchor) {
+                 // Only allow dragging if an anchor is set
+                startBranchDrag(e, domino);
+            } else {
+                handleBranchSelection(e, domino);
+            }
+        } else {
+            startRegularDominoDrag(e, domino, 'board');
+        }
+    }
+
+    function startRegularDominoDrag(e, dominoObject, origin) {
         e.stopPropagation();
         if (isDraggingDomino) return;
-
         const currentTurnPlayer = localGameState.players[localGameState.playerOrder[localGameState.currentPlayerIndex]];
         if (currentTurnPlayer.controller !== currentPlayerId) return;
-        
+
         if (origin === 'hand' && localGameState.turnState !== 'WAITING') {
             showMessage("You can only play a tile when it is your turn to play.");
             return;
         }
-        
-        // --- MODIFICATION START ---
-        // This logic has been changed to allow players to move any tile on the board during their turn.
-        if (origin === 'board') {
-            // Players can only adjust the board AFTER they have made their primary move for the turn (when turnState is 'PLACED').
-            if (localGameState.turnState !== 'PLACED') {
-                // Provide feedback to the user instead of silently failing.
-                showMessage("You must play a tile from your hand before you can adjust the board layout.");
-                return;
-            }
-            // The original check that limited movement to only the tile played in the current turn has been removed.
-            // Now, any tile on the board can be moved to make space.
+        if (origin === 'hand' && localGameState.mustDrawToStart) {
+            showMessage("You must draw a tile to start your turn.");
+            return;
         }
-        // --- MODIFICATION END ---
-        
+        if (origin === 'board') {
+            if (localGameState.turnState !== 'PLACED') return;
+        }
+
         originalDominoElement = e.currentTarget;
         draggedDominoData = dominoObject;
         isDraggingDomino = true;
         wasDragged = false;
         dragStartTime = Date.now();
-        
         const coords = getEventCoords(e);
         dragStartPos = { x: coords.clientX, y: coords.clientY };
-        
         activeDominoElement = createDomino(draggedDominoData.dominoData);
         activeDominoElement.classList.add('dragging');
         document.body.appendChild(activeDominoElement);
-
         originalDominoElement.style.opacity = '0.3';
-
         const initialLeft = coords.clientX - (DOMINO_WIDTH / 2);
         const initialTop = coords.clientY - (DOMINO_HEIGHT / 2);
-        
         const currentRotation = draggedDominoData.rotation || 0;
         activeDominoElement.style.transform = `translate3d(${initialLeft}px, ${initialTop}px, 0) scale(${zoomLevel}) rotate(${currentRotation}deg)`;
-
         dom.gameStatusElement.textContent = `Moving a tile...`;
-        
         const moveHandler = (ev) => dragDomino(ev);
         const endHandler = (ev) => endDominoDrag(ev, origin, moveHandler, endHandler);
-
         document.addEventListener('mousemove', moveHandler);
         document.addEventListener('mouseup', endHandler, { once: true });
         document.addEventListener('touchmove', moveHandler, { passive: false });
@@ -2200,10 +2186,8 @@
         if (Math.abs(coords.clientX - dragStartPos.x) > 5 || Math.abs(coords.clientY - dragStartPos.y) > 5) {
             wasDragged = true;
         }
-        
         const newLeft = coords.clientX - (DOMINO_WIDTH / 2);
         const newTop = coords.clientY - (DOMINO_HEIGHT / 2);
-
         const currentRotation = draggedDominoData.rotation || 0;
         activeDominoElement.style.transform = `translate3d(${newLeft}px, ${newTop}px, 0) scale(${zoomLevel}) rotate(${currentRotation}deg)`;
     }
@@ -2211,77 +2195,66 @@
     async function endDominoDrag(e, origin, moveHandler, endHandler) {
         document.removeEventListener('mousemove', moveHandler);
         document.removeEventListener('touchmove', moveHandler);
-        
+
         if (!isDraggingDomino) return;
-        
+
         const gameRef = doc(db, "games", currentGameId);
         const dragDuration = Date.now() - dragStartTime;
         const isTap = !wasDragged && dragDuration < 200;
 
-        if (isTap && origin === 'board') {
-            const currentRotation = parseInt(draggedDominoData.rotation || 0);
-            const newRotation = (currentRotation + 45) % 360;
-
-            if (originalDominoElement) {
-                originalDominoElement.style.transform = `rotate(${newRotation}deg)`;
-                originalDominoElement.dataset.rotation = newRotation;
-                const rect = originalDominoElement.getBoundingClientRect();
-                const centerX = rect.left + rect.width / 2;
-                const centerY = rect.top + rect.height / 2;
-                triggerParticleEffect(centerX, centerY);
-            }
-
-            await runTransaction(db, async (transaction) => {
-                const gameSnap = await transaction.get(gameRef);
-                if (!gameSnap.exists()) throw "Game does not exist!";
-                const gameState = gameSnap.data();
-                let newMoveHistory = [...(gameState.moveHistory || [])];
-                const newBoardDominos = [...gameState.boardDominos];
-                const boardIndex = newBoardDominos.findIndex(d => d.dominoData.id === draggedDominoData.dominoData.id);
-                if (boardIndex > -1) {
-                    newMoveHistory.push({ type: 'rotate', dominoId: draggedDominoData.dominoData.id, from: newBoardDominos[boardIndex].rotation });
-                    newBoardDominos[boardIndex].rotation = newRotation;
-                    transaction.update(gameRef, { boardDominos: newBoardDominos, moveHistory: newMoveHistory });
-                }
-            });
-        } else if (wasDragged) {
-            const coords = getEventCoords(e);
-            const worldRect = dom.worldElement.getBoundingClientRect();
-
-            if (origin === 'hand' && (coords.clientX < worldRect.left || coords.clientX > worldRect.right || coords.clientY < worldRect.top || coords.clientY > worldRect.bottom)) {
-                // Dragged outside, do nothing
-            } else {
-                const cursorX_relative = coords.clientX - worldRect.left;
-                const cursorY_relative = coords.clientY - worldRect.top;
-
-                const cursorX_onBoard = (cursorX_relative / zoomLevel) + boardPosition.x;
-                const cursorY_onBoard = (cursorY_relative / zoomLevel) + boardPosition.y;
-
-                const finalXOnBoard = cursorX_onBoard - (DOMINO_WIDTH / 2);
-                const finalYOnBoard = cursorY_onBoard - (DOMINO_HEIGHT / 2);
+        try {
+            if (isTap && origin === 'board') {
+                const currentRotation = parseInt(draggedDominoData.rotation || 0);
+                const newRotation = (currentRotation + 45) % 360;
                 
-                let newX = finalXOnBoard;
-                let newY = finalYOnBoard;
-                let newRotation = parseInt(originalDominoElement.dataset.rotation || 0);
-                
-                let isValidPlacement = true;
-                if (localGameState.boardDominos.length === 0) {
-                    const d = draggedDominoData.dominoData;
-                    const required = localGameState.currentStartingDouble;
-                    const isCorrectDouble = d.top === required && d.bottom === required;
-                    const isDoubleSpinner = d.top === SPINNER_VALUE && d.bottom === SPINNER_VALUE;
-                    if (!isCorrectDouble && !isDoubleSpinner) {
-                        isValidPlacement = false;
-                        showMessage(`Must start with Double ${required} or Double Spinner!`);
-                    } else {
-                        newX = (BOARD_SIZE / 2) - (DOMINO_WIDTH / 2);
-                        newY = (BOARD_SIZE / 2) - (DOMINO_HEIGHT / 2);
-                        newRotation = 90;
+                await runTransaction(db, async (transaction) => {
+                    const gameSnap = await transaction.get(gameRef);
+                    if (!gameSnap.exists()) throw "Game does not exist!";
+                    const gameState = gameSnap.data();
+                    let newMoveHistory = [...(gameState.moveHistory || [])];
+                    const newBoardDominos = [...gameState.boardDominos];
+                    const boardIndex = newBoardDominos.findIndex(d => d.dominoData.id === draggedDominoData.dominoData.id);
+                    if (boardIndex > -1) {
+                        newMoveHistory.push({ type: 'rotate', dominoId: draggedDominoData.dominoData.id, from: newBoardDominos[boardIndex].rotation });
+                        newBoardDominos[boardIndex].rotation = newRotation;
+                        transaction.update(gameRef, { boardDominos: newBoardDominos, moveHistory: newMoveHistory });
                     }
-                }
+                });
 
-                if (isValidPlacement) {
-                    try {
+            } else if (wasDragged || (isTap && origin === 'hand')) { // A tap from the hand is now treated as a play
+                const coords = getEventCoords(e);
+                const worldRect = dom.worldElement.getBoundingClientRect();
+
+                if (origin === 'hand' && (coords.clientX < worldRect.left || coords.clientX > worldRect.right || coords.clientY < worldRect.top || coords.clientY > worldRect.bottom)) {
+                     // Dragged outside, do nothing, just clean up
+                } else {
+                    const cursorX_relative = coords.clientX - worldRect.left;
+                    const cursorY_relative = coords.clientY - worldRect.top;
+                    const cursorX_onBoard = (cursorX_relative / zoomLevel) + boardPosition.x;
+                    const cursorY_onBoard = (cursorY_relative / zoomLevel) + boardPosition.y;
+                    const finalXOnBoard = cursorX_onBoard - (DOMINO_WIDTH / 2);
+                    const finalYOnBoard = cursorY_onBoard - (DOMINO_HEIGHT / 2);
+                    let newX = finalXOnBoard;
+                    let newY = finalYOnBoard;
+                    let newRotation = draggedDominoData.rotation || 0; // Use existing rotation
+                    
+                    let isValidPlacement = true;
+                    if (localGameState.boardDominos.length === 0) {
+                        const d = draggedDominoData.dominoData;
+                        const required = localGameState.currentStartingDouble;
+                        const isCorrectDouble = d.top === required && d.bottom === required;
+                        const isDoubleSpinner = d.top === SPINNER_VALUE && d.bottom === SPINNER_VALUE;
+                        if (!isCorrectDouble && !isDoubleSpinner) {
+                            isValidPlacement = false;
+                            showMessage(`Must start with Double ${required} or Double Spinner!`);
+                        } else {
+                            newX = (BOARD_SIZE / 2) - (DOMINO_WIDTH / 2);
+                            newY = (BOARD_SIZE / 2) - (DOMINO_HEIGHT / 2);
+                            newRotation = 90;
+                        }
+                    }
+
+                    if (isValidPlacement) {
                         await runTransaction(db, async (transaction) => {
                             const gameSnap = await transaction.get(gameRef);
                             if (!gameSnap.exists()) throw "Game does not exist!";
@@ -2309,34 +2282,35 @@
                                     log: newLog
                                 });
                             } else { // origin === 'board'
-                                const newBoardDominos = gameState.boardDominos.map(d => (d.dominoData.id === draggedDominoData.dominoData.id) ? { ...d, x: newX, y: newY } : d);
+                                const newBoardDominos = gameState.boardDominos.map(d => (d.dominoData.id === draggedDominoData.dominoData.id) ? { ...d, x: newX, y: newY, rotation: newRotation } : d);
                                 const newMoveHistory = [...(gameState.moveHistory || []), { type: 'reposition', dominoId: draggedDominoData.dominoData.id, from: { x: draggedDominoData.x, y: draggedDominoData.y } }];
                                 transaction.update(gameRef, { boardDominos: newBoardDominos, moveHistory: newMoveHistory });
                             }
                         });
                         triggerRippleEffect(newX + DOMINO_WIDTH / 2, newY + DOMINO_HEIGHT / 2);
-                    } catch (error) {
-                        console.error("Firebase transaction for placing domino failed:", error);
-                        showMessage("Error placing the domino. Please try again.");
                     }
                 }
             }
+        } catch (error) {
+            console.error("Error during domino placement transaction:", error);
+            showMessage("Error placing domino. Please try again.");
+        } finally {
+            // This block ALWAYS runs, after try/catch. Perfect for cleanup.
+            if (activeDominoElement) activeDominoElement.remove();
+            if (originalDominoElement) originalDominoElement.style.opacity = '1';
+
+            activeDominoElement = null;
+            originalDominoElement = null;
+            draggedDominoData = null;
+            isDraggingDomino = false; 
+            wasDragged = false;
         }
-        
-        // Cleanup drag elements
-        if (originalDominoElement) originalDominoElement.style.opacity = '1';
-        if (activeDominoElement) activeDominoElement.remove();
-        activeDominoElement = null;
-        originalDominoElement = null;
-        draggedDominoData = null;
-        isDraggingDomino = false;
     }
 
     // --- Pan and Zoom Logic ---
     function centerBoardOnStart() {
         const worldWidth = dom.worldElement.clientWidth;
         const worldHeight = dom.worldElement.clientHeight;
-
         zoomLevel = 1.0;
         boardPosition.x = (BOARD_SIZE / 2) - (worldWidth / 2 / zoomLevel);
         boardPosition.y = (BOARD_SIZE / 2) - (worldHeight / 2 / zoomLevel);
@@ -2348,7 +2322,6 @@
         const viewHeight = dom.worldElement.clientHeight / zoomLevel;
         boardPosition.x = Math.max(0, Math.min(boardPosition.x, BOARD_SIZE - viewWidth));
         boardPosition.y = Math.max(0, Math.min(boardPosition.y, BOARD_SIZE - viewHeight));
-
         dom.gameBoardElement.style.transform = `scale(${zoomLevel}) translate(${-boardPosition.x}px, ${-boardPosition.y}px)`;
         updateMinimap(localGameState.boardDominos || []);
     }
@@ -2363,16 +2336,14 @@
         dom.minimapViewport.style.height = `${viewHeight * scale}px`;
         dom.minimapViewport.style.left = `${boardPosition.x * scale}px`;
         dom.minimapViewport.style.top = `${boardPosition.y * scale}px`;
-        
         dom.minimapContainer.querySelectorAll('.minimap-dot').forEach(dot => dot.remove());
+        if (!boardDominos) return;
         boardDominos.forEach(domino => {
             const dot = document.createElement('div');
             dot.className = 'minimap-dot';
             dot.style.left = `${(domino.x + DOMINO_WIDTH / 2) * scale}px`;
             dot.style.top = `${(domino.y + DOMINO_HEIGHT / 2) * scale}px`;
-            
             dot.style.transform = `translate(-50%, -50%) rotate(${domino.rotation}deg)`;
-
             dot.addEventListener('click', (e) => {
                 e.stopPropagation();
                 boardPosition.x = domino.x - (viewWidth / 2) + (DOMINO_WIDTH / 2);
@@ -2384,18 +2355,14 @@
     }
     
     dom.worldElement.addEventListener('mousedown', (e) => {
-        if (e.button !== 0) return;
-        if (isDraggingDomino) return;
+        if (e.button !== 0 || isDraggingDomino || moveBranchMode) return;
         if (e.target !== dom.worldElement && e.target !== dom.gameBoardElement && e.target.id !== 'world-wrapper') return;
-        
         isPanning = true;
         dom.worldElement.classList.add('panning');
         const coords = getEventCoords(e);
         panStart = { x: coords.clientX, y: coords.clientY };
-        
         const panMove = (ev) => pan(ev);
         const endPanMove = () => endPan(panMove, endPanMove);
-
         document.addEventListener('mousemove', panMove);
         document.addEventListener('mouseup', endPanMove, { once: true });
     });
@@ -2419,7 +2386,7 @@
     }
     
     dom.worldElement.addEventListener('touchstart', (e) => {
-        if (e.touches.length === 1 && !isDraggingDomino) {
+        if (e.touches.length === 1 && !isDraggingDomino && !moveBranchMode) {
              if (e.target !== dom.worldElement && e.target !== dom.gameBoardElement && e.target.id !== 'world-wrapper') return;
               isPanning = true;
               dom.worldElement.classList.add('panning');
@@ -2441,112 +2408,42 @@
         }
     });
 
-    function handleZoom(delta, clientX, clientY) {
-        const rect = dom.worldElement.getBoundingClientRect();
-        const mouseX = clientX - rect.left;
-        const mouseY = clientY - rect.top;
-        const worldX_before = (mouseX / zoomLevel) + boardPosition.x;
-        const worldY_before = (mouseY / zoomLevel) + boardPosition.y;
-        
-        const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoomLevel * (1 + delta)));
-        
-        boardPosition.x = worldX_before - (mouseX / newZoom);
-        boardPosition.y = worldY_before - (mouseY / newZoom);
-        zoomLevel = newZoom;
-        updateBoardTransform();
-    }
-
-    function zoomWithControls(delta) {
-        const rect = dom.worldElement.getBoundingClientRect();
-        const centerX = rect.left + rect.width / 2;
-        const centerY = rect.top + rect.height / 2;
-        handleZoom(delta, centerX, centerY);
-    }
-
-    dom.zoomInButton.addEventListener('click', () => zoomWithControls(0.2));
-    dom.zoomOutButton.addEventListener('click', () => zoomWithControls(-0.2));
-
-    dom.minimapContainer.addEventListener('click', (e) => {
-        e.stopPropagation();
-        if (e.target.classList.contains('minimap-dot') || e.target.id === 'minimap-viewport') {
-            return;
-        }
-
-        const mapSize = dom.minimapContainer.clientWidth;
-        const scale = mapSize / BOARD_SIZE;
-
-        const clickXOnMap = e.offsetX;
-        const clickYOnMap = e.offsetY;
-
-        const targetBoardX = clickXOnMap / scale;
-        const targetBoardY = clickYOnMap / scale;
-
-        const viewWidth = dom.worldElement.clientWidth / zoomLevel;
-        const viewHeight = dom.worldElement.clientHeight / zoomLevel;
-        
-        boardPosition.x = targetBoardX - (viewWidth / 2);
-        boardPosition.y = targetBoardY - (viewHeight / 2);
-
-        updateBoardTransform();
-    });
-
-    // --- Undo and Theme Logic ---
-    dom.undoButton.addEventListener('click', async () => {
-        const gameRef = doc(db, "games", currentGameId);
-        await runTransaction(db, async (transaction) => {
-            const gameSnap = await transaction.get(gameRef);
-            if (!gameSnap.exists()) return;
-            const gameState = gameSnap.data();
-            if (!gameState.moveHistory || gameState.moveHistory.length === 0) return;
-
-            const newMoveHistory = [...gameState.moveHistory];
-            const lastMove = newMoveHistory.pop();
-            const newBoardDominos = [...gameState.boardDominos];
-            const dominoIndex = newBoardDominos.findIndex(d => d.dominoData.id === lastMove.dominoId);
-
-            if (dominoIndex > -1) {
-                if (lastMove.type === 'reposition') {
-                    newBoardDominos[dominoIndex].x = lastMove.from.x;
-                    newBoardDominos[dominoIndex].y = lastMove.from.y;
-                } else if (lastMove.type === 'rotate') {
-                    newBoardDominos[dominoIndex].rotation = lastMove.from;
-                }
-                transaction.update(gameRef, { boardDominos: newBoardDominos, moveHistory: newMoveHistory });
-            }
-        });
-    });
-
     dom.rotateLastTileButton.addEventListener('click', async () => {
         const gameRef = doc(db, "games", currentGameId);
         const lastPlayedId = localGameState.lastPlayedDominoId;
         if (!lastPlayedId) return;
-
+    
+        // Find the element to get its position for the particle effect.
         const dominoEl = dom.gameBoardElement.querySelector(`.domino[data-id="${lastPlayedId}"]`);
         if (dominoEl) {
-            const currentRotation = parseInt(dominoEl.dataset.rotation || 0);
-            const newRotation = (currentRotation + 45) % 360;
-            dominoEl.style.transform = `rotate(${newRotation}deg)`;
-            dominoEl.dataset.rotation = newRotation;
             const rect = dominoEl.getBoundingClientRect();
             const centerX = rect.left + rect.width / 2;
             const centerY = rect.top + rect.height / 2;
             triggerParticleEffect(centerX, centerY);
         }
-
+    
+        // Update Firestore to make the change persistent. The snapshot listener will handle the visual update.
         await runTransaction(db, async (transaction) => {
             const gameSnap = await transaction.get(gameRef);
             if (!gameSnap.exists()) return;
             const gameState = gameSnap.data();
             if (!gameState.lastPlayedDominoId) return;
-
+            
             const newBoardDominos = [...gameState.boardDominos];
             const boardIndex = newBoardDominos.findIndex(d => d.dominoData.id === gameState.lastPlayedDominoId);
-
+            
             if (boardIndex > -1) {
                 const currentRotation = newBoardDominos[boardIndex].rotation;
                 const newRotation = (currentRotation + 45) % 360;
                 newBoardDominos[boardIndex].rotation = newRotation;
-                transaction.update(gameRef, { boardDominos: newBoardDominos });
+
+                // Also add this to the move history so it can be undone
+                const newMoveHistory = [...(gameState.moveHistory || []), { type: 'rotate', dominoId: lastPlayedId, from: currentRotation }];
+
+                transaction.update(gameRef, { 
+                    boardDominos: newBoardDominos,
+                    moveHistory: newMoveHistory 
+                });
             }
         });
     });
@@ -2568,29 +2465,23 @@
                 const gameSnap = await transaction.get(gameRef);
                 if (!gameSnap.exists()) return;
                 const gameState = gameSnap.data();
-                
                 if (gameState.turnState !== 'PENDING_VALIDATION') {
                     return; 
                 }
-
                 const currentTurnPlayerId = gameState.playerOrder[gameState.currentPlayerIndex];
                 const playerHand = gameState.players[currentTurnPlayerId].hand;
-
                 if (playerHand.length === 0) {
                     let roundPoints = {};
                     let scoreHistoryEntry = { round: gameState.roundNumber, scores: {} };
                     const updatedPlayers = { ...gameState.players };
-
                     Object.keys(updatedPlayers).forEach(pid => {
                         const handValue = (pid === currentTurnPlayerId) ? 0 : calculateHandValue(updatedPlayers[pid].hand);
                         updatedPlayers[pid].score += handValue;
                         roundPoints[pid] = handValue;
                         scoreHistoryEntry.scores[pid] = handValue;
                     });
-                    
                     const newScoreHistory = [...(gameState.scoreHistory || []), scoreHistoryEntry];
                     const isGameOver = gameState.roundNumber >= 10;
-
                     transaction.update(gameRef, {
                         players: updatedPlayers,
                         gameStatus: isGameOver ? 'finished' : 'round-over',
@@ -2606,9 +2497,7 @@
                     const validatorName = gameState.players[currentPlayerId].name;
                     const newLog = [...(gameState.log || []), `${validatorName} validated the move. It's now ${nextPlayer.name}'s turn.`];
                     if (newLog.length > 5) newLog.shift();
-
                     const needsConfirmation = nextPlayer.id !== nextPlayer.controller;
-
                     transaction.update(gameRef, {
                         currentPlayerIndex: nextPlayerIndex,
                         turnState: 'WAITING',
@@ -2633,26 +2522,20 @@
                 const gameSnap = await transaction.get(gameRef);
                 if (!gameSnap.exists()) return;
                 const gameState = gameSnap.data();
-
                 if (gameState.turnState !== 'PENDING_VALIDATION') {
                     return; // Move already validated or challenged
                 }
-
                 const challengerName = gameState.players[currentPlayerId].name;
                 const challengedPlayerId = gameState.playerOrder[gameState.currentPlayerIndex];
                 const challengedPlayerName = gameState.players[challengedPlayerId].name;
-
                 const newBoardDominos = [...gameState.boardDominos];
                 const challengedDominoIndex = newBoardDominos.findIndex(d => d.dominoData.id === gameState.lastPlayedDominoId);
-
                 if (challengedDominoIndex > -1) {
                     const challengedDomino = newBoardDominos.splice(challengedDominoIndex, 1)[0];
                     const updatedPlayers = { ...gameState.players };
                     updatedPlayers[challengedPlayerId].hand.push(challengedDomino.dominoData);
-
                     const newLog = [...(gameState.log || []), `${challengerName} challenged ${challengedPlayerName}'s move! Tile returned.`];
                     if (newLog.length > 5) newLog.shift();
-
                     transaction.update(gameRef, {
                         boardDominos: newBoardDominos,
                         players: updatedPlayers,
@@ -2670,17 +2553,13 @@
         }
     });
     
-    // --- Detailed Scoreboard Rendering ---
+    // --- Detailed Scoreboard Rendering --- 
     function renderDetailedScoreboard(gameState) {
         const { scoreHistory, players, playerOrder } = gameState;
         if (!scoreHistory || !dom.detailedScoreboardContent) return;
-
         dom.detailedScoreboardContent.innerHTML = ''; // Clear previous content
-
         const table = document.createElement('table');
         table.id = 'detailed-scoreboard-table';
-
-        // Header
         const thead = table.createTHead();
         const headerRow = thead.insertRow();
         const roundHeader = document.createElement('th');
@@ -2691,8 +2570,6 @@
             th.textContent = players[pid].name.substring(0, 3); // Abbreviate name
             headerRow.appendChild(th);
         });
-
-        // Body
         const tbody = table.createTBody();
         scoreHistory.forEach(roundData => {
             const row = tbody.insertRow();
@@ -2701,8 +2578,6 @@
                 row.insertCell().textContent = roundData.scores[pid] ?? '0';
             });
         });
-
-        // Footer (Total)
         const tfoot = table.createTFoot();
         const totalRow = tfoot.insertRow();
         totalRow.className = 'total-row';
@@ -2712,15 +2587,12 @@
             const cell = totalRow.insertCell();
             cell.textContent = players[pid].score;
         });
-
         dom.detailedScoreboardContent.appendChild(table);
     }
-
-    // --- Animation Functions ---
+    // --- Animation Functions --- 
     function triggerConfetti(color) {
         const container = document.querySelector('.confetti-container');
         if (!container) return;
-
         for (let i = 0; i < 100; i++) {
             const confetti = document.createElement('div');
             confetti.className = 'confetti';
@@ -2729,7 +2601,6 @@
             confetti.style.backgroundColor = color || PLAYER_COLORS[Math.floor(Math.random() * PLAYER_COLORS.length)];
             confetti.style.transform = `scale(${Math.random() * 0.5 + 0.5})`;
             container.appendChild(confetti);
-
             setTimeout(() => {
                 confetti.remove();
             }, 3000);
@@ -2745,12 +2616,10 @@
             particle.className = 'particle';
             particle.style.left = `${x}px`;
             particle.style.top = `${y}px`;
-
             const angle = Math.random() * 2 * Math.PI;
             const distance = (Math.random() * 60 + 30) * zoomLevel; // Increased distance and scaled by zoom
             const endX = Math.cos(angle) * distance;
             const endY = Math.sin(angle) * distance;
-
             particle.style.setProperty('--x', `${endX}px`);
             particle.style.setProperty('--y', `${endY}px`);
             particle.style.setProperty('--start-scale', zoomLevel);
@@ -2758,7 +2627,6 @@
             const size = (Math.random() * 4 + 4) * zoomLevel; // Increased size and scaled by zoom
             particle.style.width = `${size}px`;
             particle.style.height = `${size}px`;
-
             container.appendChild(particle);
             setTimeout(() => particle.remove(), 500);
         }
@@ -2774,7 +2642,262 @@
             ripple.remove();
         }, 700);
     }
+    
+    // --- REWORKED: Branch Moving Logic (No Physics) ---
 
+    dom.moveBranchButton.addEventListener('click', () => {
+        moveBranchMode = !moveBranchMode;
+        dom.moveBranchButton.classList.toggle('active', moveBranchMode);
+        
+        // Reset selection when toggling the tool
+        selectedBranch.dominos.forEach(d => {
+             document.querySelector(`.domino[data-id="${d.dominoData.id}"]`)?.classList.remove('selected-for-branch', 'anchor-domino');
+        });
+        selectedBranch = { anchor: null, dominos: [], originalPositions: new Map(), isDraggingBranch: false };
+
+        if (moveBranchMode) {
+            dom.gameStatusElement.textContent = "Move Branch: Click a tile to be the anchor.";
+        } else {
+            // Restore normal status message
+            if (localGameState && localGameState.playerOrder) {
+                const currentTurnPlayerId = localGameState.playerOrder[localGameState.currentPlayerIndex];
+                const isMyDeviceTurn = localGameState.players[currentTurnPlayerId]?.controller === currentPlayerId;
+                updateStatusAndButtons(localGameState, isMyDeviceTurn, currentTurnPlayerId);
+            }
+        }
+    });
+
+    // --- FIX: This function now handles manual, incremental selection ---
+    function handleBranchSelection(e, domino) {
+        e.stopPropagation();
+        const id = domino.dominoData.id;
+        const el = document.querySelector(`.domino[data-id="${id}"]`);
+        if (!el) return;
+
+        // 1. No anchor yet, so this becomes the anchor.
+        if (!selectedBranch.anchor) {
+            selectedBranch.anchor = domino;
+            selectedBranch.dominos.push(domino);
+            el.classList.add('anchor-domino');
+            dom.gameStatusElement.textContent = "Move Branch: Select adjacent tiles to add to the branch.";
+            return;
+        }
+
+        // 2. Clicked on the anchor again. Clear everything.
+        if (id === selectedBranch.anchor.dominoData.id) {
+            selectedBranch.dominos.forEach(d => {
+                document.querySelector(`.domino[data-id="${d.dominoData.id}"]`)
+                        ?.classList.remove('selected-for-branch', 'anchor-domino');
+            });
+            selectedBranch = { anchor: null, dominos: [], originalPositions: new Map(), isDraggingBranch: false };
+            dom.gameStatusElement.textContent = "Move Branch: Select a tile to be the anchor.";
+            return;
+        }
+
+        const isSelected = selectedBranch.dominos.some(d => d.dominoData.id === id);
+
+        if (isSelected) {
+            // 3. Clicked a selected (non-anchor) tile. De-select it.
+            selectedBranch.dominos = selectedBranch.dominos.filter(d => d.dominoData.id !== id);
+            el.classList.remove('selected-for-branch');
+        } else {
+            // 4. Clicked a new, unselected tile. Try to add it.
+            const isAdjacentToBranch = selectedBranch.dominos.some(branchDomino => checkAdjacency(branchDomino, domino));
+            if (isAdjacentToBranch) {
+                selectedBranch.dominos.push(domino);
+                el.classList.add('selected-for-branch');
+            } else {
+                showMessage("You can only select tiles that are adjacent to the existing branch.");
+            }
+        }
+    }
+
+    function checkAdjacency(dominoA, dominoB) {
+        const centerAx = dominoA.x + DOMINO_WIDTH / 2;
+        const centerAy = dominoA.y + DOMINO_HEIGHT / 2;
+        const centerBx = dominoB.x + DOMINO_WIDTH / 2;
+        const centerBy = dominoB.y + DOMINO_HEIGHT / 2;
+
+        // Simplified check using rotated bounding boxes might be complex.
+        // A distance check between centers is a good approximation.
+        // A generous threshold accounts for different orientations.
+        const dx = centerAx - centerBx;
+        const dy = centerAy - centerBy;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        // A value slightly larger than the width of a domino should be sufficient.
+        return distance < (DOMINO_WIDTH * 1.1);
+    }
+
+    function startBranchDrag(e, dominoObject) {
+        if (!moveBranchMode || !selectedBranch.anchor || !selectedBranch.dominos.some(d => d.dominoData.id === dominoObject.dominoData.id)) return;
+        
+        isDraggingDomino = true; 
+        selectedBranch.isDraggingBranch = true;
+        draggedDominoData = dominoObject;
+
+        const coords = getEventCoords(e);
+        dragStartPos = { x: coords.clientX, y: coords.clientY };
+        
+        // Capture original positions at the start of the drag
+        selectedBranch.originalPositions.clear();
+        selectedBranch.dominos.forEach(dom => {
+            selectedBranch.originalPositions.set(dom.dominoData.id, { x: dom.x, y: dom.y, rotation: dom.rotation });
+        });
+
+        const moveHandler = (ev) => dragBranch(ev);
+        const endHandler = (ev) => endBranchDrag(ev, moveHandler, endHandler);
+
+        document.addEventListener('mousemove', moveHandler);
+        document.addEventListener('mouseup', endHandler, { once: true });
+        document.addEventListener('touchmove', moveHandler, { passive: false });
+        document.addEventListener('touchend', endHandler, { once: true });
+    }
+
+    function dragBranch(e) {
+        if (!selectedBranch.isDraggingBranch) return;
+        e.preventDefault();
+
+        const coords = getEventCoords(e);
+        const anchorScreenPos = worldToScreen(selectedBranch.anchor.x + DOMINO_WIDTH / 2, selectedBranch.anchor.y + DOMINO_HEIGHT / 2);
+
+        // Calculate angle from anchor to where the drag started (in screen coordinates)
+        const initialAngle = Math.atan2(dragStartPos.y - anchorScreenPos.y, dragStartPos.x - anchorScreenPos.x);
+        
+        // Calculate angle from anchor to current mouse position
+        const currentAngle = Math.atan2(coords.clientY - anchorScreenPos.y, coords.clientX - anchorScreenPos.x);
+        
+        const angleDelta = currentAngle - initialAngle;
+
+        // Apply rotation to all dominoes in the branch relative to the anchor
+        selectedBranch.dominos.forEach(domino => {
+            if (domino.dominoData.id === selectedBranch.anchor.dominoData.id) return; // Don't move the anchor
+
+            const el = document.querySelector(`.domino[data-id="${domino.dominoData.id}"]`);
+            if (!el) return;
+
+            const originalPos = selectedBranch.originalPositions.get(domino.dominoData.id);
+            const anchorCenter = { x: selectedBranch.anchor.x + DOMINO_WIDTH/2, y: selectedBranch.anchor.y + DOMINO_HEIGHT/2 };
+            
+            // Vector from anchor to original domino center
+            const ox = (originalPos.x + DOMINO_WIDTH/2) - anchorCenter.x;
+            const oy = (originalPos.y + DOMINO_HEIGHT/2) - anchorCenter.y;
+            
+            // Rotate the vector
+            const rotatedX = ox * Math.cos(angleDelta) - oy * Math.sin(angleDelta);
+            const rotatedY = ox * Math.sin(angleDelta) + oy * Math.cos(angleDelta);
+            
+            const newCenterX = anchorCenter.x + rotatedX;
+            const newCenterY = anchorCenter.y + rotatedY;
+
+            const newRotation = originalPos.rotation + (angleDelta * 180 / Math.PI);
+
+            // Update visuals in real-time
+            el.style.left = `${newCenterX - DOMINO_WIDTH/2}px`;
+            el.style.top = `${newCenterY - DOMINO_HEIGHT/2}px`;
+            el.style.transform = `rotate(${newRotation}deg)`;
+        });
+    }
+
+    async function endBranchDrag(e, moveHandler, endHandler) {
+        document.removeEventListener('mousemove', moveHandler);
+        document.removeEventListener('mouseup', endHandler);
+        document.removeEventListener('touchmove', moveHandler);
+        document.removeEventListener('touchend', endHandler);
+
+        if (!selectedBranch.isDraggingBranch) return;
+
+        const gameRef = doc(db, "games", currentGameId);
+        try {
+            await runTransaction(db, async (transaction) => {
+                const gameSnap = await transaction.get(gameRef);
+                if (!gameSnap.exists()) throw new Error("Game not found");
+                
+                const newBoardDominos = [...gameSnap.data().boardDominos];
+                const newMoveHistory = [...(gameSnap.data().moveHistory || [])];
+
+                // Store original state for the history entry
+                const originalBranchState = [];
+                selectedBranch.dominos.forEach(domino => {
+                    const original = selectedBranch.originalPositions.get(domino.dominoData.id);
+                    if (original) {
+                         originalBranchState.push({ dominoId: domino.dominoData.id, ...original });
+                    }
+                });
+                newMoveHistory.push({ type: 'branch_move', from: originalBranchState });
+
+                selectedBranch.dominos.forEach(domino => {
+                    if (domino.dominoData.id === selectedBranch.anchor.dominoData.id) return;
+                    const el = dom.gameBoardElement.querySelector(`.domino[data-id="${domino.dominoData.id}"]`);
+                    if (!el) return;
+
+                    const boardIndex = newBoardDominos.findIndex(d => d.dominoData.id === domino.dominoData.id);
+                    if (boardIndex > -1) {
+                         // The element's left/top are already in the board's coordinate space because they are children of gameBoardElement
+                        const newX = parseFloat(el.style.left);
+                        const newY = parseFloat(el.style.top);
+                        
+                        const transform = el.style.transform;
+                        const rotationMatch = transform.match(/rotate\(([^)]+)deg\)/);
+                        const newRotation = rotationMatch ? parseFloat(rotationMatch[1]) : 0;
+                        
+                        newBoardDominos[boardIndex].x = newX;
+                        newBoardDominos[boardIndex].y = newY;
+                        newBoardDominos[boardIndex].rotation = newRotation;
+                    }
+                });
+                transaction.update(gameRef, { boardDominos: newBoardDominos, moveHistory: newMoveHistory });
+            });
+        } catch (error) {
+            console.error("Error saving moved branch:", error);
+            showMessage("Could not save branch position. The change may be reverted.");
+            // Force a re-render from Firestore to revert visual changes on error
+            handleGameStateUpdate(localGameState);
+        }
+        
+        isDraggingDomino = false;
+        selectedBranch.isDraggingBranch = false;
+        selectedBranch.originalPositions.clear();
+    }
+    
+    // Helper functions for coordinate conversion
+    function screenToWorld(screenX, screenY) {
+        const worldRect = dom.worldElement.getBoundingClientRect();
+        const x = (screenX - worldRect.left) / zoomLevel + boardPosition.x;
+        const y = (screenY - worldRect.top) / zoomLevel + boardPosition.y;
+        return { x, y };
+    }
+
+    function worldToScreen(worldX, worldY) {
+        const worldRect = dom.worldElement.getBoundingClientRect();
+        const x = (worldX - boardPosition.x) * zoomLevel + worldRect.left;
+        const y = (worldY - boardPosition.y) * zoomLevel + worldRect.top;
+        return { x, y };
+    }
+
+    // FIX: Add event listeners for zoom buttons
+    dom.zoomInButton.addEventListener('click', () => zoomWithControls(0.2));
+    dom.zoomOutButton.addEventListener('click', () => zoomWithControls(-0.2));
+
+    function handleZoom(delta, clientX, clientY) {
+        const rect = dom.worldElement.getBoundingClientRect();
+        const mouseX = clientX - rect.left;
+        const mouseY = clientY - rect.top;
+        const worldX_before = (mouseX / zoomLevel) + boardPosition.x;
+        const worldY_before = (mouseY / zoomLevel) + boardPosition.y;
+        const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoomLevel * (1 + delta)));
+        boardPosition.x = worldX_before - (mouseX / newZoom);
+        boardPosition.y = worldY_before - (mouseY / newZoom);
+        zoomLevel = newZoom;
+        updateBoardTransform();
+    }
+
+    function zoomWithControls(delta) {
+        const rect = dom.worldElement.getBoundingClientRect();
+        const centerX = rect.left + rect.width / 2;
+        const centerY = rect.top + rect.height / 2;
+        handleZoom(delta, centerX, centerY);
+    }
 
     // --- Initial Load ---
     window.onload = initializeFirebase;
