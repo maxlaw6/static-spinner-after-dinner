@@ -828,8 +828,9 @@
                     <button class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition-colors" id="end-turn-button">End Turn</button>
                     <button class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded transition-colors" id="rotate-last-tile-button">Rotate Tile</button>
                     <button class="tool-button bg-sky-600 hover:bg-sky-700 text-white font-bold py-2 px-3 rounded transition-colors" id="move-branch-button">Move Branch</button>
-                    <button class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-3 rounded transition-colors hidden" id="validate-move-button">Validate Move</button>
-                    <button class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-3 rounded transition-colors hidden" id="challenge-move-button">Challenge</button>
+                    <!-- FIX: Removed 'hidden' class from these buttons -->
+                    <button class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-3 rounded transition-colors" id="validate-move-button">Validate</button>
+                    <button class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-3 rounded transition-colors" id="challenge-move-button">Challenge</button>
                 </div>
             </div>
             <!-- NEW: Detailed Scoreboard Container -->
@@ -1804,8 +1805,11 @@
             newEl.addEventListener('mousedown', (e) => handleBoardClick(e, domino));
             newEl.addEventListener('touchstart', (e) => handleBoardClick(e, domino), { passive: false });
             
+            // FIX: Explicitly remove glow class if condition is not met
             if (gameState.turnState === 'PENDING_VALIDATION' && id === gameState.lastPlayedDominoId) {
                 newEl.classList.add('pending-validation-glow');
+            } else {
+                newEl.classList.remove('pending-validation-glow');
             }
 
             const isSelected = selectedBranch.dominos.some(d => d.dominoData.id === id);
@@ -1833,22 +1837,17 @@
         updateStatusAndButtons(gameState, isMyDeviceTurn, currentTurnPlayerId);
     }
 
+    // --- FIX: This function has been completely reworked ---
     function updateStatusAndButtons(gameState, isMyDeviceTurn, currentTurnPlayerId) {
         let statusText = '';
-        
-        // FIX: Buttons are always present but may be disabled
-        dom.endTurnButton.classList.remove('hidden');
-        dom.rotateLastTileButton.classList.remove('hidden');
-        dom.moveBranchButton.classList.remove('hidden');
-        dom.validateMoveButton.classList.add('hidden');
-        dom.challengeMoveButton.classList.add('hidden');
+        let canValidate = false;
 
         if (moveBranchMode) {
-             if (!selectedBranch.anchor) {
-                 statusText = "Move Branch: Select an anchor tile to pivot around.";
-             } else {
-                 statusText = `Move Branch: Select adjacent tiles. Drag any selected tile to rotate.`;
-             }
+            if (!selectedBranch.anchor) {
+                statusText = "Move Branch: Select an anchor tile to pivot around.";
+            } else {
+                statusText = `Move Branch: Select adjacent tiles. Drag any selected tile to rotate.`;
+            }
         } else if (isMyDeviceTurn) {
             switch(gameState.turnState) {
                 case 'PENDING_VALIDATION':
@@ -1874,17 +1873,25 @@
             statusText = `Waiting for ${gameState.players[currentTurnPlayerId].name}...`;
             if (gameState.turnState === 'PENDING_VALIDATION') {
                 statusText = `Validate ${gameState.players[currentTurnPlayerId].name}'s move.`;
-                dom.validateMoveButton.classList.remove('hidden');
-                dom.challengeMoveButton.classList.remove('hidden');
+                canValidate = true;
             }
         }
+
         if (!isDraggingDomino && !selectedBranch.isDraggingBranch) {
             dom.gameStatusElement.textContent = statusText;
         }
 
-        dom.endTurnButton.disabled = !isMyDeviceTurn || (gameState.turnState !== 'PLACED' && !gameState.hasDrawn) || moveBranchMode;
-        dom.rotateLastTileButton.disabled = !(isMyDeviceTurn && gameState.turnState === 'PLACED' && gameState.lastPlayedDominoId) || moveBranchMode;
-        dom.moveBranchButton.disabled = !isMyDeviceTurn || gameState.turnState !== 'PLACED';
+        // --- FIX: Logic for enabling/disabling buttons ---
+        const canManipulatePlayedTile = isMyDeviceTurn && gameState.turnState === 'PLACED' && gameState.lastPlayedDominoId;
+        
+        dom.endTurnButton.disabled = !isMyDeviceTurn || (!canManipulatePlayedTile && !gameState.hasDrawn) || moveBranchMode;
+        dom.rotateLastTileButton.disabled = !canManipulatePlayedTile || moveBranchMode;
+        dom.moveBranchButton.disabled = !canManipulatePlayedTile; // The button itself toggles the mode, so don't disable it if mode is active
+
+        // --- FIX: Use disabled property for validate/challenge buttons ---
+        dom.validateMoveButton.disabled = !canValidate;
+        dom.challengeMoveButton.disabled = !canValidate;
+
         dom.boneyardPileElement.style.cursor = (isMyDeviceTurn && gameState.turnState === 'WAITING' && !gameState.hasDrawn && gameState.boneyard.length > 0) ? 'pointer' : 'not-allowed';
         dom.boneyardPileElement.classList.toggle('can-draw', isMyDeviceTurn && gameState.turnState === 'WAITING' && !gameState.hasDrawn && gameState.boneyard.length > 0);
     }
@@ -2183,7 +2190,8 @@
         if (!isDraggingDomino || !activeDominoElement) return;
         e.preventDefault();
         const coords = getEventCoords(e);
-        if (Math.abs(coords.clientX - dragStartPos.x) > 5 || Math.abs(coords.clientY - dragStartPos.y) > 5) {
+        // FIX: Increased threshold for forgiving taps on touch screens
+        if (Math.abs(coords.clientX - dragStartPos.x) > 10 || Math.abs(coords.clientY - dragStartPos.y) > 10) {
             wasDragged = true;
         }
         const newLeft = coords.clientX - (DOMINO_WIDTH / 2);
@@ -2904,3 +2912,4 @@
 </script>
 </body>
 </html>
+
