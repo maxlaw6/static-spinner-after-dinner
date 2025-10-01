@@ -535,23 +535,23 @@
         
         /* --- LOCAL PLAYER LIST --- */
         #local-player-list-item {
-              display: flex;
-              justify-content: space-between;
-              align-items: center;
-              background-color: #374151; /* bg-gray-700 */
-              padding: 4px 8px;
-              border-radius: 4px;
+             display: flex;
+             justify-content: space-between;
+             align-items: center;
+             background-color: #374151; /* bg-gray-700 */
+             padding: 4px 8px;
+             border-radius: 4px;
         }
         #local-player-list-item button {
-              background-color: #ef4444; /* bg-red-500 */
-              color: white;
-              border: none;
-              border-radius: 50%;
-              width: 20px;
-              height: 20px;
-              font-weight: bold;
-              line-height: 1;
-              cursor: pointer;
+             background-color: #ef4444; /* bg-red-500 */
+             color: white;
+             border: none;
+             border-radius: 50%;
+             width: 20px;
+             height: 20px;
+             font-weight: bold;
+             line-height: 1;
+             cursor: pointer;
         }
 
         /* --- REWORKED: ROTATION HANDLES --- */
@@ -610,40 +610,26 @@
 </head>
 <body class="text-white">
 
-<!-- REWORKED: Rotation Handle Container -->
 <div id="rotation-handles-container" class="absolute top-0 left-0 w-full h-full pointer-events-none z-40"></div>
 
-<!-- Domino Pip Colors -->
 <svg width="0" height="0" style="position:absolute;z-index:-1;">
     <defs>
-        <!-- 0: White/Blank -->
         <radialGradient id="pipGradient-0" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#FFFFFF"/><stop offset="100%" stop-color="#E0E0E0"/></radialGradient>
-        <!-- 1: Yellow -->
         <radialGradient id="pipGradient-1" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#FFD700"/><stop offset="100%" stop-color="#DAA520"/></radialGradient>
-        <!-- 2: Red -->
         <radialGradient id="pipGradient-2" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#FF3B30"/><stop offset="100%" stop-color="#E12D22"/></radialGradient>
-        <!-- 3: Maroon -->
         <radialGradient id="pipGradient-3" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#9A2A2A"/><stop offset="100%" stop-color="#800000"/></radialGradient>
-        <!-- 4: Royal Blue -->
         <radialGradient id="pipGradient-4" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#5899E2"/><stop offset="100%" stop-color="#4169E1"/></radialGradient>
-        <!-- 5: Forest Green -->
         <radialGradient id="pipGradient-5" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#228B22"/><stop offset="100%" stop-color="#1E7E1E"/></radialGradient>
-        <!-- 6: Black -->
         <radialGradient id="pipGradient-6" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#444444"/><stop offset="100%" stop-color="#000000"/></radialGradient>
-        <!-- 7: Burnt Umber -->
         <radialGradient id="pipGradient-7" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#A0522D"/><stop offset="100%" stop-color="#8B4513"/></radialGradient>
-        <!-- 8: Rich Purple -->
         <radialGradient id="pipGradient-8" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#9B59B6"/><stop offset="100%" stop-color="#8E44AD"/></radialGradient>
-        <!-- 9: Greyish Blue -->
         <radialGradient id="pipGradient-9" cx="50%" cy="50%" r="65%" fx="30%" fy="30%"><stop offset="0%" stop-color="#8492A6"/><stop offset="100%" stop-color="#64748B"/></radialGradient>
     </defs>
 </svg>
 
-<!-- Message Modal -->
 <div id="message-modal" class="hidden">
     <div id="message-modal-content" class="bg-gray-800 p-6 rounded-lg shadow-xl w-full max-w-sm">
         <p id="message-text" class="text-lg mb-4"></p>
-        <!-- FIX: Container for multiple buttons -->
         <div id="message-buttons" class="flex gap-4">
             <button id="message-ok-button" class="w-full bg-blue-600 hover:bg-blue-700 font-bold py-2 px-3 rounded transition-colors">OK</button>
             <button id="message-cancel-button" class="w-full bg-gray-600 hover:bg-gray-700 font-bold py-2 px-3 rounded transition-colors hidden">Cancel</button>
@@ -651,7 +637,6 @@
     </div>
 </div>
 
-<!-- Boneyard Picker Modal -->
 <div id="boneyard-picker-modal" class="hidden">
     <div class="bg-gray-800 p-6 rounded-lg shadow-xl w-[90vw] max-w-4xl max-h-[90vh] flex flex-col">
         <div class="flex justify-between items-center mb-4">
@@ -659,13 +644,11 @@
             <button id="boneyard-picker-close-button" class="text-gray-400 hover:text-white text-3xl">&times;</button>
         </div>
         <div id="boneyard-picker-wrapper" class="flex-grow overflow-auto bg-gray-900 rounded-lg p-2">
-            <!-- JS will render dominoes here in a grid -->
-        </div>
+            </div>
         <p class="text-center text-gray-400 mt-2 text-sm">Click a domino to add it to your hand.</p>
     </div>
 </div>
 
-<!-- Loading Screen -->
 <div id="loading-screen" class="flex items-center justify-center">
     <div class="text-center">
         <h1 class="text-3xl font-bold">Connecting to Game Service...</h1>
@@ -673,7 +656,6 @@
     </div>
 </div>
 
-<!-- NEW: Round Start Screen -->
 <div id="round-start-screen" class="hidden">
     <div id="round-start-content" class="w-full max-w-md">
         <h2 class="text-3xl font-bold text-center mb-4">Starting Round <span id="round-start-number"></span></h2>
@@ -687,7 +669,6 @@
     </div>
 </div>
 
-<!-- Pass Device Screen -->
 <div id="pass-device-screen" class="hidden">
     <div id="pass-device-content" class="text-center">
         <h2 class="text-3xl font-bold mb-4">Pass the Device to...</h2>
@@ -696,7 +677,6 @@
     </div>
 </div>
 
-<!-- Setup / Lobby Screen -->
 <div class="hidden" id="setup-screen">
     <div class="bg-gray-800 p-8 rounded-lg shadow-2xl text-white w-full max-w-md">
         <h1 class="text-3xl font-bold text-center mb-6">Spinner after Dinner</h1>
@@ -707,7 +687,6 @@
                 <input class="w-full p-2 rounded bg-gray-700 text-white" id="player-name" placeholder="Enter your name" type="text"/>
             </div>
             
-            <!-- Create Game Flow -->
             <div id="create-game-flow">
                 <label class="block mb-2">Game Mode:</label>
                 <div class="flex gap-4 mb-6">
@@ -716,7 +695,6 @@
                 </div>
             </div>
 
-            <!-- Join Game Flow -->
             <div id="join-game-flow">
                 <div class="text-center my-4">OR</div>
                 <div class="mb-4">
@@ -726,7 +704,6 @@
                 <button class="w-full bg-blue-600 hover:bg-blue-700 font-bold py-3 px-4 rounded transition-colors" disabled id="join-game-button">Find Game</button>
             </div>
 
-            <!-- Host's Local Player Setup View -->
             <div id="local-player-setup-view" class="hidden">
                 <p class="text-center text-gray-400 mb-4">You (the host) are Player 1. Add other local players below.</p>
                 <div class="mb-4">
@@ -742,7 +719,6 @@
                  <button class="w-full bg-gray-500 hover:bg-gray-600 font-bold py-3 px-4 rounded transition-colors" id="back-to-mode-selection-button">Back</button>
             </div>
 
-            <!-- NEW: Join Type Selection View -->
             <div id="join-type-selection-view" class="hidden">
                 <h2 class="text-2xl font-bold text-center mb-4">How are you joining?</h2>
                 <p class="text-center text-gray-400 mb-6">Joining game: <span id="join-type-game-id-display"></span></p>
@@ -753,7 +729,6 @@
                 </div>
             </div>
 
-            <!-- Joiner's Group Setup View -->
             <div id="join-group-setup-view" class="hidden">
                 <h2 class="text-2xl font-bold text-center mb-4">Joining Game: <span id="joining-game-id-display"></span></h2>
                 <p class="text-center text-gray-400 mb-4">You are Player 1 for your group. Add other local players from your device below.</p>
@@ -785,7 +760,6 @@
     </div>
 </div>
 
-<!-- Round End Screen -->
 <div class="hidden" id="round-end-screen">
     <div class="w-full max-w-md" id="round-end-content">
         <h2 class="text-3xl font-bold text-center mb-4" id="round-end-title">Round Over!</h2>
@@ -795,9 +769,7 @@
     </div>
 </div>
 
-<!-- Game Over Screen -->
 <div class="hidden" id="game-over-screen">
-    <!-- FIX: Increased max-width to accommodate the full scoreboard -->
     <div class="w-full max-w-3xl" id="final-score-display">
         <h2 class="text-4xl font-bold text-center mb-4 text-yellow-300">Game Over!</h2>
         <p class="text-xl mb-6" id="final-winner-message"></p>
@@ -806,11 +778,9 @@
     </div>
 </div>
 
-<!-- Main Game Container -->
 <div class="hidden" id="game-container">
     <div id="game-layout">
         <div class="bg-gray-900 bg-opacity-70 p-2 rounded-lg shadow-lg flex justify-between items-center flex-wrap gap-4" id="game-info">
-            <!-- Group 1: Left Controls -->
             <div class="flex items-center gap-4">
                 <button class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded transition-colors" id="main-menu-button">New Game / Exit</button>
                 <div>
@@ -819,21 +789,18 @@
                 </div>
             </div>
             
-            <!-- Group 2: Game Log & Pip Tally -->
             <div class="flex items-center gap-4 flex-grow justify-center">
                  <div id="game-log" class="flex-grow"></div>
                 <div class="text-center px-4">
                     <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Your Hand Pips</h3>
                     <p id="hand-value-display" class="text-2xl font-bold text-yellow-300">0</p>
                 </div>
-                <!-- STARTING TILE INDICATOR -->
                 <div class="text-center px-4">
                     <h3 id="round-indicator-label" class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Round</h3>
                     <p id="round-indicator" class="text-2xl font-bold text-white">0</p>
                 </div>
             </div>
 
-            <!-- Group 3: Right Controls -->
             <div class="flex items-center gap-4">
                 <button class="bg-yellow-600 hover:bg-yellow-700 text-black font-bold py-2 px-4 rounded transition-colors" id="re-deal-button">Next Round</button>
                 <label for="theme-switcher" class="sr-only">Theme</label>
@@ -851,8 +818,7 @@
         
         <div id="left-panel">
             <div id="player-hands-container">
-                <!-- Player hands will be rendered here by JS -->
-            </div>
+                </div>
             <div id="boneyard-container">
                 <h2 class="text-xl font-semibold mb-3 text-center">Boneyard</h2>
                 <div id="boneyard-pile" title="Click to view and pick a domino">
@@ -861,15 +827,13 @@
                 </div>
                 <div class="mt-2 flex items-center justify-center gap-2" id="boneyard-buttons">
                     <button class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition-colors" id="end-turn-button">End Turn</button>
-                    <!-- NEW: Undo Draw Button -->
                     <button class="bg-yellow-600 hover:bg-yellow-700 text-black font-bold py-2 px-3 rounded transition-colors hidden" id="undo-draw-button">Undo Draw</button>
+                     <button class="bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-3 rounded transition-colors hidden" id="undo-move-button">Undo Move</button>
                     <button class="tool-button bg-sky-600 hover:bg-sky-700 text-white font-bold py-2 px-3 rounded transition-colors" id="move-branch-button">Move Branch</button>
-                    <!-- FIX: Removed 'hidden' class from these buttons -->
                     <button class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-3 rounded transition-colors" id="validate-move-button">Validate</button>
                     <button class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-3 rounded transition-colors" id="challenge-move-button">Challenge</button>
                 </div>
             </div>
-            <!-- NEW: Detailed Scoreboard Container -->
             <div id="detailed-scoreboard-container">
                 <h3 class="text-lg font-semibold text-center mb-2">Score History</h3>
                 <div id="detailed-scoreboard-content"></div>
@@ -887,7 +851,6 @@
             <div id="minimap-container">
                 <div id="minimap-viewport"></div>
             </div>
-            <!-- NEW: Zoom Controls -->
             <div id="zoom-controls" class="absolute bottom-4 right-4 z-10 flex flex-col gap-2">
                 <button id="zoom-in-button" class="w-10 h-10 bg-gray-900 bg-opacity-70 rounded-full text-white text-2xl font-bold flex items-center justify-center shadow-lg hover:bg-opacity-90 transition-all">+</button>
                 <button id="zoom-out-button" class="w-10 h-10 bg-gray-900 bg-opacity-70 rounded-full text-white text-2xl font-bold flex items-center justify-center shadow-lg hover:bg-opacity-90 transition-all">-</button>
@@ -895,7 +858,6 @@
         </div>
     </div>
 </div>
-<!-- Firebase SDK -->
 <script type="module">
     // Import Firebase modules
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
@@ -999,6 +961,8 @@
         // NEW: Move Branch buttons
         moveBranchButton: document.getElementById('move-branch-button'),
         undoDrawButton: document.getElementById('undo-draw-button'),
+        // CHANGE: Add Undo Move Button to DOM elements
+        undoMoveButton: document.getElementById('undo-move-button'),
 
         // NEW: Boneyard Picker elements
         boneyardPickerModal: document.getElementById('boneyard-picker-modal'),
@@ -2019,6 +1983,8 @@
             el.parentNode.replaceChild(newEl, el);
             
             newEl.addEventListener('mousedown', (e) => handleBoardClick(e, domino));
+            // CHANGE: Add touchstart event for moving placed tiles on iPad
+            newEl.addEventListener('touchstart', (e) => handleBoardTouchStart(e, domino), { passive: false });
             newEl.addEventListener('contextmenu', (e) => {
                 e.preventDefault();
                 showRotationHandles(e, domino);
@@ -2107,11 +2073,17 @@
 
         const canManipulatePlayedTile = isMyDeviceTurn && gameState.turnState === 'PLACED' && gameState.lastPlayedDominoId;
         const canUndoDraw = isMyDeviceTurn && gameState.hasDrawn && gameState.turnState === 'WAITING';
+        // CHANGE: Add condition for showing Undo Move button
+        const canUndoMove = isMyDeviceTurn && gameState.turnState === 'PLACED';
         
         dom.endTurnButton.disabled = !isMyDeviceTurn || (!canManipulatePlayedTile && !gameState.hasDrawn) || moveBranchMode;
         
         dom.undoDrawButton.classList.toggle('hidden', !canUndoDraw);
         dom.undoDrawButton.disabled = !canUndoDraw;
+
+        // CHANGE: Toggle visibility of Undo Move button
+        dom.undoMoveButton.classList.toggle('hidden', !canUndoMove);
+        dom.undoMoveButton.disabled = !canUndoMove;
 
         dom.moveBranchButton.disabled = !canManipulatePlayedTile;
 
@@ -2196,12 +2168,23 @@
         dom.scoreboard.appendChild(scoreEntry);
     }
     
+    // CHANGE: Add colored names to game log
     function renderGameLog(log) {
         if (!log) return;
         dom.gameLog.innerHTML = '';
+        const players = localGameState.players || {};
+
         log.forEach(entry => {
+            let coloredEntry = entry;
+            // Loop through players to find and color their names
+            for (const pid in players) {
+                const player = players[pid];
+                // Use a RegExp to replace the name, ensuring it's a whole word to avoid partial matches
+                const nameRegex = new RegExp(`\\b${player.name}\\b`, 'g');
+                coloredEntry = coloredEntry.replace(nameRegex, `<span style="color: ${player.color}; font-weight: 600;">${player.name}</span>`);
+            }
             const p = document.createElement('p');
-            p.textContent = entry;
+            p.innerHTML = coloredEntry; // Use innerHTML to render the span
             dom.gameLog.appendChild(p);
         });
         dom.gameLog.scrollTop = dom.gameLog.scrollHeight;
@@ -2382,6 +2365,12 @@
         return e.touches?.[0] || e.changedTouches?.[0] || e;
     }
 
+    // CHANGE: Add a separate handler for touchstart on board tiles to prevent default browser actions
+    function handleBoardTouchStart(e, domino) {
+        e.preventDefault(); // Prevent scrolling/zooming on iPad when interacting with a tile
+        handleBoardClick(e, domino);
+    }
+
     function handleBoardClick(e, domino) {
         if (isDraggingDomino || isRotating) return;
         
@@ -2402,11 +2391,8 @@
 
         // If it's the last played tile on your turn...
         if (canInteractWithTile) {
-            // A left-click (tap) will now also open the radial menu for quick rotation.
-            // Repositioning is handled by starting a drag from this tile.
-            if (e.type === 'mousedown' && e.button === 0) { // Check for left mouse button
-                 startRegularDominoDrag(e, domino, 'board');
-            }
+            // A left-click (or tap) will start a drag. A short tap will be handled in endDominoDrag.
+            startRegularDominoDrag(e, domino, 'board');
         }
     }
 
@@ -3221,10 +3207,58 @@
         }
     }
 
+    // CHANGE: Add Undo Move function and event listener
+    async function undoMove() {
+        dom.undoMoveButton.disabled = true; // Prevent double clicks
+        const gameRef = doc(db, "games", currentGameId);
+        try {
+            await runTransaction(db, async (transaction) => {
+                const gameSnap = await transaction.get(gameRef);
+                if (!gameSnap.exists()) throw new Error("Game does not exist!");
+                
+                const gameState = gameSnap.data();
+                const currentTurnPlayerId = gameState.playerOrder[gameState.currentPlayerIndex];
+                
+                // Double-check conditions inside the transaction
+                if (gameState.players[currentTurnPlayerId].controller !== currentPlayerId || 
+                    gameState.turnState !== 'PLACED' || 
+                    !gameState.lastPlayedDominoId) {
+                    return; // Can't undo this move anymore
+                }
+
+                const lastPlayedId = gameState.lastPlayedDominoId;
+                const newBoardDominos = [...gameState.boardDominos];
+                const playedDominoIndex = newBoardDominos.findIndex(d => d.dominoData.id === lastPlayedId);
+
+                if (playedDominoIndex === -1) throw new Error("Last played domino not found on board.");
+
+                const [undoneDominoObject] = newBoardDominos.splice(playedDominoIndex, 1);
+                const updatedPlayers = { ...gameState.players };
+                updatedPlayers[currentTurnPlayerId].hand.push(undoneDominoObject.dominoData);
+
+                const newLog = [...(gameState.log || [])];
+                newLog.pop(); // Remove the "played a tile" message
+
+                transaction.update(gameRef, {
+                    players: updatedPlayers,
+                    boardDominos: newBoardDominos,
+                    turnState: 'WAITING', // Revert state
+                    lastPlayedDominoId: null,
+                    moveHistory: [], // Clear move history for the turn
+                    log: newLog
+                });
+            });
+        } catch (error) {
+            console.error("Error undoing move:", error);
+            showMessage("Could not undo the move. Please try again.");
+        }
+        // No need to re-enable button, state change will hide it
+    }
+    dom.undoMoveButton.addEventListener('click', undoMove);
+
+
     // --- Initial Load ---
     window.onload = initializeFirebase;
 </script>
 </body>
 </html>
-
-
