@@ -1244,7 +1244,7 @@
             lastDrawnDominoId: null, passCount: 0, moveHistory: [], log: [], currentTheme: 'classic',
             createdAt: serverTimestamp(), turnConfirmationPending: false,
             // UNDO VALIDATION: Add state for undo requests
-            undoRequest: { requestingPlayerId: null, approvals: [], status: 'none' } // 'none', 'pending', 'approved', 'denied'
+            undoRequest: { requestingPlayerId: null, type: null, approvals: [], status: 'none' } // 'none', 'pending', 'approved', 'denied'
         };
 
         await setDoc(gameRef, initialGameState);
@@ -1704,7 +1704,7 @@
                     log: [],
                     roundEndInfo: null,
                     turnConfirmationPending: false,
-                    undoRequest: { requestingPlayerId: null, approvals: [], status: 'none' }, // Reset undo state
+                    undoRequest: { requestingPlayerId: null, type: null, approvals: [], status: 'none' }, // Reset undo state
                     roundStartInfo: {
                         starterId: starterId,
                         starterIndex: starterIndex,
@@ -1839,49 +1839,6 @@
 
     dom.boneyardPileElement.addEventListener('click', openBoneyardPicker);
     dom.boneyardPileElement.addEventListener('touchstart', (e) => { e.preventDefault(); openBoneyardPicker(); });
-
-    async function undoDraw() {
-        dom.undoDrawButton.disabled = true; // Prevent double clicks
-        const gameRef = doc(db, "games", currentGameId);
-        try {
-            await runTransaction(db, async (transaction) => {
-                const gameSnap = await transaction.get(gameRef);
-                if (!gameSnap.exists()) throw "Game does not exist!";
-                const gameState = gameSnap.data();
-                const currentTurnPlayer = gameState.players[gameState.playerOrder[gameState.currentPlayerIndex]];
-                
-                if (currentTurnPlayer.controller !== currentPlayerId || !gameState.hasDrawn || !gameState.lastDrawnDominoId) {
-                    return; // Can't undo
-                }
-
-                const hand = [...currentTurnPlayer.hand];
-                const drawnDominoIndex = hand.findIndex(d => d.id === gameState.lastDrawnDominoId);
-                if (drawnDominoIndex === -1) return; // Domino not found
-
-                const [undoneDomino] = hand.splice(drawnDominoIndex, 1);
-                const newBoneyard = [...gameState.boneyard, undoneDomino];
-                
-                const updatedPlayers = { ...gameState.players };
-                updatedPlayers[currentTurnPlayer.id].hand = hand;
-
-                const newLog = [...(gameState.log || [])];
-                const lastLog = newLog.pop(); // Remove the "drew" message
-                
-                transaction.update(gameRef, {
-                    players: updatedPlayers,
-                    boneyard: newBoneyard,
-                    hasDrawn: false,
-                    lastDrawnDominoId: null,
-                    log: newLog
-                });
-            });
-        } catch (error) {
-            console.error("Error undoing draw:", error);
-            showMessage("Could not undo the draw. Please try again.");
-            dom.undoDrawButton.disabled = false; // Re-enable on error
-        }
-    }
-    dom.undoDrawButton.addEventListener('click', undoDraw);
 
     async function submitTurnForValidation() {
         // FIX: Disable button immediately on click
@@ -2075,7 +2032,7 @@
         dom.endTurnButton.classList.remove('action-needed');
 
         // UNDO VALIDATION: Check undo request status
-        const undoRequest = gameState.undoRequest || { status: 'none' };
+        const undoRequest = gameState.undoRequest || { status: 'none', type: null };
         if (undoRequest.status === 'pending') {
             const requesterName = gameState.players[undoRequest.requestingPlayerId]?.name || 'A player';
             statusText = `${requesterName} has requested an undo.`;
@@ -2125,28 +2082,36 @@
         }
 
         const canManipulatePlayedTile = isMyDeviceTurn && gameState.turnState === 'PLACED' && gameState.lastPlayedDominoId;
-        const canUndoDraw = isMyDeviceTurn && gameState.hasDrawn && gameState.turnState === 'WAITING';
         
-        const canRequestUndo = isMyDeviceTurn && gameState.turnState === 'PLACED' && undoRequest.status === 'none';
-        
-        dom.endTurnButton.disabled = !isMyDeviceTurn || (!canManipulatePlayedTile && !gameState.hasDrawn) || moveBranchMode;
-        
-        dom.undoDrawButton.classList.toggle('hidden', !canUndoDraw);
-        dom.undoDrawButton.disabled = !canUndoDraw;
+        // Undo Draw Logic
+        const canRequestUndoDraw = isMyDeviceTurn && gameState.hasDrawn && gameState.turnState === 'WAITING' && undoRequest.status === 'none';
+        const isMyDrawUndoPending = undoRequest.status === 'pending' && undoRequest.type === 'draw' && undoRequest.requestingPlayerId === currentTurnPlayerId;
+        dom.undoDrawButton.classList.toggle('hidden', !canRequestUndoDraw && !isMyDrawUndoPending);
+        dom.undoDrawButton.disabled = false;
+        if(isMyDrawUndoPending){
+            dom.undoDrawButton.textContent = 'Cancel Undo';
+             dom.undoDrawButton.classList.remove('bg-yellow-600', 'hover:bg-yellow-700', 'text-black');
+             dom.undoDrawButton.classList.add('bg-gray-500', 'hover:bg-gray-600', 'text-white');
+        } else {
+             dom.undoDrawButton.textContent = 'Undo Draw';
+             dom.undoDrawButton.classList.remove('bg-gray-500', 'hover:bg-gray-600', 'text-white');
+             dom.undoDrawButton.classList.add('bg-yellow-600', 'hover:bg-yellow-700', 'text-black');
+        }
 
-        dom.undoMoveButton.classList.remove('bg-gray-500', 'hover:bg-gray-600');
-        dom.undoMoveButton.classList.add('bg-orange-500', 'hover:bg-orange-600');
         
-        const isMyUndoRequestPending = undoRequest.status === 'pending' && undoRequest.requestingPlayerId === currentTurnPlayerId;
-        dom.undoMoveButton.classList.toggle('hidden', !canRequestUndo && !isMyUndoRequestPending);
+        // Undo Move Logic
+        const canRequestUndoMove = isMyDeviceTurn && gameState.turnState === 'PLACED' && undoRequest.status === 'none';
+        const isMyMoveUndoPending = undoRequest.status === 'pending' && undoRequest.type === 'play' && undoRequest.requestingPlayerId === currentTurnPlayerId;
+        dom.undoMoveButton.classList.toggle('hidden', !canRequestUndoMove && !isMyMoveUndoPending);
         dom.undoMoveButton.disabled = false;
-
-        if (isMyUndoRequestPending) {
+        if (isMyMoveUndoPending) {
              dom.undoMoveButton.textContent = 'Cancel Undo';
              dom.undoMoveButton.classList.remove('bg-orange-500', 'hover:bg-orange-600');
              dom.undoMoveButton.classList.add('bg-gray-500', 'hover:bg-gray-600');
         } else {
             dom.undoMoveButton.textContent = 'Undo Move';
+            dom.undoMoveButton.classList.remove('bg-gray-500', 'hover:bg-gray-600');
+            dom.undoMoveButton.classList.add('bg-orange-500', 'hover:bg-orange-600');
         }
 
 
@@ -3329,8 +3294,7 @@
     }
 
     // --- UNDO VALIDATION: New and Modified Undo Logic ---
-    async function requestUndo() {
-        dom.undoMoveButton.disabled = true;
+    async function requestUndo(type) {
         const gameRef = doc(db, "games", currentGameId);
         const currentTurnPlayerId = localGameState.playerOrder[localGameState.currentPlayerIndex];
         const newLog = [...(localGameState.log || []), `${localGameState.players[currentTurnPlayerId].name} requested an undo.`];
@@ -3339,6 +3303,7 @@
         await updateDoc(gameRef, {
             undoRequest: {
                 requestingPlayerId: currentTurnPlayerId,
+                type: type,
                 approvals: [],
                 status: 'pending'
             },
@@ -3351,7 +3316,7 @@
         const newLog = [...(localGameState.log || [])];
         newLog.pop(); // Remove the "requested an undo" message
         await updateDoc(gameRef, {
-            undoRequest: { requestingPlayerId: null, approvals: [], status: 'none' },
+            undoRequest: { requestingPlayerId: null, type: null, approvals: [], status: 'none' },
             log: newLog
         });
     }
@@ -3388,7 +3353,7 @@
             const isModalVisible = !dom.messageModal.classList.contains('hidden');
             if (!alreadyVoted && !isModalVisible) { // Only show if not already voted and modal isn't open for something else
                  const requesterName = gameState.players[undoRequest.requestingPlayerId]?.name || 'A player';
-                 showMessage(`${requesterName} wants to undo their last move.`, {
+                 showMessage(`${requesterName} wants to undo their last ${undoRequest.type}.`, {
                     confirmText: "Approve",
                     confirmClass: "bg-green-600 hover:bg-green-700 action-needed",
                     onConfirm: approveUndo,
@@ -3401,12 +3366,16 @@
         }
 
         // --- Host executes the approved undo ---
-        const requiredApprovals = 1; // Only one approval needed now
+        const requiredApprovals = 1; 
 
         if (amITheHost && undoRequest.status === 'pending' && undoRequest.approvals.length >= requiredApprovals) {
             const gameRef = doc(db, "games", currentGameId);
             updateDoc(gameRef, { 'undoRequest.status': 'approved' }).then(() => {
-                executeUndo();
+                if (undoRequest.type === 'play') {
+                    executeUndoMove();
+                } else if (undoRequest.type === 'draw') {
+                    executeUndoDraw();
+                }
             });
         }
         
@@ -3415,7 +3384,7 @@
         }
     }
 
-    async function executeUndo() {
+    async function executeUndoMove() {
         const gameRef = doc(db, "games", currentGameId);
         try {
             await runTransaction(db, async (transaction) => {
@@ -3425,24 +3394,14 @@
 
                 const lastPlayedId = gameState.lastPlayedDominoId;
                 const turnPlayerId = gameState.undoRequest.requestingPlayerId;
-
-                if (!lastPlayedId || !turnPlayerId) {
-                    transaction.update(gameRef, { undoRequest: { requestingPlayerId: null, approvals: [], status: 'none' }});
-                    return;
-                }
+                if (!lastPlayedId || !turnPlayerId) return;
 
                 const newBoardDominos = [...gameState.boardDominos];
                 const playedDominoIndex = newBoardDominos.findIndex(d => d.dominoData.id === lastPlayedId);
-
-                if (playedDominoIndex === -1) {
-                    console.error("Undo failed: last played domino not on board.");
-                    transaction.update(gameRef, { undoRequest: { requestingPlayerId: null, approvals: [], status: 'none' }});
-                    return;
-                }
+                if (playedDominoIndex === -1) return;
 
                 const [undoneDominoObject] = newBoardDominos.splice(playedDominoIndex, 1);
                 const updatedPlayers = { ...gameState.players };
-                
                 updatedPlayers[turnPlayerId].hand.push(undoneDominoObject.dominoData);
 
                 const newLog = [...(gameState.log || []), `The undo was approved. ${updatedPlayers[turnPlayerId].name}'s turn is reset.`];
@@ -3455,22 +3414,72 @@
                     lastPlayedDominoId: null,
                     moveHistory: [],
                     log: newLog,
-                    undoRequest: { requestingPlayerId: null, approvals: [], status: 'none' } // Reset state
+                    undoRequest: { requestingPlayerId: null, type: null, approvals: [], status: 'none' }
                 });
             });
         } catch (error) {
-            console.error("Error executing undo:", error);
+            console.error("Error executing move undo:", error);
             showMessage("Could not perform the undo action.");
         }
     }
+    
+    async function executeUndoDraw() {
+         const gameRef = doc(db, "games", currentGameId);
+        try {
+            await runTransaction(db, async (transaction) => {
+                const gameSnap = await transaction.get(gameRef);
+                if (!gameSnap.exists()) throw "Game does not exist!";
+                const gameState = gameSnap.data();
+                
+                const turnPlayerId = gameState.undoRequest.requestingPlayerId;
+                const lastDrawnId = gameState.lastDrawnDominoId;
+                const currentTurnPlayer = gameState.players[turnPlayerId];
+
+                if (!lastDrawnId || !currentTurnPlayer) return;
+
+                const hand = [...currentTurnPlayer.hand];
+                const drawnDominoIndex = hand.findIndex(d => d.id === lastDrawnId);
+                if (drawnDominoIndex === -1) return; 
+
+                const [undoneDomino] = hand.splice(drawnDominoIndex, 1);
+                const newBoneyard = [...gameState.boneyard, undoneDomino];
+                
+                const updatedPlayers = { ...gameState.players };
+                updatedPlayers[turnPlayerId].hand = hand;
+
+                const newLog = [...(gameState.log || []), `The draw undo was approved for ${currentTurnPlayer.name}.`];
+                if (newLog.length > 5) newLog.shift();
+                
+                transaction.update(gameRef, {
+                    players: updatedPlayers,
+                    boneyard: newBoneyard,
+                    hasDrawn: false,
+                    lastDrawnDominoId: null,
+                    log: newLog,
+                    undoRequest: { requestingPlayerId: null, type: null, approvals: [], status: 'none' }
+                });
+            });
+        } catch (error) {
+            console.error("Error executing draw undo:", error);
+        }
+    }
+
 
     dom.undoMoveButton.addEventListener('click', () => {
-        const undoRequest = localGameState.undoRequest || { status: 'none' };
-        const currentTurnPlayerId = localGameState.playerOrder[localGameState.currentPlayerIndex];
-        if (undoRequest.status === 'pending' && undoRequest.requestingPlayerId === currentTurnPlayerId) {
+        const { undoRequest } = localGameState;
+        if (undoRequest?.status === 'pending' && undoRequest.type === 'play') {
             cancelUndoRequest();
         } else {
-            requestUndo();
+            requestUndo('play');
+        }
+    });
+
+    dom.undoDrawButton.addEventListener('click', () => {
+        const { undoRequest } = localGameState;
+        if (undoRequest?.status === 'pending' && undoRequest.type === 'draw') {
+            cancelUndoRequest();
+        } else {
+            requestUndo('draw');
         }
     });
 
