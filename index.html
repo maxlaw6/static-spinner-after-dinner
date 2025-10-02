@@ -102,7 +102,8 @@
         .domino-on-board {
             position: absolute;
             transform-origin: center;
-            transition: none;
+            /* SMOOTH SNAP: Added transition for smooth rotation snapping */
+            transition: transform 0.2s cubic-bezier(.25,.8,.25,1);
         }
         .domino.domino-back {
             background-color: #f5f5dc;
@@ -411,7 +412,7 @@
         }
         #game-info { 
             grid-column: 1 / -1;
-            grid-row: 1 / 2; 
+            grid-row: 1 / 2;  
         }
         #left-panel {
             grid-column: 1 / 2;
@@ -862,7 +863,7 @@
     // Import Firebase modules
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
     import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-    import { getFirestore, doc, getDoc, setDoc, updateDoc, onSnapshot, collection, serverTimestamp, runTransaction, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    import { getFirestore, doc, getDoc, setDoc, updateDoc, onSnapshot, collection, serverTimestamp, runTransaction, writeBatch, arrayUnion } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
     import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-analytics.js";
 
     // --- DOM Elements ---
@@ -984,6 +985,8 @@
     const BOARD_SIZE = 4000;
     const DOMINO_WIDTH = 80;
     const DOMINO_HEIGHT = 40;
+    // NEW: Proximity check threshold
+    const PLACEMENT_PROXIMITY_THRESHOLD = DOMINO_WIDTH * 1.2;
     
     // --- Interaction State ---
     let isDraggingDomino = false;
@@ -1014,7 +1017,6 @@
     // --- Firebase Initialization ---
     async function initializeFirebase() {
         try {
-            // Reverted to the original hardcoded Firebase config as requested.
             const firebaseConfig = {
                 apiKey: "AIzaSyCTmUo5UpQW77xhOkI_3XELSISo6WHyqLs",
                 authDomain: "spinner-live.firebaseapp.com",
@@ -1037,7 +1039,6 @@
                     currentPlayerId = user.uid;
                     enableLobby();
                 } else {
-                    // Reverted to simple anonymous sign-in
                     await signInAnonymously(auth);
                 }
             });
@@ -1054,8 +1055,11 @@
         
         // Reset buttons
         dom.messageOkButton.textContent = 'OK';
+        dom.messageOkButton.className = 'w-full bg-blue-600 hover:bg-blue-700 font-bold py-2 px-3 rounded transition-colors';
         dom.messageOkButton.onclick = () => dom.messageModal.classList.add('hidden');
         dom.messageCancelButton.classList.add('hidden');
+        dom.messageCancelButton.textContent = 'Cancel';
+        dom.messageCancelButton.className = 'w-full bg-gray-600 hover:bg-gray-700 font-bold py-2 px-3 rounded transition-colors';
         dom.messageCancelButton.onclick = null;
         
         // Apply options
@@ -1068,9 +1072,23 @@
                 options.onConfirm();
             };
         }
+        if (options.confirmClass) {
+            dom.messageOkButton.className = `w-full ${options.confirmClass} font-bold py-2 px-3 rounded transition-colors`;
+        }
         if (options.showCancel) {
             dom.messageCancelButton.classList.remove('hidden');
-            dom.messageCancelButton.onclick = () => dom.messageModal.classList.add('hidden');
+            if (options.cancelText) {
+                 dom.messageCancelButton.textContent = options.cancelText;
+            }
+             if (options.cancelClass) {
+                dom.messageCancelButton.className = `w-full ${options.cancelClass} font-bold py-2 px-3 rounded transition-colors`;
+            }
+            dom.messageCancelButton.onclick = () => {
+                dom.messageModal.classList.add('hidden');
+                if(options.onCancel) {
+                    options.onCancel();
+                }
+            }
         }
 
         dom.messageModal.classList.remove('hidden');
@@ -1214,6 +1232,8 @@
             hasDrawn: false, scoreHistory: [], mustDrawToStart: false, lastPlayedDominoId: null,
             lastDrawnDominoId: null, passCount: 0, moveHistory: [], log: [], currentTheme: 'classic',
             createdAt: serverTimestamp(), turnConfirmationPending: false,
+            // UNDO VALIDATION: Add state for undo requests
+            undoRequest: { requestingPlayerId: null, approvals: [], status: 'none' } // 'none', 'pending', 'approved', 'denied'
         };
 
         await setDoc(gameRef, initialGameState);
@@ -1411,12 +1431,17 @@
     function handleGameStateUpdate(gameState) {
         const oldStatus = localGameState.gameStatus;
         const oldTheme = localGameState.currentTheme;
+        const oldUndoStatus = localGameState.undoRequest?.status;
+
         const newTheme = gameState.currentTheme;
         localGameState = gameState; 
 
         if (!gameState.players || !gameState.playerOrder || gameState.playerOrder.length === 0) {
             return;
         }
+
+        // --- UNDO VALIDATION: Handle incoming undo requests ---
+        handleUndoRequest(gameState, oldUndoStatus);
 
         // --- If the theme changed, clear the board to force a full re-render of dominoes ---
         if (oldTheme !== newTheme) {
@@ -1668,6 +1693,7 @@
                     log: [],
                     roundEndInfo: null,
                     turnConfirmationPending: false,
+                    undoRequest: { requestingPlayerId: null, approvals: [], status: 'none' }, // Reset undo state
                     roundStartInfo: {
                         starterId: starterId,
                         starterIndex: starterIndex,
@@ -2031,8 +2057,15 @@
     function updateStatusAndButtons(gameState, isMyDeviceTurn, currentTurnPlayerId) {
         let statusText = '';
         let canValidate = false;
+        
+        // UNDO VALIDATION: Check undo request status
+        const undoRequest = gameState.undoRequest || { status: 'none' };
+        if (undoRequest.status === 'pending') {
+            const requesterName = gameState.players[undoRequest.requestingPlayerId]?.name || 'A player';
+            statusText = `${requesterName} has requested an undo.`;
+        }
 
-        if (moveBranchMode) {
+        else if (moveBranchMode) {
             if (!selectedBranch.anchor) {
                 statusText = "Move Branch: Select an anchor tile to pivot around.";
             } else {
@@ -2060,10 +2093,12 @@
                     break;
             }
         } else { // Not my turn
-            statusText = `Waiting for ${gameState.players[currentTurnPlayerId].name}...`;
-            if (gameState.turnState === 'PENDING_VALIDATION') {
-                statusText = `Validate ${gameState.players[currentTurnPlayerId].name}'s move.`;
-                canValidate = true;
+            if (undoRequest.status !== 'pending') { // Don't overwrite undo message
+                statusText = `Waiting for ${gameState.players[currentTurnPlayerId].name}...`;
+                if (gameState.turnState === 'PENDING_VALIDATION') {
+                    statusText = `Validate ${gameState.players[currentTurnPlayerId].name}'s move.`;
+                    canValidate = true;
+                }
             }
         }
 
@@ -2073,17 +2108,25 @@
 
         const canManipulatePlayedTile = isMyDeviceTurn && gameState.turnState === 'PLACED' && gameState.lastPlayedDominoId;
         const canUndoDraw = isMyDeviceTurn && gameState.hasDrawn && gameState.turnState === 'WAITING';
-        // CHANGE: Add condition for showing Undo Move button
-        const canUndoMove = isMyDeviceTurn && gameState.turnState === 'PLACED';
+        
+        // UNDO VALIDATION: Adjust when undo move button is available
+        const canRequestUndo = isMyDeviceTurn && gameState.turnState === 'PLACED' && undoRequest.status === 'none';
         
         dom.endTurnButton.disabled = !isMyDeviceTurn || (!canManipulatePlayedTile && !gameState.hasDrawn) || moveBranchMode;
         
         dom.undoDrawButton.classList.toggle('hidden', !canUndoDraw);
         dom.undoDrawButton.disabled = !canUndoDraw;
 
-        // CHANGE: Toggle visibility of Undo Move button
-        dom.undoMoveButton.classList.toggle('hidden', !canUndoMove);
-        dom.undoMoveButton.disabled = !canUndoMove;
+        dom.undoMoveButton.classList.toggle('hidden', !canRequestUndo);
+        dom.undoMoveButton.disabled = !canRequestUndo;
+        if (undoRequest.status === 'pending' && undoRequest.requestingPlayerId === currentTurnPlayerId) {
+             dom.undoMoveButton.classList.remove('hidden');
+             dom.undoMoveButton.textContent = 'Requested...';
+             dom.undoMoveButton.disabled = true;
+        } else {
+            dom.undoMoveButton.textContent = 'Undo Move';
+        }
+
 
         dom.moveBranchButton.disabled = !canManipulatePlayedTile;
 
@@ -2458,6 +2501,35 @@
         activeDominoElement.style.transform = `translate3d(${newLeft}px, ${newTop}px, 0) scale(${zoomLevel}) rotate(${currentRotation}deg)`;
     }
 
+    // NEW: Check proximity before placing a domino
+    function isPlacementValid(newDomino, allDominos) {
+        // If the board is empty, the only valid placement is the first move.
+        if (allDominos.length === 0) {
+            return true; 
+        }
+
+        const newCenter = {
+            x: newDomino.x + DOMINO_WIDTH / 2,
+            y: newDomino.y + DOMINO_HEIGHT / 2
+        };
+
+        // Check if it's close to any existing domino
+        for (const existingDomino of allDominos) {
+            const existingCenter = {
+                x: existingDomino.x + DOMINO_WIDTH / 2,
+                y: existingDomino.y + DOMINO_HEIGHT / 2
+            };
+            const dx = newCenter.x - existingCenter.x;
+            const dy = newCenter.y - existingCenter.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            if (distance < PLACEMENT_PROXIMITY_THRESHOLD) {
+                return true; // Found a domino nearby
+            }
+        }
+        return false; // No dominoes were close enough
+    }
+
     async function endDominoDrag(e, origin, moveHandler, endHandler) {
         document.removeEventListener('mousemove', moveHandler);
         document.removeEventListener('touchmove', moveHandler);
@@ -2477,7 +2549,7 @@
                 const coords = getEventCoords(e);
                 const worldRect = dom.worldElement.getBoundingClientRect();
                 if (origin === 'hand' && (coords.clientX < worldRect.left || coords.clientX > worldRect.right || coords.clientY < worldRect.top || coords.clientY > worldRect.bottom)) {
-                     throw new Error("Cancelled drag"); // Just cleanup, don't show message
+                    throw new Error("Cancelled drag"); // Just cleanup, don't show message
                 }
                 const cursorX_onBoard = (coords.clientX - worldRect.left) / zoomLevel + boardPosition.x;
                 const cursorY_onBoard = (coords.clientY - worldRect.top) / zoomLevel + boardPosition.y;
@@ -2499,7 +2571,15 @@
                         newY = (BOARD_SIZE / 2) - (DOMINO_HEIGHT / 2);
                         newRotation = 90;
                     }
+                } else if (origin === 'hand') {
+                    // PROXIMITY CHECK: Validate placement for non-first moves
+                    const tempDomino = { x: newX, y: newY };
+                    if (!isPlacementValid(tempDomino, localGameState.boardDominos)) {
+                        isValidPlacement = false;
+                        showMessage("You must place dominoes next to existing ones.");
+                    }
                 }
+
 
                 if (isValidPlacement) {
                     await runTransaction(db, async (transaction) => {
@@ -3094,10 +3174,14 @@
         handle2.className = 'rotation-handle';
         handle2.id = 'rotation-handle-2';
 
-        handle1.style.left = `${center.x + radius * Math.cos(angle - Math.PI/2)}px`;
-        handle1.style.top = `${center.y + radius * Math.sin(angle - Math.PI/2)}px`;
-        handle2.style.left = `${center.x - radius * Math.cos(angle - Math.PI/2)}px`;
-        handle2.style.top = `${center.y - radius * Math.sin(angle - Math.PI/2)}px`;
+        const handle1Angle = angle - Math.PI / 2;
+        const handle2Angle = angle + Math.PI / 2;
+
+        handle1.style.left = `${center.x + radius * Math.cos(handle1Angle)}px`;
+        handle1.style.top = `${center.y + radius * Math.sin(handle1Angle)}px`;
+        handle2.style.left = `${center.x + radius * Math.cos(handle2Angle)}px`;
+        handle2.style.top = `${center.y + radius * Math.sin(handle2Angle)}px`;
+
 
         dom.rotationHandlesContainer.appendChild(handle1);
         dom.rotationHandlesContainer.appendChild(handle2);
@@ -3143,19 +3227,23 @@
             let angleDeg = angleRad * (180 / Math.PI) + 90; 
             if (angleDeg < 0) angleDeg += 360; 
             
+            // SMOOTH SNAP: Remove transition during drag for responsiveness
+            dominoEl.style.transition = 'none';
             dominoEl.style.transform = `rotate(${angleDeg}deg)`;
 
-            // Update positions of BOTH handles so they move with the rotation
+            // ROTATION HANDLES: Update positions of BOTH handles so they move with the rotation
             const radius = DOMINO_WIDTH * zoomLevel / 2 * 0.8;
-            const handleAngle = angleRad - Math.PI / 2; // Perpendicular to domino direction
+            
+            const handle1Angle = angleDeg * (Math.PI / 180) - Math.PI / 2;
+            const handle2Angle = handle1Angle + Math.PI;
 
             if(handle1) {
-                handle1.style.left = `${pivot.x + radius * Math.cos(handleAngle)}px`;
-                handle1.style.top = `${pivot.y + radius * Math.sin(handleAngle)}px`;
+                handle1.style.left = `${pivot.x + radius * Math.cos(handle1Angle)}px`;
+                handle1.style.top = `${pivot.y + radius * Math.sin(handle1Angle)}px`;
             }
             if(handle2) {
-                handle2.style.left = `${pivot.x - radius * Math.cos(handleAngle)}px`;
-                handle2.style.top = `${pivot.y - radius * Math.sin(handleAngle)}px`;
+                handle2.style.left = `${pivot.x + radius * Math.cos(handle2Angle)}px`;
+                handle2.style.top = `${pivot.y + radius * Math.sin(handle2Angle)}px`;
             }
         };
 
@@ -3167,7 +3255,12 @@
             const rotationMatch = transform.match(/rotate\(([^)]+)deg\)/);
             const finalRotation = rotationMatch ? parseFloat(rotationMatch[1]) : domino.rotation;
 
-            rotateDominoToAngle(domino, finalRotation);
+            // SMOOTH SNAP: Calculate snapped angle and apply it
+            const snappedAngle = Math.round(finalRotation / 45) * 45;
+            dominoEl.style.transition = 'transform 0.2s cubic-bezier(.25,.8,.25,1)'; // Re-apply transition for the snap
+            dominoEl.style.transform = `rotate(${snappedAngle}deg)`;
+
+            rotateDominoToAngle(domino, snappedAngle);
             isRotating = false;
             draggedDominoData = null;
             // FIX: Explicitly hide handles again on completion to be safe.
@@ -3207,54 +3300,125 @@
         }
     }
 
-    // CHANGE: Add Undo Move function and event listener
-    async function undoMove() {
-        dom.undoMoveButton.disabled = true; // Prevent double clicks
+    // --- UNDO VALIDATION: New and Modified Undo Logic ---
+    async function requestUndo() {
+        dom.undoMoveButton.disabled = true;
+        const gameRef = doc(db, "games", currentGameId);
+        const currentTurnPlayerId = localGameState.playerOrder[localGameState.currentPlayerIndex];
+        const newLog = [...(localGameState.log || []), `${localGameState.players[currentTurnPlayerId].name} requested an undo.`];
+        if (newLog.length > 5) newLog.shift();
+
+        await updateDoc(gameRef, {
+            undoRequest: {
+                requestingPlayerId: currentTurnPlayerId,
+                approvals: [],
+                status: 'pending'
+            },
+            log: newLog
+        });
+    }
+
+    async function approveUndo() {
+        const gameRef = doc(db, "games", currentGameId);
+        await updateDoc(gameRef, {
+            'undoRequest.approvals': arrayUnion(currentPlayerId)
+        });
+    }
+
+    async function denyUndo() {
+        const gameRef = doc(db, "games", currentGameId);
+        const denierName = localGameState.players[currentPlayerId].name;
+        const newLog = [...(localGameState.log || []), `${denierName} denied the undo request.`];
+        if (newLog.length > 5) newLog.shift();
+        await updateDoc(gameRef, {
+            'undoRequest.status': 'denied',
+            log: newLog
+        });
+    }
+
+    function handleUndoRequest(gameState, oldUndoStatus) {
+        const undoRequest = gameState.undoRequest;
+        if (!undoRequest || undoRequest.status === 'none') return;
+
+        const isMyRequest = undoRequest.requestingPlayerId === localGameState.playerOrder[localGameState.currentPlayerIndex];
+        const amITheHost = localGameState.players[currentPlayerId]?.isHost;
+        
+        // --- Show modal to players who need to vote ---
+        if (undoRequest.status === 'pending' && !isMyRequest) {
+            const alreadyVoted = undoRequest.approvals.includes(currentPlayerId);
+            if (!alreadyVoted) {
+                 const requesterName = gameState.players[undoRequest.requestingPlayerId]?.name || 'A player';
+                 showMessage(`${requesterName} wants to undo their last move.`, {
+                    confirmText: "Approve",
+                    confirmClass: "bg-green-600 hover:bg-green-700",
+                    onConfirm: approveUndo,
+                    showCancel: true,
+                    cancelText: "Deny",
+                    cancelClass: "bg-red-600 hover:bg-red-700",
+                    onCancel: denyUndo
+                });
+            }
+        }
+
+        // --- Host executes the approved undo ---
+        const controllerIds = new Set(Object.values(gameState.players).map(p => p.controller));
+        const isLocalGame = controllerIds.size === 1;
+        const totalPlayers = gameState.playerOrder.length;
+        const requiredApprovals = isLocalGame ? 1 : Math.ceil((totalPlayers - 1) / 2);
+
+        if (amITheHost && undoRequest.status === 'pending' && undoRequest.approvals.length >= requiredApprovals) {
+            // Mark as approved to prevent multiple executions
+            const gameRef = doc(db, "games", currentGameId);
+            updateDoc(gameRef, { 'undoRequest.status': 'approved' }).then(() => {
+                executeUndo();
+            });
+        }
+        
+        if (oldUndoStatus === 'pending' && undoRequest.status === 'denied') {
+            showMessage("Your undo request was denied.");
+        }
+    }
+
+    async function executeUndo() {
         const gameRef = doc(db, "games", currentGameId);
         try {
             await runTransaction(db, async (transaction) => {
                 const gameSnap = await transaction.get(gameRef);
                 if (!gameSnap.exists()) throw new Error("Game does not exist!");
-                
                 const gameState = gameSnap.data();
-                const currentTurnPlayerId = gameState.playerOrder[gameState.currentPlayerIndex];
-                
-                // Double-check conditions inside the transaction
-                if (gameState.players[currentTurnPlayerId].controller !== currentPlayerId || 
-                    gameState.turnState !== 'PLACED' || 
-                    !gameState.lastPlayedDominoId) {
-                    return; // Can't undo this move anymore
-                }
 
                 const lastPlayedId = gameState.lastPlayedDominoId;
+                const turnPlayerId = gameState.undoRequest.requestingPlayerId;
+                if (!lastPlayedId || !turnPlayerId) return;
+
                 const newBoardDominos = [...gameState.boardDominos];
                 const playedDominoIndex = newBoardDominos.findIndex(d => d.dominoData.id === lastPlayedId);
-
-                if (playedDominoIndex === -1) throw new Error("Last played domino not found on board.");
+                if (playedDominoIndex === -1) return;
 
                 const [undoneDominoObject] = newBoardDominos.splice(playedDominoIndex, 1);
                 const updatedPlayers = { ...gameState.players };
-                updatedPlayers[currentTurnPlayerId].hand.push(undoneDominoObject.dominoData);
+                updatedPlayers[turnPlayerId].hand.push(undoneDominoObject.dominoData);
 
-                const newLog = [...(gameState.log || [])];
-                newLog.pop(); // Remove the "played a tile" message
+                const newLog = [...(gameState.log || []), `The undo was approved. ${updatedPlayers[turnPlayerId].name}'s turn is reset.`];
+                if (newLog.length > 5) newLog.shift();
 
                 transaction.update(gameRef, {
                     players: updatedPlayers,
                     boardDominos: newBoardDominos,
-                    turnState: 'WAITING', // Revert state
+                    turnState: 'WAITING',
                     lastPlayedDominoId: null,
-                    moveHistory: [], // Clear move history for the turn
-                    log: newLog
+                    moveHistory: [],
+                    log: newLog,
+                    undoRequest: { requestingPlayerId: null, approvals: [], status: 'none' } // Reset state
                 });
             });
         } catch (error) {
-            console.error("Error undoing move:", error);
-            showMessage("Could not undo the move. Please try again.");
+            console.error("Error executing undo:", error);
+            showMessage("Could not perform the undo action.");
         }
-        // No need to re-enable button, state change will hide it
     }
-    dom.undoMoveButton.addEventListener('click', undoMove);
+
+    dom.undoMoveButton.addEventListener('click', requestUndo);
 
 
     // --- Initial Load ---
@@ -3262,3 +3426,4 @@
 </script>
 </body>
 </html>
+
