@@ -1753,7 +1753,14 @@
     function openBoneyardPicker() {
         const currentTurnPlayer = localGameState.players[localGameState.playerOrder[localGameState.currentPlayerIndex]];
         const isMyDeviceTurn = currentTurnPlayer.controller === currentPlayerId;
-        const canDraw = isMyDeviceTurn && localGameState.turnState === 'WAITING' && !localGameState.hasDrawn && localGameState.boneyard.length > 0
+        const isMyTurnToDraw = isMyDeviceTurn && localGameState.turnState === 'WAITING' && !localGameState.hasDrawn;
+
+        if (isMyTurnToDraw && localGameState.boneyard.length === 0) {
+            endRoundAsBlocked();
+            return;
+        }
+
+        const canDraw = isMyTurnToDraw && localGameState.boneyard.length > 0
         if (!canDraw) return;
         
         // --- Animation Logic: Set transform origin to the boneyard pile ---
@@ -1870,63 +1877,22 @@
                     if (newLog.length > 5) newLog.shift();
                     
                     const newPassCount = (gameState.passCount || 0) + 1;
-                    const totalPlayers = gameState.playerOrder.length;
+                    const nextPlayerIndex = (gameState.currentPlayerIndex + 1) % gameState.playerOrder.length;
+                    const nextPlayer = gameState.players[gameState.playerOrder[nextPlayerIndex]];
+                    
+                    // FIX: Only show pass device screen for local players on the same device
+                    const needsConfirmation = currentTurnPlayer.controller === nextPlayer.controller && currentTurnPlayer.id !== nextPlayer.id;
 
-                    // Check if the round is blocked
-                    if (newPassCount >= totalPlayers) {
-                        // END THE ROUND - Everyone passed
-                        newLog.push(`All players passed. The round is blocked!`);
-                        let roundPoints = {};
-                        let scoreHistoryEntry = { round: gameState.roundNumber, scores: {} };
-                        const updatedPlayers = { ...gameState.players };
-                        
-                        // Find the player with the lowest score in hand to be the winner
-                        let lowestHandValue = Infinity;
-                        let roundWinnerId = null;
-
-                        gameState.playerOrder.forEach(pid => {
-                            const handValue = calculateHandValue(updatedPlayers[pid].hand);
-                            if (handValue < lowestHandValue) {
-                                lowestHandValue = handValue;
-                                roundWinnerId = pid;
-                            }
-                        });
-                        
-                        Object.keys(updatedPlayers).forEach(pid => {
-                            const handValue = calculateHandValue(updatedPlayers[pid].hand);
-                            const pointsToAdd = (pid === roundWinnerId) ? 0 : handValue;
-                            updatedPlayers[pid].score += pointsToAdd;
-                            roundPoints[pid] = pointsToAdd;
-                            scoreHistoryEntry.scores[pid] = pointsToAdd;
-                        });
-
-                        const newScoreHistory = [...(gameState.scoreHistory || []), scoreHistoryEntry];
-                        const isGameOver = gameState.roundNumber >= 10;
-                        
-                        transaction.update(gameRef, {
-                            players: updatedPlayers,
-                            gameStatus: isGameOver ? 'finished' : 'round-over',
-                            roundEndInfo: { winnerId: roundWinnerId, points: roundPoints, reason: 'Round Blocked' },
-                            scoreHistory: newScoreHistory,
-                            log: newLog
-                        });
-                        
-                    } else {
-                        // Just pass the turn
-                        const nextPlayerIndex = (gameState.currentPlayerIndex + 1) % gameState.playerOrder.length;
-                        const nextPlayer = gameState.players[gameState.playerOrder[nextPlayerIndex]];
-                        const needsConfirmation = nextPlayer.controller !== currentTurnPlayer.controller;
-                        
-                        transaction.update(gameRef, {
-                            currentPlayerIndex: nextPlayerIndex,
-                            turnState: 'WAITING',
-                            hasDrawn: false,
-                            lastDrawnDominoId: null,
-                            passCount: newPassCount,
-                            log: newLog,
-                            turnConfirmationPending: needsConfirmation
-                        });
-                    }
+                    transaction.update(gameRef, {
+                        currentPlayerIndex: nextPlayerIndex,
+                        turnState: 'WAITING',
+                        hasDrawn: false,
+                        lastDrawnDominoId: null,
+                        passCount: newPassCount,
+                        log: newLog,
+                        turnConfirmationPending: needsConfirmation
+                    });
+                    
                 } else if (gameState.turnState === 'PLACED') {
                     // This is for submitting a played tile
                     newLog.push(`${currentTurnPlayer.name} submitted their move for validation.`);
@@ -1962,6 +1928,9 @@
                         } else {
                             // Just pass the turn
                             const nextPlayerIndex = (gameState.currentPlayerIndex + 1) % gameState.playerOrder.length;
+                            const nextPlayer = gameState.players[gameState.playerOrder[nextPlayerIndex]];
+                            const needsConfirmation = currentTurnPlayer.controller === nextPlayer.controller && currentTurnPlayer.id !== nextPlayer.id;
+                            
                             transaction.update(gameRef, {
                                 currentPlayerIndex: nextPlayerIndex,
                                 turnState: 'WAITING',
@@ -1969,7 +1938,7 @@
                                 moveHistory: [],
                                 lastPlayedDominoId: null,
                                 log: newLog,
-                                turnConfirmationPending: true,
+                                turnConfirmationPending: needsConfirmation,
                                 lastDrawnDominoId: null,
                                 passCount: 0 // Reset pass count
                             });
@@ -2885,7 +2854,8 @@
                     const validatorName = gameState.players[currentPlayerId].name;
                     const newLog = [...(gameState.log || []), `${validatorName} validated the move. It's now ${nextPlayer.name}'s turn.`];
                     if (newLog.length > 5) newLog.shift();
-                    const needsConfirmation = nextPlayer.id !== nextPlayer.controller;
+                    const needsConfirmation = nextPlayer.controller !== nextPlayer.id; // Correct logic
+                    
                     transaction.update(gameRef, {
                         currentPlayerIndex: nextPlayerIndex,
                         turnState: 'WAITING',
@@ -3595,5 +3565,4 @@
 </script>
 </body>
 </html>
-
 
