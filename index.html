@@ -476,6 +476,17 @@
         .pending-validation-glow {
             animation: pending-glow 1.5s infinite;
         }
+        
+        /* NEW: Wiggle animation for actionable buttons */
+        @keyframes wiggle {
+            0%, 100% { transform: rotate(-3deg) scale(1.05); }
+            50% { transform: rotate(3deg) scale(1.05); }
+        }
+        .action-needed {
+            animation: wiggle 0.4s ease-in-out infinite;
+            box-shadow: 0 0 15px 5px #f59e0b; /* amber-500 */
+        }
+
 
         /* NEW: Winner Animations */
         @keyframes winner-pulse {
@@ -1371,9 +1382,9 @@
         currentGameId = gameId;
         
         if (unsubscribeGameListener) unsubscribeGameListener();
-        unsubscribeGameListener = onSnapshot(doc(db, "games", currentGameId), (docSnap) => {
-            if (docSnap.exists()) {
-                handleGameStateUpdate(docSnap.data());
+        unsubscribeGameListener = onSnapshot(doc(db, "games", currentGameId), (doc) => {
+            if (doc.exists()) {
+                handleGameStateUpdate(doc.data());
             } else {
                 showMessage("The game has ended or was deleted.");
                 leaveGame();
@@ -2058,6 +2069,11 @@
         let statusText = '';
         let canValidate = false;
         
+        // Clear wiggle animations before re-evaluating
+        dom.validateMoveButton.classList.remove('action-needed');
+        dom.challengeMoveButton.classList.remove('action-needed');
+        dom.endTurnButton.classList.remove('action-needed');
+
         // UNDO VALIDATION: Check undo request status
         const undoRequest = gameState.undoRequest || { status: 'none' };
         if (undoRequest.status === 'pending') {
@@ -2078,6 +2094,7 @@
                     break;
                 case 'PLACED':
                     statusText = "You've played. Adjust your tile or end your turn.";
+                    dom.endTurnButton.classList.add('action-needed');
                     break;
                 case 'WAITING':
                 default:
@@ -2085,6 +2102,7 @@
                         statusText = "You must draw to start the round.";
                     } else if(gameState.hasDrawn){
                         statusText = "You have drawn. Play a tile or end your turn.";
+                        dom.endTurnButton.classList.add('action-needed');
                     } else if (gameState.boardDominos.length === 0) {
                         statusText = `You must play the Double ${gameState.currentStartingDouble} or Double Spinner.`;
                     } else {
@@ -2109,7 +2127,6 @@
         const canManipulatePlayedTile = isMyDeviceTurn && gameState.turnState === 'PLACED' && gameState.lastPlayedDominoId;
         const canUndoDraw = isMyDeviceTurn && gameState.hasDrawn && gameState.turnState === 'WAITING';
         
-        // UNDO VALIDATION: Adjust when undo move button is available
         const canRequestUndo = isMyDeviceTurn && gameState.turnState === 'PLACED' && undoRequest.status === 'none';
         
         dom.endTurnButton.disabled = !isMyDeviceTurn || (!canManipulatePlayedTile && !gameState.hasDrawn) || moveBranchMode;
@@ -2117,12 +2134,17 @@
         dom.undoDrawButton.classList.toggle('hidden', !canUndoDraw);
         dom.undoDrawButton.disabled = !canUndoDraw;
 
-        dom.undoMoveButton.classList.toggle('hidden', !canRequestUndo);
-        dom.undoMoveButton.disabled = !canRequestUndo;
-        if (undoRequest.status === 'pending' && undoRequest.requestingPlayerId === currentTurnPlayerId) {
-             dom.undoMoveButton.classList.remove('hidden');
-             dom.undoMoveButton.textContent = 'Requested...';
-             dom.undoMoveButton.disabled = true;
+        dom.undoMoveButton.classList.remove('bg-gray-500', 'hover:bg-gray-600');
+        dom.undoMoveButton.classList.add('bg-orange-500', 'hover:bg-orange-600');
+        
+        const isMyUndoRequestPending = undoRequest.status === 'pending' && undoRequest.requestingPlayerId === currentTurnPlayerId;
+        dom.undoMoveButton.classList.toggle('hidden', !canRequestUndo && !isMyUndoRequestPending);
+        dom.undoMoveButton.disabled = false;
+
+        if (isMyUndoRequestPending) {
+             dom.undoMoveButton.textContent = 'Cancel Undo';
+             dom.undoMoveButton.classList.remove('bg-orange-500', 'hover:bg-orange-600');
+             dom.undoMoveButton.classList.add('bg-gray-500', 'hover:bg-gray-600');
         } else {
             dom.undoMoveButton.textContent = 'Undo Move';
         }
@@ -2132,6 +2154,8 @@
 
         dom.validateMoveButton.disabled = !canValidate;
         dom.challengeMoveButton.disabled = !canValidate;
+        dom.validateMoveButton.classList.toggle('action-needed', canValidate);
+        dom.challengeMoveButton.classList.toggle('action-needed', canValidate);
 
         const canDraw = isMyDeviceTurn && gameState.turnState === 'WAITING' && !gameState.hasDrawn && gameState.boneyard.length > 0
         dom.boneyardPileElement.style.cursor = canDraw ? 'pointer' : 'not-allowed';
@@ -2571,10 +2595,14 @@
                         newY = (BOARD_SIZE / 2) - (DOMINO_HEIGHT / 2);
                         newRotation = 90;
                     }
-                } else if (origin === 'hand') {
-                    // PROXIMITY CHECK: Validate placement for non-first moves
+                } else {
+                    // PROXIMITY CHECK: Validate placement for non-first moves, and for repositioning
+                    let boardForProximityCheck = localGameState.boardDominos;
+                    if (origin === 'board') {
+                        boardForProximityCheck = localGameState.boardDominos.filter(d => d.dominoData.id !== draggedDominoData.dominoData.id);
+                    }
                     const tempDomino = { x: newX, y: newY };
-                    if (!isPlacementValid(tempDomino, localGameState.boardDominos)) {
+                    if (boardForProximityCheck.length > 0 && !isPlacementValid(tempDomino, boardForProximityCheck)) {
                         isValidPlacement = false;
                         showMessage("You must place dominoes next to existing ones.");
                     }
@@ -3318,6 +3346,17 @@
         });
     }
 
+    async function cancelUndoRequest() {
+        const gameRef = doc(db, "games", currentGameId);
+        const newLog = [...(localGameState.log || [])];
+        newLog.pop(); // Remove the "requested an undo" message
+        await updateDoc(gameRef, {
+            undoRequest: { requestingPlayerId: null, approvals: [], status: 'none' },
+            log: newLog
+        });
+    }
+
+
     async function approveUndo() {
         const gameRef = doc(db, "games", currentGameId);
         await updateDoc(gameRef, {
@@ -3340,41 +3379,38 @@
         const undoRequest = gameState.undoRequest;
         if (!undoRequest || undoRequest.status === 'none') return;
 
-        const isMyRequest = undoRequest.requestingPlayerId === localGameState.playerOrder[localGameState.currentPlayerIndex];
-        const amITheHost = localGameState.players[currentPlayerId]?.isHost;
+        const amITheRequester = undoRequest.requestingPlayerId === currentPlayerId;
+        const amITheHost = gameState.players[currentPlayerId]?.isHost;
         
         // --- Show modal to players who need to vote ---
-        if (undoRequest.status === 'pending' && !isMyRequest) {
+        if (undoRequest.status === 'pending' && !amITheRequester) {
             const alreadyVoted = undoRequest.approvals.includes(currentPlayerId);
-            if (!alreadyVoted) {
+            const isModalVisible = !dom.messageModal.classList.contains('hidden');
+            if (!alreadyVoted && !isModalVisible) { // Only show if not already voted and modal isn't open for something else
                  const requesterName = gameState.players[undoRequest.requestingPlayerId]?.name || 'A player';
                  showMessage(`${requesterName} wants to undo their last move.`, {
                     confirmText: "Approve",
-                    confirmClass: "bg-green-600 hover:bg-green-700",
+                    confirmClass: "bg-green-600 hover:bg-green-700 action-needed",
                     onConfirm: approveUndo,
                     showCancel: true,
                     cancelText: "Deny",
-                    cancelClass: "bg-red-600 hover:bg-red-700",
+                    cancelClass: "bg-red-600 hover:bg-red-600",
                     onCancel: denyUndo
                 });
             }
         }
 
         // --- Host executes the approved undo ---
-        const controllerIds = new Set(Object.values(gameState.players).map(p => p.controller));
-        const isLocalGame = controllerIds.size === 1;
-        const totalPlayers = gameState.playerOrder.length;
-        const requiredApprovals = isLocalGame ? 1 : Math.ceil((totalPlayers - 1) / 2);
+        const requiredApprovals = 1; // Only one approval needed now
 
         if (amITheHost && undoRequest.status === 'pending' && undoRequest.approvals.length >= requiredApprovals) {
-            // Mark as approved to prevent multiple executions
             const gameRef = doc(db, "games", currentGameId);
             updateDoc(gameRef, { 'undoRequest.status': 'approved' }).then(() => {
                 executeUndo();
             });
         }
         
-        if (oldUndoStatus === 'pending' && undoRequest.status === 'denied') {
+        if (amITheRequester && oldUndoStatus === 'pending' && undoRequest.status === 'denied') {
             showMessage("Your undo request was denied.");
         }
     }
@@ -3389,14 +3425,24 @@
 
                 const lastPlayedId = gameState.lastPlayedDominoId;
                 const turnPlayerId = gameState.undoRequest.requestingPlayerId;
-                if (!lastPlayedId || !turnPlayerId) return;
+
+                if (!lastPlayedId || !turnPlayerId) {
+                    transaction.update(gameRef, { undoRequest: { requestingPlayerId: null, approvals: [], status: 'none' }});
+                    return;
+                }
 
                 const newBoardDominos = [...gameState.boardDominos];
                 const playedDominoIndex = newBoardDominos.findIndex(d => d.dominoData.id === lastPlayedId);
-                if (playedDominoIndex === -1) return;
+
+                if (playedDominoIndex === -1) {
+                    console.error("Undo failed: last played domino not on board.");
+                    transaction.update(gameRef, { undoRequest: { requestingPlayerId: null, approvals: [], status: 'none' }});
+                    return;
+                }
 
                 const [undoneDominoObject] = newBoardDominos.splice(playedDominoIndex, 1);
                 const updatedPlayers = { ...gameState.players };
+                
                 updatedPlayers[turnPlayerId].hand.push(undoneDominoObject.dominoData);
 
                 const newLog = [...(gameState.log || []), `The undo was approved. ${updatedPlayers[turnPlayerId].name}'s turn is reset.`];
@@ -3418,7 +3464,15 @@
         }
     }
 
-    dom.undoMoveButton.addEventListener('click', requestUndo);
+    dom.undoMoveButton.addEventListener('click', () => {
+        const undoRequest = localGameState.undoRequest || { status: 'none' };
+        const currentTurnPlayerId = localGameState.playerOrder[localGameState.currentPlayerIndex];
+        if (undoRequest.status === 'pending' && undoRequest.requestingPlayerId === currentTurnPlayerId) {
+            cancelUndoRequest();
+        } else {
+            requestUndo();
+        }
+    });
 
 
     // --- Initial Load ---
