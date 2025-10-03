@@ -1243,8 +1243,8 @@
             hasDrawn: false, scoreHistory: [], mustDrawToStart: false, lastPlayedDominoId: null,
             lastDrawnDominoId: null, passCount: 0, moveHistory: [], log: [], currentTheme: 'classic',
             createdAt: serverTimestamp(), turnConfirmationPending: false,
-            // UNDO VALIDATION: Add state for undo requests
-            undoRequest: { requestingPlayerId: null, type: null, approvals: [], status: 'none' } // 'none', 'pending', 'approved', 'denied'
+            undoRequestedThisTurn: false,
+            undoRequest: { requestingPlayerId: null, type: null, approvals: [], status: 'none' } 
         };
 
         await setDoc(gameRef, initialGameState);
@@ -1713,6 +1713,7 @@
                     log: [],
                     roundEndInfo: null,
                     turnConfirmationPending: false,
+                    undoRequestedThisTurn: false,
                     undoRequest: { requestingPlayerId: null, type: null, approvals: [], status: 'none' }, // Reset undo state
                     roundStartInfo: {
                         starterId: starterId,
@@ -1890,7 +1891,8 @@
                         lastDrawnDominoId: null,
                         passCount: newPassCount,
                         log: newLog,
-                        turnConfirmationPending: needsConfirmation
+                        turnConfirmationPending: needsConfirmation,
+                        undoRequestedThisTurn: false // Reset flag
                     });
                     
                 } else if (gameState.turnState === 'PLACED') {
@@ -1940,7 +1942,8 @@
                                 log: newLog,
                                 turnConfirmationPending: needsConfirmation,
                                 lastDrawnDominoId: null,
-                                passCount: 0 // Reset pass count
+                                passCount: 0, // Reset pass count
+                                undoRequestedThisTurn: false // Reset flag
                             });
                         }
                     } else {
@@ -2138,7 +2141,7 @@
         const canManipulatePlayedTile = isMyDeviceTurn && gameState.turnState === 'PLACED' && gameState.lastPlayedDominoId;
         
         // Undo Draw Logic
-        const canRequestUndoDraw = isMyDeviceTurn && gameState.hasDrawn && gameState.turnState === 'WAITING' && undoRequest.status === 'none';
+        const canRequestUndoDraw = isMyDeviceTurn && gameState.hasDrawn && gameState.turnState === 'WAITING' && undoRequest.status === 'none' && !gameState.undoRequestedThisTurn;
         const isMyDrawUndoPending = undoRequest.status === 'pending' && undoRequest.type === 'draw' && undoRequest.requestingPlayerId === currentTurnPlayerId;
         dom.undoDrawButton.classList.toggle('hidden', !canRequestUndoDraw && !isMyDrawUndoPending);
         dom.undoDrawButton.disabled = false;
@@ -2154,7 +2157,7 @@
 
         
         // Undo Move Logic
-        const canRequestUndoMove = isMyDeviceTurn && gameState.turnState === 'PLACED' && undoRequest.status === 'none';
+        const canRequestUndoMove = isMyDeviceTurn && gameState.turnState === 'PLACED' && undoRequest.status === 'none' && !gameState.undoRequestedThisTurn;
         const isMyMoveUndoPending = undoRequest.status === 'pending' && undoRequest.type === 'play' && undoRequest.requestingPlayerId === currentTurnPlayerId;
         dom.undoMoveButton.classList.toggle('hidden', !canRequestUndoMove && !isMyMoveUndoPending);
         dom.undoMoveButton.disabled = false;
@@ -2176,9 +2179,9 @@
         dom.validateMoveButton.classList.toggle('action-needed', canValidate);
         dom.challengeMoveButton.classList.toggle('action-needed', canValidate);
 
-        const canDraw = isMyDeviceTurn && gameState.turnState === 'WAITING' && !gameState.hasDrawn && gameState.boneyard.length > 0
+        const canDraw = isMyDeviceTurn && gameState.turnState === 'WAITING' && !gameState.hasDrawn; // Note: removed boneyard length check here to allow triggering blocked state
         dom.boneyardPileElement.style.cursor = canDraw ? 'pointer' : 'not-allowed';
-        dom.boneyardPileElement.classList.toggle('can-draw', canDraw);
+        dom.boneyardPileElement.classList.toggle('can-draw', canDraw && gameState.boneyard.length > 0);
     }
 
     function renderPlayerHands(gameState) {
@@ -2845,7 +2848,8 @@
                         roundEndInfo: { winnerId: currentTurnPlayerId, points: roundPoints },
                         turnState: 'WAITING',
                         hasDrawn: false,
-                        scoreHistory: newScoreHistory
+                        scoreHistory: newScoreHistory,
+                        undoRequestedThisTurn: false // Reset flag
                     });
                 } else {
                     const nextPlayerIndex = (gameState.currentPlayerIndex + 1) % gameState.playerOrder.length;
@@ -2863,7 +2867,8 @@
                         moveHistory: [],
                         lastPlayedDominoId: null,
                         log: newLog,
-                        turnConfirmationPending: needsConfirmation
+                        turnConfirmationPending: needsConfirmation,
+                        undoRequestedThisTurn: false // Reset flag
                     });
                 }
             });
@@ -3289,21 +3294,24 @@
         const handle1 = document.getElementById('rotation-handle-1');
         const handle2 = document.getElementById('rotation-handle-2');
 
+        const startAngleRad = Math.atan2(getEventCoords(e).clientY - pivot.y, getEventCoords(e).clientX - pivot.x);
+        const startDominoRotation = domino.rotation || 0;
+
         const dragRotateHandler = (moveEvent) => {
             moveEvent.preventDefault();
             const coords = getEventCoords(moveEvent);
-            const angleRad = Math.atan2(coords.clientY - pivot.y, coords.clientX - pivot.x);
-            let angleDeg = angleRad * (180 / Math.PI) + 90; 
-            if (angleDeg < 0) angleDeg += 360; 
+            const currentAngleRad = Math.atan2(coords.clientY - pivot.y, coords.clientX - pivot.x);
+            const angleDeltaRad = currentAngleRad - startAngleRad;
+            let newAngleDeg = startDominoRotation + (angleDeltaRad * 180 / Math.PI);
             
             // SMOOTH SNAP: Remove transition during drag for responsiveness
             dominoEl.style.transition = 'none';
-            dominoEl.style.transform = `rotate(${angleDeg}deg)`;
+            dominoEl.style.transform = `rotate(${newAngleDeg}deg)`;
 
             // ROTATION HANDLES: Update positions of BOTH handles so they move with the rotation
             const radius = DOMINO_WIDTH * zoomLevel / 2 * 1.0;
             
-            const handle1Angle = angleDeg * (Math.PI / 180) - Math.PI / 2;
+            const handle1Angle = newAngleDeg * (Math.PI / 180) - Math.PI / 2;
             const handle2Angle = handle1Angle + Math.PI;
 
             if(handle1) {
@@ -3372,11 +3380,18 @@
     // --- UNDO VALIDATION: New and Modified Undo Logic ---
     async function requestUndo(type) {
         const gameRef = doc(db, "games", currentGameId);
+
+        if (localGameState.undoRequestedThisTurn) {
+            showMessage("You can only request one undo per turn.");
+            return;
+        }
+
         const currentTurnPlayerId = localGameState.playerOrder[localGameState.currentPlayerIndex];
         const newLog = [...(localGameState.log || []), `${localGameState.players[currentTurnPlayerId].name} requested an undo.`];
         if (newLog.length > 5) newLog.shift();
 
         await updateDoc(gameRef, {
+            undoRequestedThisTurn: true,
             undoRequest: {
                 requestingPlayerId: currentTurnPlayerId,
                 type: type,
@@ -3393,6 +3408,7 @@
         newLog.pop(); // Remove the "requested an undo" message
         await updateDoc(gameRef, {
             undoRequest: { requestingPlayerId: null, type: null, approvals: [], status: 'none' },
+            undoRequestedThisTurn: false, // Allow another request if cancelled
             log: newLog
         });
     }
@@ -3455,8 +3471,20 @@
             });
         }
         
-        if (amITheRequester && oldUndoStatus === 'pending' && undoRequest.status === 'denied') {
-            showMessage("Your undo request was denied.");
+        if (oldUndoStatus === 'pending' && undoRequest.status === 'denied') {
+            if (amITheRequester) {
+                showMessage("Your undo request was denied.");
+            }
+            // The host is responsible for cleaning up the 'denied' state after a delay
+            if (amITheHost) {
+                setTimeout(() => {
+                    const gameRef = doc(db, "games", currentGameId);
+                    // Reset the state so the player can continue their turn
+                    updateDoc(gameRef, {
+                        undoRequest: { requestingPlayerId: null, type: null, approvals: [], status: 'none' }
+                    });
+                }, 1500); // 1.5s delay to allow clients to see the "denied" message
+            }
         }
     }
 
