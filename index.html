@@ -159,13 +159,14 @@
 
         /* Pip and Spinner Styles */
         .pip-container {
-            width: 100%;
+            flex: 1; /* Changed from width: 100% to allow proper sharing of space */
             height: 100%;
             display: flex;
             align-items: center;
             justify-content: center;
             padding: 2px;
             pointer-events: none;
+            min-width: 0; /* Allows shrinking past content size if absolutely necessary */
         }
         .divider {
             width: 2px; /* A bit thicker */
@@ -176,6 +177,7 @@
             /* Create a 3D groove effect with shadows */
             box-shadow: inset 0.5px 0.5px 1px rgba(0,0,0,0.7), /* Dark inner shadow for the groove */
                          0.5px 0.5px 1px rgba(255,255,255,0.4); /* Light outer highlight */
+            flex-shrink: 0; /* CRITICAL FIX: Prevents the divider from being squashed to 0px */
         }
         .spinner-icon {
             width: 24px;
