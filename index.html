@@ -840,7 +840,7 @@
                 <div class="mt-2 flex items-center justify-center gap-2" id="boneyard-buttons">
                     <button class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition-colors" id="end-turn-button">End Turn</button>
                     <button class="bg-yellow-600 hover:bg-yellow-700 text-black font-bold py-2 px-3 rounded transition-colors hidden" id="undo-draw-button">Undo Draw</button>
-                     <button class="bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-3 rounded transition-colors hidden" id="undo-move-button">Undo Move</button>
+                      <button class="bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-3 rounded transition-colors hidden" id="undo-move-button">Undo Move</button>
                     <button class="tool-button bg-sky-600 hover:bg-sky-700 text-white font-bold py-2 px-3 rounded transition-colors" id="move-branch-button">Move Branch</button>
                     <button class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-3 rounded transition-colors" id="validate-move-button">Validate</button>
                     <button class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-3 rounded transition-colors" id="challenge-move-button">Challenge</button>
@@ -1097,7 +1097,7 @@
             dom.messageCancelButton.onclick = () => {
                 dom.messageModal.classList.add('hidden');
                 if(options.onCancel) {
-                     options.onCancel();
+                      options.onCancel();
                 }
             }
         }
@@ -1640,11 +1640,8 @@
                 });
 
                 const boneyard = deck;
-
                 const boneyardLayout = [];
-                // Generate a persistent, random rotation for each tile in the boneyard
                 boneyard.forEach(dominoData => {
-                    // Use a smaller rotation range for a "neatly messy" look in the grid
                     const randRotation = Math.random() * 30 - 15; 
                     boneyardLayout.push({
                         id: dominoData.id,
@@ -1653,19 +1650,25 @@
                 });
 
                 const newRoundNumber = currentData.roundNumber + 1;
+                // Calculates 9 for Round 1, 8 for Round 2, etc.
                 const newStartingDouble = 9 - ((newRoundNumber - 1) % 10);
+                
                 let starterIndex;
                 let mustDraw = false;
                 
+                // 1. Check if anyone was dealt the specific Double or Double Spinner
                 const tileStarterIndex = findRoundStarter(updatedPlayers, playerIds, newStartingDouble);
                 
                 if (tileStarterIndex !== -1) {
+                    // Someone has the required tile! They start and play immediately.
                     starterIndex = tileStarterIndex;
                     mustDraw = false;
                 } else {
-                    // LOGIC CHANGE: Different rules for round 1 vs subsequent rounds
+                    // 2. NO ONE has the required tile. 
+                    // We must pick a starter who is forced to DRAW to find it.
+                    
                     if (newRoundNumber === 1) {
-                        // Round 1: Highest pip count starts.
+                        // Round 1 Fallback: Player with highest pip count starts
                         let highestScore = -1;
                         let highestScoreIndex = -1;
                         for (let i = 0; i < playerIds.length; i++) {
@@ -1677,21 +1680,20 @@
                             }
                         }
                         starterIndex = highestScoreIndex;
-                        mustDraw = false; // They start by playing, not drawing.
                     } else {
-                        // Round 2+: Previous winner starts.
+                        // Round 2+ Fallback: Previous winner starts
                         const previousWinnerId = currentData.roundEndInfo?.winnerId;
                         const previousWinnerIndex = playerIds.indexOf(previousWinnerId);
                         
                         if (previousWinnerId && previousWinnerIndex !== -1) {
                             starterIndex = previousWinnerIndex;
                         } else {
-                            // Fallback if there's no clear winner (e.g., a tie or error)
-                            // This is unlikely but safe to have. We'll default to player 0.
-                             starterIndex = 0; 
+                             starterIndex = 0; // Fallback if data is missing
                         }
-                        mustDraw = true; // This player MUST draw to start their turn.
                     }
+                    
+                    // CRITICAL: Since no one has the starting tile, the starter MUST draw.
+                    mustDraw = true; 
                 }
 
                 const starterId = playerIds[starterIndex];
@@ -1703,7 +1705,7 @@
                     boardDominos: [],
                     roundNumber: newRoundNumber,
                     currentStartingDouble: newStartingDouble,
-                    mustDrawToStart: mustDraw,
+                    mustDrawToStart: mustDraw, // Applies the rule here
                     turnState: 'WAITING',
                     hasDrawn: false,
                     lastPlayedDominoId: null,
@@ -1714,7 +1716,7 @@
                     roundEndInfo: null,
                     turnConfirmationPending: false,
                     undoRequestedThisTurn: false,
-                    undoRequest: { requestingPlayerId: null, type: null, approvals: [], status: 'none' }, // Reset undo state
+                    undoRequest: { requestingPlayerId: null, type: null, approvals: [], status: 'none' },
                     roundStartInfo: {
                         starterId: starterId,
                         starterIndex: starterIndex,
@@ -1965,6 +1967,60 @@
     }
     dom.endTurnButton.addEventListener('click', submitTurnForValidation);
     
+    // NEW: Function to end round if blocked
+    async function endRoundAsBlocked() {
+        const gameRef = doc(db, "games", currentGameId);
+        try {
+            await runTransaction(db, async (transaction) => {
+                const gameSnap = await transaction.get(gameRef);
+                if (!gameSnap.exists()) throw "Game does not exist!";
+                const gameState = gameSnap.data();
+
+                // Calculate scores
+                let roundPoints = {};
+                let scoreHistoryEntry = { round: gameState.roundNumber, scores: {} };
+                const updatedPlayers = { ...gameState.players };
+                
+                let lowestScore = Infinity;
+                let winnerId = null;
+
+                // Check scores
+                Object.keys(updatedPlayers).forEach(pid => {
+                    const handValue = calculateHandValue(updatedPlayers[pid].hand);
+                    updatedPlayers[pid].score += handValue;
+                    roundPoints[pid] = handValue;
+                    scoreHistoryEntry.scores[pid] = handValue;
+
+                    if (handValue < lowestScore) {
+                        lowestScore = handValue;
+                        winnerId = pid;
+                    } else if (handValue === lowestScore) {
+                        // In case of a tie for lowest score, we can pick the first one found or handle it differently.
+                        // Standard practice varies, usually points are still added. We'll stick to first found as winner for simplicity in displaying message.
+                        if (!winnerId) winnerId = pid;
+                    }
+                });
+
+                const newScoreHistory = [...(gameState.scoreHistory || []), scoreHistoryEntry];
+                const isGameOver = gameState.roundNumber >= 10; 
+
+                transaction.update(gameRef, {
+                    players: updatedPlayers,
+                    gameStatus: isGameOver ? 'finished' : 'round-over',
+                    roundEndInfo: { winnerId: winnerId, points: roundPoints, reason: 'Round Blocked' },
+                    turnState: 'WAITING',
+                    hasDrawn: false,
+                    scoreHistory: newScoreHistory,
+                    undoRequestedThisTurn: false,
+                    passCount: 0
+                });
+            });
+        } catch (error) {
+            console.error("Error ending blocked round:", error);
+            showMessage("Could not end the blocked round.");
+        }
+    }
+
     function calculateHandValue(hand) {
         if (!hand) return 0;
         return hand.reduce((total, domino) => {
@@ -2788,10 +2844,10 @@
     dom.worldElement.addEventListener('touchstart', (e) => {
         if (e.touches.length === 1 && !isDraggingDomino && !moveBranchMode) {
              if (e.target !== dom.worldElement && e.target !== dom.gameBoardElement && e.target.id !== 'world-wrapper') return;
-              isPanning = true;
-              dom.worldElement.classList.add('panning');
-              const coords = getEventCoords(e);
-              panStart = { x: coords.clientX, y: coords.clientY };
+             isPanning = true;
+             dom.worldElement.classList.add('panning');
+             const coords = getEventCoords(e);
+             panStart = { x: coords.clientX, y: coords.clientY };
         }
     }, { passive: false });
 
@@ -3593,4 +3649,3 @@
 </script>
 </body>
 </html>
-
