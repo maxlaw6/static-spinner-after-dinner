@@ -310,7 +310,7 @@
             gap: 4px;
             justify-content: center;
         }
-        #setup-screen, #round-end-screen, #loading-screen, #game-over-screen, #message-modal, #round-start-screen, #pass-device-screen, #boneyard-picker-modal {
+        #setup-screen, #round-end-screen, #loading-screen, #game-over-screen, #message-modal, #round-start-screen, #pass-device-screen, #boneyard-picker-modal, #game-menu-modal {
             position: fixed;
             top: 0; left: 0;
             width: 100%; height: 100%;
@@ -321,7 +321,7 @@
             justify-content: center;
             backdrop-filter: blur(5px);
         }
-        #round-end-screen, #game-over-screen, #pass-device-screen {
+        #round-end-screen, #game-over-screen, #pass-device-screen, #game-menu-modal {
             z-index: 10001 !important; /* Ensure it's on top */
         }
         #setup-screen > div {
@@ -332,8 +332,8 @@
         .hidden {
             display: none !important;
         }
-        #final-score-display, #round-end-content, #message-modal-content, #round-start-content, #pass-device-content {
-            background-color: rgba(31, 41, 55, 0.9);
+        #final-score-display, #round-end-content, #message-modal-content, #round-start-content, #pass-device-content, #game-menu-content {
+            background-color: rgba(31, 41, 55, 0.95);
             padding: 2rem;
             border-radius: 10px;
             text-align: center;
@@ -487,6 +487,18 @@
         .action-needed {
             animation: wiggle 0.4s ease-in-out infinite;
             box-shadow: 0 0 15px 5px #f59e0b; /* amber-500 */
+        }
+
+        /* NEW: Whimsical Shuffle Animation */
+        @keyframes shuffle-dance {
+            0% { transform: rotate(0deg) translate(0, 0); }
+            25% { transform: rotate(5deg) translate(2px, -2px); }
+            50% { transform: rotate(-5deg) translate(-2px, 2px); }
+            75% { transform: rotate(3deg) translate(-2px, -2px); }
+            100% { transform: rotate(0deg) translate(0, 0); }
+        }
+        .shuffling {
+            animation: shuffle-dance 0.3s ease-in-out infinite;
         }
 
 
@@ -651,10 +663,31 @@
     </div>
 </div>
 
+<div id="game-menu-modal" class="hidden">
+    <div id="game-menu-content" class="w-full max-w-md bg-gray-900 rounded-lg p-6 shadow-2xl relative">
+        <div class="flex justify-between items-center mb-6">
+            <h2 class="text-2xl font-bold text-white">Game Menu</h2>
+            <button id="close-menu-button" class="text-gray-400 hover:text-white text-3xl font-bold">&times;</button>
+        </div>
+        
+        <div class="mb-6">
+            <h3 class="text-lg font-bold text-gray-300 mb-3 text-left">Players</h3>
+            <div id="menu-player-list" class="space-y-2 max-h-60 overflow-y-auto bg-gray-800 rounded p-2">
+                <!-- Players inserted here by JS -->
+            </div>
+        </div>
+
+        <div class="flex flex-col gap-4">
+            <button class="w-full bg-red-700 hover:bg-red-800 text-white font-bold py-3 px-4 rounded transition-colors hidden" id="menu-leave-game-button">Leave Game</button>
+            <button class="w-full bg-gray-600 hover:bg-gray-700 text-white font-bold py-3 px-4 rounded transition-colors" id="menu-new-game-button">Exit to Main Menu</button>
+        </div>
+    </div>
+</div>
+
 <div id="boneyard-picker-modal" class="hidden">
     <div class="bg-gray-800 p-6 rounded-lg shadow-xl w-[90vw] max-w-4xl max-h-[90vh] flex flex-col">
         <div class="flex justify-between items-center mb-4">
-            <h2 class="text-2xl font-bold">Choose a Domino from the Boneyard</h2>
+            <h2 class="text-2xl font-bold">Choose a Domino</h2>
             <button id="boneyard-picker-close-button" class="text-gray-400 hover:text-white text-3xl">&times;</button>
         </div>
         <div id="boneyard-picker-wrapper" class="flex-grow overflow-auto bg-gray-900 rounded-lg p-2">
@@ -796,7 +829,7 @@
     <div id="game-layout">
         <div class="bg-gray-900 bg-opacity-70 p-2 rounded-lg shadow-lg flex justify-between items-center flex-wrap gap-4" id="game-info">
             <div class="flex items-center gap-4">
-                <button class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded transition-colors" id="main-menu-button">New Game / Exit</button>
+                <button class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition-colors" id="open-menu-button">Menu</button>
                 <div>
                     <h2 class="font-bold text-lg">Current Turn: <span id="current-player"></span></h2>
                     <p class="text-sm text-yellow-300" id="game-status">Loading...</p>
@@ -840,6 +873,11 @@
                     <span id="boneyard-count">0</span>
                 </div>
                 <div class="mt-2 flex items-center justify-center gap-2" id="boneyard-buttons">
+                    <button class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-3 rounded transition-colors" id="shuffle-boneyard-button" title="Shuffle Boneyard">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                    </button>
                     <button class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition-colors" id="end-turn-button">End Turn</button>
                     <button class="bg-yellow-600 hover:bg-yellow-700 text-black font-bold py-2 px-3 rounded transition-colors hidden" id="undo-draw-button">Undo Draw</button>
                       <button class="bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-3 rounded transition-colors hidden" id="undo-move-button">Undo Move</button>
@@ -918,7 +956,8 @@
         gameOverScreen: document.getElementById('game-over-screen'),
         finalWinnerMessage: document.getElementById('final-winner-message'),
         finalScoreList: document.getElementById('final-score-list'),
-        mainMenuButton: document.getElementById('main-menu-button'),
+        // CHANGE: Replaced main menu button reference
+        openMenuButton: document.getElementById('open-menu-button'),
         mainMenuButtonFinal: document.getElementById('main-menu-button-final'),
         messageModal: document.getElementById('message-modal'),
         messageText: document.getElementById('message-text'),
@@ -975,13 +1014,22 @@
         // NEW: Move Branch buttons
         moveBranchButton: document.getElementById('move-branch-button'),
         undoDrawButton: document.getElementById('undo-draw-button'),
-        // CHANGE: Add Undo Move Button to DOM elements
         undoMoveButton: document.getElementById('undo-move-button'),
+        
+        // NEW: Shuffle Button
+        shuffleBoneyardButton: document.getElementById('shuffle-boneyard-button'),
 
         // NEW: Boneyard Picker elements
         boneyardPickerModal: document.getElementById('boneyard-picker-modal'),
         boneyardPickerWrapper: document.getElementById('boneyard-picker-wrapper'),
         boneyardPickerCloseButton: document.getElementById('boneyard-picker-close-button'),
+
+        // NEW: Game Menu Elements
+        gameMenuModal: document.getElementById('game-menu-modal'),
+        closeMenuButton: document.getElementById('close-menu-button'),
+        menuPlayerList: document.getElementById('menu-player-list'),
+        menuLeaveGameButton: document.getElementById('menu-leave-game-button'),
+        menuNewGameButton: document.getElementById('menu-new-game-button'),
     };
     
     // --- Firebase & Game State ---
@@ -1397,8 +1445,171 @@
     function leaveGame() {
         window.location.reload();
     }
-    dom.mainMenuButton.addEventListener('click', leaveGame);
+    // dom.mainMenuButton is removed in favor of Menu Modal
+    dom.openMenuButton.addEventListener('click', () => {
+        updateMenuPlayerList();
+        dom.gameMenuModal.classList.remove('hidden');
+    });
+    
+    dom.closeMenuButton.addEventListener('click', () => {
+        dom.gameMenuModal.classList.add('hidden');
+    });
+    
+    dom.menuNewGameButton.addEventListener('click', leaveGame);
     dom.mainMenuButtonFinal.addEventListener('click', leaveGame);
+
+    dom.menuLeaveGameButton.addEventListener('click', async () => {
+        const myPlayerId = localGameState.playerOrder.find(pid => localGameState.players[pid].controller === currentPlayerId);
+        if (myPlayerId) {
+            handleLeaveGame(myPlayerId);
+        }
+        dom.gameMenuModal.classList.add('hidden');
+    });
+
+    function updateMenuPlayerList() {
+        if (!localGameState || !localGameState.playerOrder) return;
+        const list = dom.menuPlayerList;
+        list.innerHTML = '';
+        
+        const amIHost = localGameState.players[currentPlayerId]?.isHost;
+        const myControlledPlayers = localGameState.playerOrder.filter(pid => localGameState.players[pid].controller === currentPlayerId);
+        
+        // Show "Leave Game" only if user has active players
+        dom.menuLeaveGameButton.classList.toggle('hidden', myControlledPlayers.length === 0);
+
+        localGameState.playerOrder.forEach(pid => {
+            const p = localGameState.players[pid];
+            const div = document.createElement('div');
+            div.className = "flex justify-between items-center bg-gray-700 p-2 rounded";
+            
+            const nameSpan = document.createElement('span');
+            nameSpan.textContent = p.name;
+            if (p.isHost) nameSpan.textContent += " (Host)";
+            if (p.controller === currentPlayerId) nameSpan.classList.add("text-blue-300");
+            
+            div.appendChild(nameSpan);
+            
+            // Host can kick anyone but themselves
+            if (amIHost && pid !== currentPlayerId) {
+                const kickBtn = document.createElement('button');
+                kickBtn.className = "bg-red-600 hover:bg-red-700 text-white p-1 rounded";
+                kickBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>`;
+                kickBtn.onclick = () => {
+                    if(confirm(`Are you sure you want to remove ${p.name}? Their tiles will be returned to the boneyard.`)) {
+                        handleLeaveGame(pid);
+                    }
+                };
+                div.appendChild(kickBtn);
+            }
+            
+            list.appendChild(div);
+        });
+    }
+
+    async function handleLeaveGame(targetPlayerId) {
+        const gameRef = doc(db, "games", currentGameId);
+        try {
+            await runTransaction(db, async (transaction) => {
+                const gameSnap = await transaction.get(gameRef);
+                if (!gameSnap.exists()) throw "Game does not exist!";
+                const gameState = gameSnap.data();
+                
+                const targetPlayer = gameState.players[targetPlayerId];
+                if (!targetPlayer) return; // Already gone
+
+                // Return hand to boneyard
+                const hand = targetPlayer.hand || [];
+                const newBoneyard = [...gameState.boneyard, ...hand];
+                
+                // Shuffle new boneyard
+                for (let i = newBoneyard.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [newBoneyard[i], newBoneyard[j]] = [newBoneyard[j], newBoneyard[i]];
+                }
+                
+                // Regenerate layout for new tiles
+                const newBoneyardLayout = [...gameState.boneyardLayout];
+                hand.forEach(domino => {
+                     const randRotation = Math.random() * 30 - 15;
+                     newBoneyardLayout.push({ id: domino.id, rotation: randRotation });
+                });
+
+                // Remove player from order and object
+                const newPlayerOrder = gameState.playerOrder.filter(pid => pid !== targetPlayerId);
+                const newPlayers = { ...gameState.players };
+                delete newPlayers[targetPlayerId];
+
+                // Handle turn index
+                let newCurrentPlayerIndex = gameState.currentPlayerIndex;
+                const removedIndex = gameState.playerOrder.indexOf(targetPlayerId);
+                
+                if (removedIndex < newCurrentPlayerIndex) {
+                    newCurrentPlayerIndex--;
+                } else if (removedIndex === newCurrentPlayerIndex) {
+                    // If the current player left, turn passes to the next person (same index, effectively)
+                    // If index out of bounds (last player left), wrap to 0
+                    if (newCurrentPlayerIndex >= newPlayerOrder.length) {
+                        newCurrentPlayerIndex = 0;
+                    }
+                }
+                
+                // If Host left, assign new host
+                if (targetPlayer.isHost && newPlayerOrder.length > 0) {
+                    newPlayers[newPlayerOrder[0]].isHost = true;
+                }
+
+                const newLog = [...(gameState.log || []), `${targetPlayer.name} left the game. Tiles returned to boneyard.`];
+                
+                transaction.update(gameRef, {
+                    players: newPlayers,
+                    playerOrder: newPlayerOrder,
+                    currentPlayerIndex: newCurrentPlayerIndex,
+                    boneyard: newBoneyard,
+                    boneyardLayout: newBoneyardLayout,
+                    log: newLog
+                });
+            });
+        } catch (error) {
+            console.error("Error leaving game:", error);
+            showMessage("Could not remove player.");
+        }
+    }
+
+    // --- Shuffle Boneyard Logic ---
+    dom.shuffleBoneyardButton.addEventListener('click', async () => {
+        // Visual effect immediately
+        dom.boneyardPileElement.classList.add('shuffling');
+        setTimeout(() => dom.boneyardPileElement.classList.remove('shuffling'), 500);
+        
+        const gameRef = doc(db, "games", currentGameId);
+        try {
+            await runTransaction(db, async (transaction) => {
+                const gameSnap = await transaction.get(gameRef);
+                if (!gameSnap.exists()) return;
+                const gameState = gameSnap.data();
+                
+                const newBoneyard = [...gameState.boneyard];
+                // Shuffle array
+                for (let i = newBoneyard.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [newBoneyard[i], newBoneyard[j]] = [newBoneyard[j], newBoneyard[i]];
+                }
+                
+                // Shuffle layout rotations slightly for "dance" effect
+                const newLayout = gameState.boneyardLayout.map(item => ({
+                    ...item,
+                    rotation: Math.random() * 360 // Whimsical rotation
+                }));
+
+                transaction.update(gameRef, {
+                    boneyard: newBoneyard,
+                    boneyardLayout: newLayout
+                });
+            });
+        } catch(error) {
+            console.error("Shuffle failed", error);
+        }
+    });
 
     dom.copyGameIdButton.addEventListener('click', () => {
         const copyText = currentGameId;
@@ -1451,6 +1662,12 @@
         localGameState = gameState; 
 
         if (!gameState.players || !gameState.playerOrder || gameState.playerOrder.length === 0) {
+            // Handle case where I was kicked (my ID not in players)
+            if (currentPlayerId && !gameState.players[currentPlayerId]) {
+                showMessage("You have been removed from the game.");
+                leaveGame();
+                return;
+            }
             return;
         }
         
@@ -1471,6 +1688,12 @@
         }
 
         const currentTurnPlayer = gameState.players[gameState.playerOrder[gameState.currentPlayerIndex]];
+        // Safety check if currentTurnPlayer is undefined (e.g. after a kick logic error, though logic should prevent this)
+        if (!currentTurnPlayer && gameState.gameStatus === 'in-progress') {
+             // Fallback or wait for next update
+             return; 
+        }
+
         if (gameState.turnConfirmationPending && currentTurnPlayer && currentTurnPlayer.controller === currentPlayerId) {
             dom.loadingScreen.classList.add('hidden');
             dom.setupScreen.classList.add('hidden');
@@ -2268,7 +2491,7 @@
             } else if (playerData.isHost) {
                  nameTag = '(Host)';
             }
-            title.textContent = `${playerData.name} ${nameTag} (${playerData.hand.length})`;
+            title.textContent = `${playerData.name} ${nameTag} (${playerData.hand ? playerData.hand.length : 0})`;
             const handDiv = document.createElement('div');
             handDiv.className = 'player-hand-content';
             let showHandFaceUp = false;
@@ -2282,25 +2505,27 @@
                     showHandFaceUp = true;
                 }
             }
-            if (showHandFaceUp) {
-                playerData.hand.forEach(dominoData => {
-                    const dominoElement = createDomino(dominoData);
-                    dominoElement.dataset.id = dominoData.id;
-                    const canDrag = isThisPlayerTheActiveTurn && playerData.controller === currentPlayerId && gameState.turnState === 'WAITING' && !moveBranchMode && !gameState.mustDrawToStart;
-                    
-                    if (canDrag) {
-                        dominoElement.addEventListener('mousedown', (e) => startRegularDominoDrag(e, { dominoData }, 'hand'));
-                        dominoElement.addEventListener('touchstart', (e) => startRegularDominoDrag(e, { dominoData }, 'hand'), { passive: false });
-                    } else {
-                        dominoElement.style.cursor = 'not-allowed';
-                    }
-                    handDiv.appendChild(dominoElement);
-                });
-            } else {
-                playerData.hand.forEach(() => {
-                    const dominoElement = createDomino(null, true, 'mini');
-                    handDiv.appendChild(dominoElement);
-                });
+            if (playerData.hand) { // Check if hand exists (e.g. joined mid-game)
+                if (showHandFaceUp) {
+                    playerData.hand.forEach(dominoData => {
+                        const dominoElement = createDomino(dominoData);
+                        dominoElement.dataset.id = dominoData.id;
+                        const canDrag = isThisPlayerTheActiveTurn && playerData.controller === currentPlayerId && gameState.turnState === 'WAITING' && !moveBranchMode && !gameState.mustDrawToStart;
+                        
+                        if (canDrag) {
+                            dominoElement.addEventListener('mousedown', (e) => startRegularDominoDrag(e, { dominoData }, 'hand'));
+                            dominoElement.addEventListener('touchstart', (e) => startRegularDominoDrag(e, { dominoData }, 'hand'), { passive: false });
+                        } else {
+                            dominoElement.style.cursor = 'not-allowed';
+                        }
+                        handDiv.appendChild(dominoElement);
+                    });
+                } else {
+                    playerData.hand.forEach(() => {
+                        const dominoElement = createDomino(null, true, 'mini');
+                        handDiv.appendChild(dominoElement);
+                    });
+                }
             }
             section.appendChild(title);
             section.appendChild(handDiv);
@@ -2355,6 +2580,7 @@
         dom.boneyardCountElement.textContent = gameState.boneyard.length;
     }
     
+    // ... [rest of existing functions like displayRoundEndScreen, createDomino, etc. remain unchanged] ...
     function displayRoundEndScreen(gameState) {
         if (!gameState.roundEndInfo) return;
         if (gameState.gameStatus === 'finished') {
