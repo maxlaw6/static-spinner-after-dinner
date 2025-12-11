@@ -1702,6 +1702,33 @@
         }
     }
 
+    // --- ADDED: Missing updateWaitingRoomUI function ---
+    function updateWaitingRoomUI(gameState) {
+        dom.gameIdDisplay.textContent = currentGameId;
+        const playerIds = gameState.playerOrder;
+        const playerCount = playerIds.length;
+        const isHost = gameState.players[currentPlayerId]?.isHost;
+        
+        dom.playerList.innerHTML = '';
+        playerIds.forEach(pid => {
+            const p = document.createElement('p');
+            p.textContent = `${gameState.players[pid].name} ${gameState.players[pid].isHost ? '(Host)' : ''}`;
+            if (pid === currentPlayerId) p.classList.add('text-yellow-300', 'font-bold');
+            dom.playerList.appendChild(p);
+        });
+        
+        const canStart = isHost && playerCount >= 2 && playerCount <= 8;
+        dom.startGameButton.disabled = !canStart;
+        
+        if (isHost) {
+            if (playerCount < 2) dom.waitingMessage.textContent = "Need at least 2 players to start.";
+            else if (playerCount > 8) dom.waitingMessage.textContent = "Cannot start with more than 8 players.";
+            else dom.waitingMessage.textContent = "You're the host. Start the game when ready!";
+        } else {
+            dom.waitingMessage.textContent = "Waiting for the host to start the game...";
+        }
+    }
+
     function generateDeck() {
         const deck = [];
         for (let i = 0; i <= 9; i++) {
