@@ -688,17 +688,9 @@
     <div class="bg-gray-800 p-6 rounded-lg shadow-xl w-[90vw] max-w-4xl max-h-[90vh] flex flex-col">
         <div class="flex justify-between items-center mb-4">
             <h2 class="text-2xl font-bold">Choose a Domino</h2>
-            <div class="flex items-center gap-3">
-                <button id="shuffle-boneyard-button" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-3 rounded transition-colors text-sm flex items-center gap-1">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                    </svg>
-                    Shuffle
-                </button>
-                <button id="boneyard-picker-close-button" class="text-gray-400 hover:text-white text-3xl">&times;</button>
-            </div>
+            <button id="boneyard-picker-close-button" class="text-gray-400 hover:text-white text-3xl">&times;</button>
         </div>
-        <div id="boneyard-picker-wrapper" class="flex-grow overflow-auto bg-gray-900 rounded-lg p-2 transition-all duration-300">
+        <div id="boneyard-picker-wrapper" class="flex-grow overflow-auto bg-gray-900 rounded-lg p-2">
             </div>
         <p class="text-center text-gray-400 mt-2 text-sm">Click a domino to add it to your hand.</p>
     </div>
@@ -881,6 +873,11 @@
                     <span id="boneyard-count">0</span>
                 </div>
                 <div class="mt-2 flex items-center justify-center gap-2" id="boneyard-buttons">
+                    <button class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-3 rounded transition-colors" id="shuffle-boneyard-button" title="Shuffle Boneyard">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                    </button>
                     <button class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition-colors" id="end-turn-button">End Turn</button>
                     <button class="bg-yellow-600 hover:bg-yellow-700 text-black font-bold py-2 px-3 rounded transition-colors hidden" id="undo-draw-button">Undo Draw</button>
                       <button class="bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-3 rounded transition-colors hidden" id="undo-move-button">Undo Move</button>
@@ -917,7 +914,7 @@
     // Import Firebase modules
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
     import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-    import { getFirestore, doc, getDoc, setDoc, updateDoc, onSnapshot, collection, serverTimestamp, runTransaction, writeBatch, arrayUnion, deleteField } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    import { getFirestore, doc, getDoc, setDoc, updateDoc, onSnapshot, collection, serverTimestamp, runTransaction, writeBatch, arrayUnion } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
     import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-analytics.js";
 
     // --- DOM Elements ---
@@ -959,6 +956,8 @@
         gameOverScreen: document.getElementById('game-over-screen'),
         finalWinnerMessage: document.getElementById('final-winner-message'),
         finalScoreList: document.getElementById('final-score-list'),
+        // CHANGE: Replaced main menu button reference
+        openMenuButton: document.getElementById('open-menu-button'),
         mainMenuButtonFinal: document.getElementById('main-menu-button-final'),
         messageModal: document.getElementById('message-modal'),
         messageText: document.getElementById('message-text'),
@@ -1015,18 +1014,18 @@
         // NEW: Move Branch buttons
         moveBranchButton: document.getElementById('move-branch-button'),
         undoDrawButton: document.getElementById('undo-draw-button'),
-        // CHANGE: Add Undo Move Button to DOM elements
         undoMoveButton: document.getElementById('undo-move-button'),
+        
+        // NEW: Shuffle Button
+        shuffleBoneyardButton: document.getElementById('shuffle-boneyard-button'),
 
         // NEW: Boneyard Picker elements
-        shuffleBoneyardButton: document.getElementById('shuffle-boneyard-button'),
         boneyardPickerModal: document.getElementById('boneyard-picker-modal'),
         boneyardPickerWrapper: document.getElementById('boneyard-picker-wrapper'),
         boneyardPickerCloseButton: document.getElementById('boneyard-picker-close-button'),
 
         // NEW: Game Menu Elements
         gameMenuModal: document.getElementById('game-menu-modal'),
-        openMenuButton: document.getElementById('open-menu-button'),
         closeMenuButton: document.getElementById('close-menu-button'),
         menuPlayerList: document.getElementById('menu-player-list'),
         menuLeaveGameButton: document.getElementById('menu-leave-game-button'),
@@ -1446,8 +1445,171 @@
     function leaveGame() {
         window.location.reload();
     }
+    // dom.mainMenuButton is removed in favor of Menu Modal
+    dom.openMenuButton.addEventListener('click', () => {
+        updateMenuPlayerList();
+        dom.gameMenuModal.classList.remove('hidden');
+    });
     
+    dom.closeMenuButton.addEventListener('click', () => {
+        dom.gameMenuModal.classList.add('hidden');
+    });
+    
+    dom.menuNewGameButton.addEventListener('click', leaveGame);
     dom.mainMenuButtonFinal.addEventListener('click', leaveGame);
+
+    dom.menuLeaveGameButton.addEventListener('click', async () => {
+        const myPlayerId = localGameState.playerOrder.find(pid => localGameState.players[pid].controller === currentPlayerId);
+        if (myPlayerId) {
+            handleLeaveGame(myPlayerId);
+        }
+        dom.gameMenuModal.classList.add('hidden');
+    });
+
+    function updateMenuPlayerList() {
+        if (!localGameState || !localGameState.playerOrder) return;
+        const list = dom.menuPlayerList;
+        list.innerHTML = '';
+        
+        const amIHost = localGameState.players[currentPlayerId]?.isHost;
+        const myControlledPlayers = localGameState.playerOrder.filter(pid => localGameState.players[pid].controller === currentPlayerId);
+        
+        // Show "Leave Game" only if user has active players
+        dom.menuLeaveGameButton.classList.toggle('hidden', myControlledPlayers.length === 0);
+
+        localGameState.playerOrder.forEach(pid => {
+            const p = localGameState.players[pid];
+            const div = document.createElement('div');
+            div.className = "flex justify-between items-center bg-gray-700 p-2 rounded";
+            
+            const nameSpan = document.createElement('span');
+            nameSpan.textContent = p.name;
+            if (p.isHost) nameSpan.textContent += " (Host)";
+            if (p.controller === currentPlayerId) nameSpan.classList.add("text-blue-300");
+            
+            div.appendChild(nameSpan);
+            
+            // Host can kick anyone but themselves
+            if (amIHost && pid !== currentPlayerId) {
+                const kickBtn = document.createElement('button');
+                kickBtn.className = "bg-red-600 hover:bg-red-700 text-white p-1 rounded";
+                kickBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>`;
+                kickBtn.onclick = () => {
+                    if(confirm(`Are you sure you want to remove ${p.name}? Their tiles will be returned to the boneyard.`)) {
+                        handleLeaveGame(pid);
+                    }
+                };
+                div.appendChild(kickBtn);
+            }
+            
+            list.appendChild(div);
+        });
+    }
+
+    async function handleLeaveGame(targetPlayerId) {
+        const gameRef = doc(db, "games", currentGameId);
+        try {
+            await runTransaction(db, async (transaction) => {
+                const gameSnap = await transaction.get(gameRef);
+                if (!gameSnap.exists()) throw "Game does not exist!";
+                const gameState = gameSnap.data();
+                
+                const targetPlayer = gameState.players[targetPlayerId];
+                if (!targetPlayer) return; // Already gone
+
+                // Return hand to boneyard
+                const hand = targetPlayer.hand || [];
+                const newBoneyard = [...gameState.boneyard, ...hand];
+                
+                // Shuffle new boneyard
+                for (let i = newBoneyard.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [newBoneyard[i], newBoneyard[j]] = [newBoneyard[j], newBoneyard[i]];
+                }
+                
+                // Regenerate layout for new tiles
+                const newBoneyardLayout = [...gameState.boneyardLayout];
+                hand.forEach(domino => {
+                     const randRotation = Math.random() * 30 - 15;
+                     newBoneyardLayout.push({ id: domino.id, rotation: randRotation });
+                });
+
+                // Remove player from order and object
+                const newPlayerOrder = gameState.playerOrder.filter(pid => pid !== targetPlayerId);
+                const newPlayers = { ...gameState.players };
+                delete newPlayers[targetPlayerId];
+
+                // Handle turn index
+                let newCurrentPlayerIndex = gameState.currentPlayerIndex;
+                const removedIndex = gameState.playerOrder.indexOf(targetPlayerId);
+                
+                if (removedIndex < newCurrentPlayerIndex) {
+                    newCurrentPlayerIndex--;
+                } else if (removedIndex === newCurrentPlayerIndex) {
+                    // If the current player left, turn passes to the next person (same index, effectively)
+                    // If index out of bounds (last player left), wrap to 0
+                    if (newCurrentPlayerIndex >= newPlayerOrder.length) {
+                        newCurrentPlayerIndex = 0;
+                    }
+                }
+                
+                // If Host left, assign new host
+                if (targetPlayer.isHost && newPlayerOrder.length > 0) {
+                    newPlayers[newPlayerOrder[0]].isHost = true;
+                }
+
+                const newLog = [...(gameState.log || []), `${targetPlayer.name} left the game. Tiles returned to boneyard.`];
+                
+                transaction.update(gameRef, {
+                    players: newPlayers,
+                    playerOrder: newPlayerOrder,
+                    currentPlayerIndex: newCurrentPlayerIndex,
+                    boneyard: newBoneyard,
+                    boneyardLayout: newBoneyardLayout,
+                    log: newLog
+                });
+            });
+        } catch (error) {
+            console.error("Error leaving game:", error);
+            showMessage("Could not remove player.");
+        }
+    }
+
+    // --- Shuffle Boneyard Logic ---
+    dom.shuffleBoneyardButton.addEventListener('click', async () => {
+        // Visual effect immediately
+        dom.boneyardPileElement.classList.add('shuffling');
+        setTimeout(() => dom.boneyardPileElement.classList.remove('shuffling'), 500);
+        
+        const gameRef = doc(db, "games", currentGameId);
+        try {
+            await runTransaction(db, async (transaction) => {
+                const gameSnap = await transaction.get(gameRef);
+                if (!gameSnap.exists()) return;
+                const gameState = gameSnap.data();
+                
+                const newBoneyard = [...gameState.boneyard];
+                // Shuffle array
+                for (let i = newBoneyard.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [newBoneyard[i], newBoneyard[j]] = [newBoneyard[j], newBoneyard[i]];
+                }
+                
+                // Shuffle layout rotations slightly for "dance" effect
+                const newLayout = gameState.boneyardLayout.map(item => ({
+                    ...item,
+                    rotation: Math.random() * 360 // Whimsical rotation
+                }));
+
+                transaction.update(gameRef, {
+                    boneyard: newBoneyard,
+                    boneyardLayout: newLayout
+                });
+            });
+        } catch(error) {
+            console.error("Shuffle failed", error);
+        }
+    });
 
     dom.copyGameIdButton.addEventListener('click', () => {
         const copyText = currentGameId;
@@ -1489,237 +1651,124 @@
         }
     });
 
-    // --- GAME MENU LOGIC (UPDATED) ---
-    function openGameMenu() {
-        dom.gameMenuModal.classList.remove('hidden');
-        renderGameMenuPlayers();
-    }
+    // --- Main Game State Handler ---
+    function handleGameStateUpdate(gameState) {
+        const oldStatus = localGameState.gameStatus;
+        const oldTheme = localGameState.currentTheme;
+        const oldUndoStatus = localGameState.undoRequest?.status;
+        const oldTurnState = localGameState.turnState;
 
-    function closeGameMenu() {
-        dom.gameMenuModal.classList.add('hidden');
-    }
+        const newTheme = gameState.currentTheme;
+        localGameState = gameState; 
 
-    dom.openMenuButton.addEventListener('click', openGameMenu);
-    dom.closeMenuButton.addEventListener('click', closeGameMenu);
-    dom.menuNewGameButton.addEventListener('click', leaveGame); // Just reload page for now
+        if (!gameState.players || !gameState.playerOrder || gameState.playerOrder.length === 0) {
+            // Handle case where I was kicked (my ID not in players)
+            if (currentPlayerId && !gameState.players[currentPlayerId]) {
+                showMessage("You have been removed from the game.");
+                leaveGame();
+                return;
+            }
+            return;
+        }
+        
+        // If validation just started, focus on the domino
+        if (oldTurnState !== 'PENDING_VALIDATION' && gameState.turnState === 'PENDING_VALIDATION') {
+            const dominoToValidate = gameState.boardDominos.find(d => d.dominoData.id === gameState.lastPlayedDominoId);
+            if (dominoToValidate) {
+                focusOnDomino(dominoToValidate);
+            }
+        }
 
-    function renderGameMenuPlayers() {
-        if (!localGameState.players || !localGameState.playerOrder) return;
-        dom.menuPlayerList.innerHTML = '';
-        const isMeHost = localGameState.players[currentPlayerId]?.isHost;
+        // --- UNDO VALIDATION: Handle incoming undo requests ---
+        handleUndoRequest(gameState, oldUndoStatus);
 
-        localGameState.playerOrder.forEach(pid => {
-            const player = localGameState.players[pid];
-            if(!player) return;
+        // --- If the theme changed, clear the board to force a full re-render of dominoes ---
+        if (oldTheme !== newTheme) {
+            dom.gameBoardElement.innerHTML = '<div id="starting-area"></div>';
+        }
 
-            const row = document.createElement('div');
-            row.className = "flex justify-between items-center bg-gray-700 p-2 rounded";
+        const currentTurnPlayer = gameState.players[gameState.playerOrder[gameState.currentPlayerIndex]];
+        // Safety check if currentTurnPlayer is undefined (e.g. after a kick logic error, though logic should prevent this)
+        if (!currentTurnPlayer && gameState.gameStatus === 'in-progress') {
+             // Fallback or wait for next update
+             return; 
+        }
+
+        if (gameState.turnConfirmationPending && currentTurnPlayer && currentTurnPlayer.controller === currentPlayerId) {
+            dom.loadingScreen.classList.add('hidden');
+            dom.setupScreen.classList.add('hidden');
+            dom.gameContainer.classList.add('hidden');
+            dom.roundStartScreen.classList.add('hidden');
+            showPassDeviceScreen(currentTurnPlayer.name);
+            return;
+        }
+
+        if (gameState.gameStatus === 'round-starting') {
+            dom.loadingScreen.classList.add('hidden');
+            dom.setupScreen.classList.add('hidden');
+            dom.gameContainer.classList.add('hidden');
+            dom.passDeviceScreen.classList.add('hidden');
+            showRoundStartScreen(gameState);
+            return;
+        }
+
+        if (gameState.gameStatus === 'waiting') {
+            dom.loadingScreen.classList.add('hidden');
+            dom.gameContainer.classList.add('hidden');
+            dom.passDeviceScreen.classList.add('hidden');
+            dom.roundStartScreen.classList.add('hidden');
+            dom.setupScreen.classList.remove('hidden');
+            dom.lobbyView.classList.add('hidden');
+            dom.waitingRoomView.classList.remove('hidden');
+            updateWaitingRoomUI(gameState);
+            return;
+        }
+
+        if (['in-progress', 'round-over', 'finished'].includes(gameState.gameStatus)) {
+            dom.loadingScreen.classList.add('hidden');
+            dom.setupScreen.classList.add('hidden');
+            dom.passDeviceScreen.classList.add('hidden'); 
+            dom.roundStartScreen.classList.add('hidden');
+            dom.gameContainer.classList.remove('hidden');
             
-            const nameSpan = document.createElement('span');
-            nameSpan.textContent = player.name + (player.isHost ? ' (Host)' : '') + (pid === currentPlayerId ? ' (You)' : '');
-            if (player.id === currentPlayerId && player.controller === currentPlayerId) {
-                 nameSpan.classList.add('font-bold', 'text-yellow-300');
+            // Center board at the start of every round.
+            if (oldStatus !== 'in-progress' && gameState.gameStatus === 'in-progress') {
+                requestAnimationFrame(() => {
+                    requestAnimationFrame(centerBoardOnStart);
+                });
             }
-            row.appendChild(nameSpan);
 
-            // Host Kick Button logic
-            if (isMeHost && pid !== currentPlayerId) {
-                const kickBtn = document.createElement('button');
-                kickBtn.className = "bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded text-sm";
-                kickBtn.innerHTML = `
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                `;
-                kickBtn.title = "Remove Player";
-                kickBtn.addEventListener('click', () => {
-                    showMessage(`Are you sure you want to remove ${player.name}? Their tiles will be returned to the boneyard.`, {
-                        confirmText: "Remove",
-                        confirmClass: "bg-red-600",
-                        showCancel: true,
-                        onConfirm: () => handleKickPlayer(pid)
-                    });
-                });
-                row.appendChild(kickBtn);
+            renderGameUI(gameState);
+
+            if (gameState.gameStatus === 'round-over') {
+                displayRoundEndScreen(gameState);
+            } else {
+                dom.roundEndScreen.classList.add('hidden');
             }
-            dom.menuPlayerList.appendChild(row);
-        });
 
-        // Toggle visibility of the "Leave Game" button for players
-        // If I am controlling this player, I can leave. 
-        // Note: For simplicity, "Leave Game" mainly applies to the main controller leaving the session.
-        dom.menuLeaveGameButton.classList.remove('hidden');
-    }
-
-    dom.menuLeaveGameButton.addEventListener('click', () => {
-        showMessage("Are you sure you want to leave the game? Your tiles will be returned to the boneyard.", {
-            confirmText: "Leave Game",
-            confirmClass: "bg-red-600",
-            showCancel: true,
-            onConfirm: handleLeaveGame
-        });
-    });
-
-    async function handleKickPlayer(targetPlayerId) {
-        if (!currentGameId) return;
-        const gameRef = doc(db, "games", currentGameId);
-        await performPlayerExit(gameRef, targetPlayerId);
-    }
-
-    async function handleLeaveGame() {
-        if (!currentGameId || !currentPlayerId) return;
-        const gameRef = doc(db, "games", currentGameId);
-        
-        // If device controls multiple local players, we might want to remove all of them or just the main one.
-        // For simplicity, let's remove ALL players controlled by this device.
-        const myControlledPlayers = localGameState.playerOrder.filter(pid => localGameState.players[pid].controller === currentPlayerId);
-        
-        for (const pid of myControlledPlayers) {
-             await performPlayerExit(gameRef, pid);
-        }
-        leaveGame(); // Reload page
-    }
-
-    // Common logic for a player exiting (voluntarily or kicked)
-    async function performPlayerExit(gameRef, targetId) {
-        try {
-            await runTransaction(db, async (transaction) => {
-                const gameSnap = await transaction.get(gameRef);
-                if (!gameSnap.exists()) return;
-                const gameState = gameSnap.data();
-                
-                const targetPlayer = gameState.players[targetId];
-                if (!targetPlayer) return;
-
-                const hand = targetPlayer.hand || [];
-                const newBoneyard = [...gameState.boneyard, ...hand];
-                
-                // Shuffle the returned tiles into the boneyard layout
-                const returnedLayouts = hand.map(d => ({
-                    id: d.id,
-                    rotation: Math.random() * 360
-                }));
-                let newLayout = [...gameState.boneyardLayout, ...returnedLayouts];
-                
-                // Shuffle layout order to mix them in
-                for (let i = newLayout.length - 1; i > 0; i--) {
-                    const j = Math.floor(Math.random() * (i + 1));
-                    [newLayout[i], newLayout[j]] = [newLayout[j], newLayout[i]];
-                }
-
-                // Remove player from order
-                const newPlayerOrder = gameState.playerOrder.filter(pid => pid !== targetId);
-                
-                // Adjust current turn index if necessary
-                let newCurrentIndex = gameState.currentPlayerIndex;
-                if (gameState.currentPlayerIndex >= newPlayerOrder.length) {
-                    newCurrentIndex = 0;
-                } else {
-                    // If the person who left was BEFORE the current player, shift index down
-                    const leavingIndex = gameState.playerOrder.indexOf(targetId);
-                    if (leavingIndex < gameState.currentPlayerIndex) {
-                        newCurrentIndex = Math.max(0, gameState.currentPlayerIndex - 1);
-                    } else if (leavingIndex === gameState.currentPlayerIndex) {
-                        // If the person whose turn it was left, pass to next (index stays same unless it was last)
-                         if (newCurrentIndex >= newPlayerOrder.length) newCurrentIndex = 0;
-                    }
-                }
-
-                const newLog = [...(gameState.log || []), `${targetPlayer.name} has left the game. Their tiles were returned to the boneyard.`];
-                
-                // Prepare updates
-                const updates = {
-                    boneyard: newBoneyard,
-                    boneyardLayout: newLayout,
-                    playerOrder: newPlayerOrder,
-                    currentPlayerIndex: newCurrentIndex,
-                    log: newLog,
-                    [`players.${targetId}`]: deleteField() // Remove player data
-                };
-
-                // If it was the leaving player's turn, reset turn state so next player can go
-                if (gameState.playerOrder[gameState.currentPlayerIndex] === targetId) {
-                    updates.turnState = 'WAITING';
-                    updates.hasDrawn = false;
-                    updates.turnConfirmationPending = false; // Reset confirmation if they left mid-confirmation
-                }
-
-                transaction.update(gameRef, updates);
-            });
-        } catch (error) {
-            console.error("Error removing player:", error);
-            showMessage("Failed to remove player properly.");
+            if (gameState.gameStatus === 'finished') {
+                showFinalScores(gameState);
+            } else {
+                dom.gameOverScreen.classList.add('hidden');
+            }
+            return;
         }
     }
 
-    async function endRoundAsBlocked() {
-        const gameRef = doc(db, "games", currentGameId);
-        try {
-            await runTransaction(db, async (transaction) => {
-                const gameSnap = await transaction.get(gameRef);
-                if (!gameSnap.exists()) throw "Game does not exist!";
-                const gameState = gameSnap.data();
-
-                let roundPoints = {};
-                let scoreHistoryEntry = { round: gameState.roundNumber, scores: {} };
-                const updatedPlayers = { ...gameState.players };
-                
-                // Calculate scores for everyone
-                let minScore = Infinity;
-                let winnerId = null;
-
-                Object.keys(updatedPlayers).forEach(pid => {
-                    const handValue = calculateHandValue(updatedPlayers[pid].hand);
-                    if (handValue < minScore) {
-                        minScore = handValue;
-                        winnerId = pid;
-                    }
-                });
-
-                Object.keys(updatedPlayers).forEach(pid => {
-                    const handValue = calculateHandValue(updatedPlayers[pid].hand);
-                    updatedPlayers[pid].score += handValue;
-                    roundPoints[pid] = handValue;
-                    scoreHistoryEntry.scores[pid] = handValue;
-                });
-
-                const newScoreHistory = [...(gameState.scoreHistory || []), scoreHistoryEntry];
-                const isGameOver = gameState.roundNumber >= 10; 
-
-                transaction.update(gameRef, {
-                    players: updatedPlayers,
-                    gameStatus: isGameOver ? 'finished' : 'round-over',
-                    roundEndInfo: { winnerId: winnerId, points: roundPoints, reason: 'Round Blocked' },
-                    turnState: 'WAITING',
-                    hasDrawn: false,
-                    scoreHistory: newScoreHistory,
-                    undoRequestedThisTurn: false
-                });
-            });
-        } catch (error) {
-            console.error("Error ending blocked round:", error);
-            showMessage("Error ending blocked round.");
-        }
-    }
-
-    // --- ADDED: Missing updateWaitingRoomUI function ---
     function updateWaitingRoomUI(gameState) {
         dom.gameIdDisplay.textContent = currentGameId;
         const playerIds = gameState.playerOrder;
         const playerCount = playerIds.length;
         const isHost = gameState.players[currentPlayerId]?.isHost;
-        
         dom.playerList.innerHTML = '';
         playerIds.forEach(pid => {
             const p = document.createElement('p');
             p.textContent = `${gameState.players[pid].name} ${gameState.players[pid].isHost ? '(Host)' : ''}`;
-            if (pid === currentPlayerId) p.classList.add('text-yellow-300', 'font-bold');
             dom.playerList.appendChild(p);
         });
-        
         const canStart = isHost && playerCount >= 2 && playerCount <= 8;
         dom.startGameButton.disabled = !canStart;
-        
+        dom.reDealButton.classList.add('hidden');
         if (isHost) {
             if (playerCount < 2) dom.waitingMessage.textContent = "Need at least 2 players to start.";
             else if (playerCount > 8) dom.waitingMessage.textContent = "Cannot start with more than 8 players.";
@@ -1728,7 +1777,57 @@
             dom.waitingMessage.textContent = "Waiting for the host to start the game...";
         }
     }
+    
+    function showPassDeviceScreen(nextPlayerName) {
+        dom.nextPlayerNamePass.textContent = nextPlayerName;
+        dom.passDeviceScreen.classList.remove('hidden');
+    }
 
+    dom.confirmTurnButton.addEventListener('click', async () => {
+        const gameRef = doc(db, "games", currentGameId);
+        await updateDoc(gameRef, { turnConfirmationPending: false });
+    });
+    
+    function showRoundStartScreen(gameState) {
+        const { roundNumber, roundStartInfo } = gameState;
+        const starter = gameState.players[roundStartInfo.starterId];
+        dom.roundEndScreen.classList.add('hidden');
+        dom.roundStartNumber.textContent = roundNumber;
+        dom.roundStarterName.textContent = starter.name;
+        const isLocalPlayerStarting = starter.controller === currentPlayerId && starter.id !== currentPlayerId;
+        if (starter.controller === currentPlayerId) {
+            dom.confirmRoundStartButton.classList.remove('hidden');
+            dom.roundStartWaitMessage.classList.add('hidden');
+            if (isLocalPlayerStarting) {
+                dom.confirmRoundStartButton.textContent = `Ready to Pass to ${starter.name}`;
+                dom.roundStartWaitMessage.textContent = `When ready, confirm to pass the device to ${starter.name}.`;
+                dom.roundStartWaitMessage.classList.remove('hidden');
+            } else {
+                dom.confirmRoundStartButton.textContent = 'Start Round';
+            }
+        } else {
+            dom.confirmRoundStartButton.classList.add('hidden');
+            dom.roundStartWaitMessage.textContent = `Waiting for ${localGameState.players[starter.controller].name} to start the round...`;
+            dom.roundStartWaitMessage.classList.remove('hidden');
+        }
+        dom.roundStartScreen.classList.remove('hidden');
+    }
+
+    dom.confirmRoundStartButton.addEventListener('click', async () => {
+        const gameRef = doc(db, "games", currentGameId);
+        const { roundStartInfo, players, roundNumber } = localGameState;
+        const starter = players[roundStartInfo.starterId];
+        const needsConfirmation = starter.controller === currentPlayerId && starter.id !== currentPlayerId;
+        await updateDoc(gameRef, {
+            gameStatus: 'in-progress',
+            currentPlayerIndex: roundStartInfo.starterIndex,
+            roundStartInfo: null,
+            turnConfirmationPending: needsConfirmation,
+            log: [...(localGameState.log || []), `Round ${roundNumber} started. ${starter.name} to play.`]
+        });
+    });
+
+    // --- Core Game Logic ---
     function generateDeck() {
         const deck = [];
         for (let i = 0; i <= 9; i++) {
@@ -1878,7 +1977,7 @@
         return -1;
     }
     
-    // --- Boneyard Picker Logic (UPDATED) ---
+    // --- Boneyard Picker Logic ---
     function openBoneyardPicker() {
         const currentTurnPlayer = localGameState.players[localGameState.playerOrder[localGameState.currentPlayerIndex]];
         const isMyDeviceTurn = currentTurnPlayer.controller === currentPlayerId;
@@ -1889,7 +1988,7 @@
             return;
         }
 
-        const canDraw = isMyTurnToDraw && localGameState.boneyard.length > 0;
+        const canDraw = isMyTurnToDraw && localGameState.boneyard.length > 0
         if (!canDraw) return;
         
         // --- Animation Logic: Set transform origin to the boneyard pile ---
@@ -1898,33 +1997,31 @@
         const originY = pileRect.top + pileRect.height / 2;
         dom.boneyardPickerModal.style.transformOrigin = `${originX}px ${originY}px`;
         
-        // Make modal visible
+        // Make modal visible to trigger CSS animation
         dom.boneyardPickerModal.classList.remove('hidden');
-        renderBoneyardPickerContent();
-    }
-
-    // NEW FUNCTION: Extracted rendering logic to allow updates while open
-    function renderBoneyardPickerContent() {
-        if (!localGameState.boneyard) return;
+        
         const container = dom.boneyardPickerWrapper;
-        container.innerHTML = ''; 
+        container.innerHTML = ''; // Clear previous
 
         const currentBoneyardIds = new Set(localGameState.boneyard.map(d => d.id));
 
         if (localGameState.boneyardLayout) {
-            localGameState.boneyardLayout.forEach((layoutData) => {
+            // Iterate through the persistent layout to maintain order
+            localGameState.boneyardLayout.forEach((layoutData, index) => {
                 if (currentBoneyardIds.has(layoutData.id)) {
+                    // Domino is still in the boneyard, render it
                     const dominoData = localGameState.boneyard.find(d => d.id === layoutData.id);
-                    const dominoElement = createDomino(dominoData, true); 
+                    const dominoElement = createDomino(dominoData, true); // true for back
                     dominoElement.classList.add('boneyard-picker-domino');
                     dominoElement.style.cursor = 'pointer';
                     
-                    // Apply random rotation
+                    // Apply the persistent random rotation
                     dominoElement.style.setProperty('--rotation', `${layoutData.rotation}deg`);
                     
                     dominoElement.addEventListener('click', () => selectDominoFromBoneyard(dominoData));
                     container.appendChild(dominoElement);
                 } else {
+                    // Domino has been picked, render a blank spot placeholder
                     const blankSpot = document.createElement('div');
                     blankSpot.className = 'boneyard-picker-blank-spot';
                     container.appendChild(blankSpot);
@@ -1987,56 +2084,6 @@
     dom.boneyardPileElement.addEventListener('click', openBoneyardPicker);
     dom.boneyardPileElement.addEventListener('touchstart', (e) => { e.preventDefault(); openBoneyardPicker(); });
 
-    // --- Shuffle Boneyard Logic (UPDATED) ---
-    dom.shuffleBoneyardButton.addEventListener('click', async () => {
-        // Visual effect on the wrapper
-        const wrapper = dom.boneyardPickerWrapper;
-        wrapper.style.opacity = '0.5';
-        wrapper.style.transform = 'scale(0.98)';
-        wrapper.classList.add('shuffling'); // Use CSS animation if preferred
-        setTimeout(() => {
-            wrapper.style.opacity = '1';
-            wrapper.style.transform = 'scale(1)';
-            wrapper.classList.remove('shuffling');
-        }, 300);
-        
-        const gameRef = doc(db, "games", currentGameId);
-        try {
-            await runTransaction(db, async (transaction) => {
-                const gameSnap = await transaction.get(gameRef);
-                if (!gameSnap.exists()) return;
-                const gameState = gameSnap.data();
-                
-                const newBoneyard = [...gameState.boneyard];
-                // Shuffle array (data)
-                for (let i = newBoneyard.length - 1; i > 0; i--) {
-                    const j = Math.floor(Math.random() * (i + 1));
-                    [newBoneyard[i], newBoneyard[j]] = [newBoneyard[j], newBoneyard[i]];
-                }
-                
-                // Shuffle layout array (visual positions) to make them move around
-                const newLayout = [...gameState.boneyardLayout];
-                for (let i = newLayout.length - 1; i > 0; i--) {
-                    const j = Math.floor(Math.random() * (i + 1));
-                    [newLayout[i], newLayout[j]] = [newLayout[j], newLayout[i]];
-                }
-
-                // Update rotations for fresh look
-                const randomizedLayout = newLayout.map(item => ({
-                    ...item,
-                    rotation: Math.random() * 360 
-                }));
-
-                transaction.update(gameRef, {
-                    boneyard: newBoneyard,
-                    boneyardLayout: randomizedLayout
-                });
-            });
-        } catch(error) {
-            console.error("Shuffle failed", error);
-        }
-    });
-
     async function submitTurnForValidation() {
         dom.endTurnButton.disabled = true;
 
@@ -2061,6 +2108,7 @@
                     const nextPlayerIndex = (gameState.currentPlayerIndex + 1) % gameState.playerOrder.length;
                     const nextPlayer = gameState.players[gameState.playerOrder[nextPlayerIndex]];
                     
+                    // FIX: Only show pass device screen for local players on the same device
                     const needsConfirmation = currentTurnPlayer.controller === nextPlayer.controller && currentTurnPlayer.id !== nextPlayer.id;
 
                     transaction.update(gameRef, {
@@ -2139,10 +2187,65 @@
         } catch(error) {
             console.error("Error ending turn:", error);
             showMessage("Could not end turn. Please try again.");
+            // The button state will be updated by handleGameStateUpdate on the next snapshot
         }
     }
     dom.endTurnButton.addEventListener('click', submitTurnForValidation);
     
+    // NEW: Function to end round if blocked
+    async function endRoundAsBlocked() {
+        const gameRef = doc(db, "games", currentGameId);
+        try {
+            await runTransaction(db, async (transaction) => {
+                const gameSnap = await transaction.get(gameRef);
+                if (!gameSnap.exists()) throw "Game does not exist!";
+                const gameState = gameSnap.data();
+
+                // Calculate scores
+                let roundPoints = {};
+                let scoreHistoryEntry = { round: gameState.roundNumber, scores: {} };
+                const updatedPlayers = { ...gameState.players };
+                
+                let lowestScore = Infinity;
+                let winnerId = null;
+
+                // Check scores
+                Object.keys(updatedPlayers).forEach(pid => {
+                    const handValue = calculateHandValue(updatedPlayers[pid].hand);
+                    updatedPlayers[pid].score += handValue;
+                    roundPoints[pid] = handValue;
+                    scoreHistoryEntry.scores[pid] = handValue;
+
+                    if (handValue < lowestScore) {
+                        lowestScore = handValue;
+                        winnerId = pid;
+                    } else if (handValue === lowestScore) {
+                        // In case of a tie for lowest score, we can pick the first one found or handle it differently.
+                        // Standard practice varies, usually points are still added. We'll stick to first found as winner for simplicity in displaying message.
+                        if (!winnerId) winnerId = pid;
+                    }
+                });
+
+                const newScoreHistory = [...(gameState.scoreHistory || []), scoreHistoryEntry];
+                const isGameOver = gameState.roundNumber >= 10; 
+
+                transaction.update(gameRef, {
+                    players: updatedPlayers,
+                    gameStatus: isGameOver ? 'finished' : 'round-over',
+                    roundEndInfo: { winnerId: winnerId, points: roundPoints, reason: 'Round Blocked' },
+                    turnState: 'WAITING',
+                    hasDrawn: false,
+                    scoreHistory: newScoreHistory,
+                    undoRequestedThisTurn: false,
+                    passCount: 0
+                });
+            });
+        } catch (error) {
+            console.error("Error ending blocked round:", error);
+            showMessage("Could not end the blocked round.");
+        }
+    }
+
     function calculateHandValue(hand) {
         if (!hand) return 0;
         return hand.reduce((total, domino) => {
@@ -2160,7 +2263,6 @@
 
     // --- UI Rendering ---
     function renderGameUI(gameState) {
-        // ... (existing rendering logic) ...
         const currentTurnPlayerId = gameState.playerOrder[gameState.currentPlayerIndex];
         const currentTurnPlayer = gameState.players[currentTurnPlayerId];
         const isMyDeviceTurn = currentTurnPlayer?.controller === currentPlayerId;
@@ -2243,7 +2345,7 @@
             dom.handValueDisplay.textContent = calculateHandValue(myPlayerData.hand);
         }
         renderBoneyard(gameState, isMyDeviceTurn);
-        dom.currentPlayerElement.textContent = gameState.players[currentTurnPlayerId]?.name || "Unknown";
+        dom.currentPlayerElement.textContent = gameState.players[currentTurnPlayerId].name;
         updateStatusAndButtons(gameState, isMyDeviceTurn, currentTurnPlayerId);
         
         // --- Ensure theme dropdown always reflects the current game state ---
@@ -2252,119 +2354,6 @@
         }
     }
 
-    // --- Main Game State Handler (UPDATED) ---
-    function handleGameStateUpdate(gameState) {
-        // ... [start of function remains same] ...
-        const oldStatus = localGameState.gameStatus;
-        const oldTheme = localGameState.currentTheme;
-        const oldUndoStatus = localGameState.undoRequest?.status;
-        const oldTurnState = localGameState.turnState;
-
-        const newTheme = gameState.currentTheme;
-        localGameState = gameState; 
-
-        // Update Boneyard Picker if open (Real-time update!)
-        if (!dom.boneyardPickerModal.classList.contains('hidden')) {
-            renderBoneyardPickerContent();
-        }
-        
-        // Update Game Menu if open
-        if (!dom.gameMenuModal.classList.contains('hidden')) {
-            renderGameMenuPlayers();
-        }
-
-        if (!gameState.players || !gameState.playerOrder || gameState.playerOrder.length === 0) {
-            // ... [rest of existing logic] ...
-            if (currentPlayerId && !gameState.players[currentPlayerId]) {
-                showMessage("You have been removed from the game.");
-                leaveGame();
-                return;
-            }
-            return;
-        }
-        
-        // ... [rest of handleGameStateUpdate remains exactly the same] ...
-        if (oldTurnState !== 'PENDING_VALIDATION' && gameState.turnState === 'PENDING_VALIDATION') {
-            const dominoToValidate = gameState.boardDominos.find(d => d.dominoData.id === gameState.lastPlayedDominoId);
-            if (dominoToValidate) {
-                focusOnDomino(dominoToValidate);
-            }
-        }
-
-        handleUndoRequest(gameState, oldUndoStatus);
-
-        if (oldTheme !== newTheme) {
-            dom.gameBoardElement.innerHTML = '<div id="starting-area"></div>';
-        }
-
-        const currentTurnPlayer = gameState.players[gameState.playerOrder[gameState.currentPlayerIndex]];
-        if (!currentTurnPlayer && gameState.gameStatus === 'in-progress') {
-             return; 
-        }
-
-        if (gameState.turnConfirmationPending && currentTurnPlayer && currentTurnPlayer.controller === currentPlayerId) {
-            dom.loadingScreen.classList.add('hidden');
-            dom.setupScreen.classList.add('hidden');
-            dom.gameContainer.classList.add('hidden');
-            dom.roundStartScreen.classList.add('hidden');
-            showPassDeviceScreen(currentTurnPlayer.name);
-            return;
-        }
-
-        if (gameState.gameStatus === 'round-starting') {
-            dom.loadingScreen.classList.add('hidden');
-            dom.setupScreen.classList.add('hidden');
-            dom.gameContainer.classList.add('hidden');
-            dom.passDeviceScreen.classList.add('hidden');
-            showRoundStartScreen(gameState);
-            return;
-        }
-
-        if (gameState.gameStatus === 'waiting') {
-            dom.loadingScreen.classList.add('hidden');
-            dom.gameContainer.classList.add('hidden');
-            dom.passDeviceScreen.classList.add('hidden');
-            dom.roundStartScreen.classList.add('hidden');
-            dom.setupScreen.classList.remove('hidden');
-            dom.lobbyView.classList.add('hidden');
-            dom.waitingRoomView.classList.remove('hidden');
-            updateWaitingRoomUI(gameState);
-            return;
-        }
-
-        if (['in-progress', 'round-over', 'finished'].includes(gameState.gameStatus)) {
-            dom.loadingScreen.classList.add('hidden');
-            dom.setupScreen.classList.add('hidden');
-            dom.passDeviceScreen.classList.add('hidden'); 
-            dom.roundStartScreen.classList.add('hidden');
-            dom.gameContainer.classList.remove('hidden');
-            
-            if (oldStatus !== 'in-progress' && gameState.gameStatus === 'in-progress') {
-                requestAnimationFrame(() => {
-                    requestAnimationFrame(centerBoardOnStart);
-                });
-            }
-
-            renderGameUI(gameState);
-
-            if (gameState.gameStatus === 'round-over') {
-                displayRoundEndScreen(gameState);
-            } else {
-                dom.roundEndScreen.classList.add('hidden');
-            }
-
-            if (gameState.gameStatus === 'finished') {
-                showFinalScores(gameState);
-            } else {
-                dom.gameOverScreen.classList.add('hidden');
-            }
-            return;
-        }
-    }
-
-    // ... [existing updateStatusAndButtons, renderPlayerHands, etc. functions remain mostly unchanged, 
-    // ensuring renderGameLog uses dom.gameLog] ...
-    
     function updateStatusAndButtons(gameState, isMyDeviceTurn, currentTurnPlayerId) {
         let statusText = '';
         let canValidate = false;
@@ -2416,9 +2405,9 @@
             }
         } else { // Not my turn
             if (undoRequest.status !== 'pending') { // Don't overwrite undo message
-                statusText = `Waiting for ${gameState.players[currentTurnPlayerId]?.name || 'player'}...`;
+                statusText = `Waiting for ${gameState.players[currentTurnPlayerId].name}...`;
                 if (gameState.turnState === 'PENDING_VALIDATION') {
-                    statusText = `Validate ${gameState.players[currentTurnPlayerId]?.name}'s move.`;
+                    statusText = `Validate ${gameState.players[currentTurnPlayerId].name}'s move.`;
                     canValidate = true;
                 }
             }
@@ -2502,7 +2491,7 @@
             } else if (playerData.isHost) {
                  nameTag = '(Host)';
             }
-            title.textContent = `${playerData.name} ${nameTag} (${playerData.hand.length})`;
+            title.textContent = `${playerData.name} ${nameTag} (${playerData.hand ? playerData.hand.length : 0})`;
             const handDiv = document.createElement('div');
             handDiv.className = 'player-hand-content';
             let showHandFaceUp = false;
@@ -2516,25 +2505,27 @@
                     showHandFaceUp = true;
                 }
             }
-            if (showHandFaceUp) {
-                playerData.hand.forEach(dominoData => {
-                    const dominoElement = createDomino(dominoData);
-                    dominoElement.dataset.id = dominoData.id;
-                    const canDrag = isThisPlayerTheActiveTurn && playerData.controller === currentPlayerId && gameState.turnState === 'WAITING' && !moveBranchMode && !gameState.mustDrawToStart;
-                    
-                    if (canDrag) {
-                        dominoElement.addEventListener('mousedown', (e) => startRegularDominoDrag(e, { dominoData }, 'hand'));
-                        dominoElement.addEventListener('touchstart', (e) => startRegularDominoDrag(e, { dominoData }, 'hand'), { passive: false });
-                    } else {
-                        dominoElement.style.cursor = 'not-allowed';
-                    }
-                    handDiv.appendChild(dominoElement);
-                });
-            } else {
-                playerData.hand.forEach(() => {
-                    const dominoElement = createDomino(null, true, 'mini');
-                    handDiv.appendChild(dominoElement);
-                });
+            if (playerData.hand) { // Check if hand exists (e.g. joined mid-game)
+                if (showHandFaceUp) {
+                    playerData.hand.forEach(dominoData => {
+                        const dominoElement = createDomino(dominoData);
+                        dominoElement.dataset.id = dominoData.id;
+                        const canDrag = isThisPlayerTheActiveTurn && playerData.controller === currentPlayerId && gameState.turnState === 'WAITING' && !moveBranchMode && !gameState.mustDrawToStart;
+                        
+                        if (canDrag) {
+                            dominoElement.addEventListener('mousedown', (e) => startRegularDominoDrag(e, { dominoData }, 'hand'));
+                            dominoElement.addEventListener('touchstart', (e) => startRegularDominoDrag(e, { dominoData }, 'hand'), { passive: false });
+                        } else {
+                            dominoElement.style.cursor = 'not-allowed';
+                        }
+                        handDiv.appendChild(dominoElement);
+                    });
+                } else {
+                    playerData.hand.forEach(() => {
+                        const dominoElement = createDomino(null, true, 'mini');
+                        handDiv.appendChild(dominoElement);
+                    });
+                }
             }
             section.appendChild(title);
             section.appendChild(handDiv);
@@ -2589,6 +2580,7 @@
         dom.boneyardCountElement.textContent = gameState.boneyard.length;
     }
     
+    // ... [rest of existing functions like displayRoundEndScreen, createDomino, etc. remain unchanged] ...
     function displayRoundEndScreen(gameState) {
         if (!gameState.roundEndInfo) return;
         if (gameState.gameStatus === 'finished') {
