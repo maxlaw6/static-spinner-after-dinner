@@ -1702,6 +1702,57 @@
         }
     }
 
+    // --- RESTORED: Missing UI Functions for Round Start and Turn Passing ---
+    function showPassDeviceScreen(nextPlayerName) {
+        dom.nextPlayerNamePass.textContent = nextPlayerName;
+        dom.passDeviceScreen.classList.remove('hidden');
+    }
+
+    dom.confirmTurnButton.addEventListener('click', async () => {
+        const gameRef = doc(db, "games", currentGameId);
+        await updateDoc(gameRef, { turnConfirmationPending: false });
+    });
+    
+    function showRoundStartScreen(gameState) {
+        const { roundNumber, roundStartInfo } = gameState;
+        const starter = gameState.players[roundStartInfo.starterId];
+        dom.roundEndScreen.classList.add('hidden');
+        dom.roundStartNumber.textContent = roundNumber;
+        dom.roundStarterName.textContent = starter.name;
+        const isLocalPlayerStarting = starter.controller === currentPlayerId && starter.id !== currentPlayerId;
+        
+        if (starter.controller === currentPlayerId) {
+            dom.confirmRoundStartButton.classList.remove('hidden');
+            dom.roundStartWaitMessage.classList.add('hidden');
+            if (isLocalPlayerStarting) {
+                dom.confirmRoundStartButton.textContent = `Ready to Pass to ${starter.name}`;
+                dom.roundStartWaitMessage.textContent = `When ready, confirm to pass the device to ${starter.name}.`;
+                dom.roundStartWaitMessage.classList.remove('hidden');
+            } else {
+                dom.confirmRoundStartButton.textContent = 'Start Round';
+            }
+        } else {
+            dom.confirmRoundStartButton.classList.add('hidden');
+            dom.roundStartWaitMessage.textContent = `Waiting for ${localGameState.players[starter.controller].name} to start the round...`;
+            dom.roundStartWaitMessage.classList.remove('hidden');
+        }
+        dom.roundStartScreen.classList.remove('hidden');
+    }
+
+    dom.confirmRoundStartButton.addEventListener('click', async () => {
+        const gameRef = doc(db, "games", currentGameId);
+        const { roundStartInfo, players, roundNumber } = localGameState;
+        const starter = players[roundStartInfo.starterId];
+        const needsConfirmation = starter.controller === currentPlayerId && starter.id !== currentPlayerId;
+        
+        await updateDoc(gameRef, {
+            gameStatus: 'in-progress',
+            currentPlayerIndex: roundStartInfo.starterIndex,
+            turnConfirmationPending: needsConfirmation,
+            log: [...(localGameState.log || []), `Round ${roundNumber} started. ${starter.name} to play.`]
+        });
+    });
+
     // --- ADDED: Missing updateWaitingRoomUI function ---
     function updateWaitingRoomUI(gameState) {
         dom.gameIdDisplay.textContent = currentGameId;
