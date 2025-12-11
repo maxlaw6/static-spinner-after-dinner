@@ -1446,10 +1446,7 @@
     function leaveGame() {
         window.location.reload();
     }
-    dom.mainMenuButton.addEventListener('click', () => {
-        // Fallback for the old button if visible, though we are hiding it now
-        openGameMenu();
-    });
+    
     dom.mainMenuButtonFinal.addEventListener('click', leaveGame);
 
     dom.copyGameIdButton.addEventListener('click', () => {
